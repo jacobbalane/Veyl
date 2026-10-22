@@ -4,7 +4,9 @@ Last updated: 2026-10-22.
 
 Section 0 followed: the full plan and the listed Glim references were read before writing source.
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
-complete. The milestone is **not done** until its device acceptance checks pass. M1 has not started.
+complete. The maintainer reports that both installed apps open: Windows shows the phone-search
+placeholder and Android shows the waiting-for-PC placeholder. M0's listed acceptance criteria pass;
+the additional device checks below remain unreported. M1 is in progress. Connecting the apps is M3.
 
 The maintainer approved installing build tools and supplied the Git author identity. Rust,
 Visual Studio C++ Build Tools, Java 17 and the Android command-line SDK are now installed. Git
@@ -46,7 +48,7 @@ architecture.md`, and stub files for the rest of §9.9.
 - [x] **M0.9 [maintainer]** §10.7 steps 1–5: GitHub CLI, create and push the repo, turn on Pages,
       Android signing key and secrets, repository settings (homepage, topics, private vulnerability
       reporting, security alerts, labels).
-- [ ] **M0.10 [maintainer] [device]** Pipeline dry run: add `## 0.0.1 (YYYY-MM-DD)` with "Preview
+- [x] **M0.10 [maintainer] [device]** Pipeline dry run: add `## 0.0.1 (YYYY-MM-DD)` with "Preview
       build. Nothing works yet; this release tests downloads." to `CHANGELOG.md`,
       `node scripts/bump-version.mjs 0.0.1`, commit, tag `v0.0.1`, push. The draft release must contain both installers (x64 and ARM64), the APK,
       their checksums and attestations. Publish it as "0.0.1 — preview build (no features yet)". Download both from the
@@ -179,7 +181,8 @@ Node 20; GitHub runs it with Node 24, and Windows builds pass.
 
 ## Published preview
 
-**M0.10 publication is complete; device checks remain pending.** With the maintainer's explicit
+**M0.10 is complete.** The maintainer reports that the installed PC and phone apps both open.
+The search/wait placeholders are expected: discovery and connection arrive in M3. With explicit
 approval to create the tag and publish, `v0.0.1` points to
 `f59be9e5ec5b8c0ef4a9e02e72cb8502f5697b00`. Its
 [tag build](https://github.com/jacobbalane/Veyl/actions/runs/39711334196) passed all five jobs,
@@ -202,7 +205,9 @@ remain ignored under `.cache/release/v0.0.1-tag/`, `.cache/release/v0.0.1-public
 
 ## Waiting on device tests
 
-The preview is published and its public downloads are verified. The maintainer still needs to:
+The preview is published, its public downloads are verified, and the maintainer reports that both
+installed apps open. Detailed tray/theme/orientation checks and device versions have not been
+reported; keep those checks pending:
 
 1. Download the appropriate Windows installer and Android APK from
    [the website](https://jacobbalane.github.io/Veyl/). Public download integrity and attestations
@@ -216,3 +221,36 @@ The preview is published and its public downloads are verified. The maintainer s
    each step. The ARM64 installer needs an ARM64 PC for a real launch check.
 
 No sensing or audio tests are appropriate for the 0.0.1 foundation. Those begin in later milestones.
+
+## M1 — Veyl Link
+
+**Goal:** the complete protocol (§4) in Rust and Kotlin, proven identical by shared test vectors.
+
+- [x] **M1.1** `veyl-link`: frame codec (blocking and Tokio), all handshake and control messages
+      (`serde`), AUDIO and PING/PONG codecs, crypto (`x25519-dalek`, `hkdf`, `hmac`, `sha2`, `aes-gcm`,
+      `subtle`), `SealedChannel` with strict counters, pairing and session state machines written
+      "sans I/O" (message in → messages out + new state) for both roles, and async helpers `pair()` and
+      `session()` for the PC role.
+- [x] **M1.2** Tests: round trips, size limits, unknown fields and types, a flipped bit closes the
+      connection, skipped or repeated counters close it, wrong keys fail, timeouts with a fake clock,
+      rate limiting, `proptest` for the codecs, an in-memory client ↔ server run of pairing and session.
+- [x] **M1.3** `examples/gen_vectors.rs` and the committed `protocol/test-vectors/v1.json`; a test that
+      regenerates and compares; enable the CI vectors step.
+- [ ] **M1.4** Kotlin `:core`: `Frames`, `Messages`, `Crypto`, `SealedChannel`, `PhonePairing`,
+      `PhoneSession`, `AudioBlock`, `PingPong`, with JUnit tests that reproduce every vector byte for byte
+      and test the phone-side state machines.
+- [ ] **M1.5** `docs/protocol.md` (§4 with Mermaid sequence diagrams).
+
+**Acceptance:** all protocol tests pass in both languages in CI; the vectors match; docs complete.
+
+**Verify:** `cargo test -p veyl-link`; `cargo run -p veyl-link --example gen_vectors` equals the
+committed file; `.\gradlew :core:test`.
+
+**M1.1–M1.3:** Rust now has bounded blocking/Tokio framing, all message codecs, X25519/HKDF/HMAC,
+strict AES-GCM counters, pairing/session machines for both roles, and async PC helpers. The helpers
+retain partial reads/writes across cancellation and service both directions while confirmations
+are sent. Twenty-two Rust tests pass, including a full pairing/session run over a 19-byte duplex
+buffer, fake-clock timeout, codec property tests, rate limits, unknown extensions, corruption,
+replay, counter exhaustion, audio queue loss and liveness. Clippy passes with warnings denied.
+The deterministic vector generator matches the committed file and RFC 7748's X25519 known answer;
+CI's vector comparison is enabled. Kotlin parity and the final protocol diagrams remain pending.

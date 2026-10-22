@@ -2,8 +2,9 @@
 
 [The 0.0.1 preview](https://github.com/jacobbalane/Veyl/releases/tag/v0.0.1) is published and its
 Windows x64, Windows ARM64 and Android downloads work from the live website. Checksums, the
-permanent Android signer and all three build attestations passed verification. M0 still needs the
-maintainer's installation and launch results; see [progress.md](progress.md#waiting-on-device-tests).
+permanent Android signer and all three build attestations passed verification. The maintainer
+reports that both installed apps open, meeting M0's acceptance criteria. Detailed tray, theme and
+orientation checks remain unreported; see [progress.md](progress.md#waiting-on-device-tests).
 
 GitHub CLI sign-in, the public repository, Pages from Actions, repository settings and Android
 signing secrets are configured. The maintainer confirmed the signing backup in 1Password.

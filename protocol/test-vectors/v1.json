@@ -1,0 +1,129 @@
+{
+  "audio": {
+    "fields": {
+      "capture_ns": -1234567890,
+      "channels": 2,
+      "first_frame": 0,
+      "flags": 12,
+      "frames": 4,
+      "pre_peak": 0.75,
+      "pre_rms_dbfs": -24.0,
+      "sample_rate": 48000,
+      "samples": [
+        -32768,
+        -123,
+        0,
+        100,
+        12345,
+        32767,
+        -1,
+        1
+      ],
+      "seq": 0,
+      "stream": 0
+    },
+    "plain": "2000020180bb00000000000000000000000000002efd69b6ffffffff04000c000000c0c10000403f008085ff000064003930ff7fffff0100"
+  },
+  "controls": [
+    "{\"t\":\"ready\",\"device\":{\"manufacturer\":\"Test\",\"model\":\"Test phone\",\"android_sdk\":26,\"app_version\":\"0.0.1\",\"phone_name\":\"Phone\"},\"capture\":{\"state\":\"idle\",\"source\":\"capture\",\"route\":\"speaker\",\"reason\":null}}",
+    "{\"t\":\"ready\",\"pc\":{\"pc_name\":\"Desk\",\"app_version\":\"0.0.1\"},\"want\":{\"meter\":true}}",
+    "{\"t\":\"audio_config\",\"run_id\":7,\"sample_rate\":48000,\"frames_per_block\":480,\"ref_channels\":2,\"mic_channels\":2,\"mic_source\":\"unprocessed\",\"effects_off\":[\"ns\",\"agc\"],\"hp_cutoff_hz\":8000,\"source\":\"capture\",\"sound_check\":{\"mic_source\":\"unprocessed\",\"mic_channels\":2,\"score\":0.71,\"mean_coherence\":0.82},\"mics\":[{\"index\":0,\"type\":\"builtin\",\"position_m\":[-0.02,-0.075,0.0],\"channels\":[0]},{\"index\":1,\"type\":\"builtin\",\"position_m\":null,\"channels\":[1]}]}",
+    "{\"t\":\"capture_state\",\"state\":\"running\",\"source\":\"capture\",\"route\":\"speaker\",\"reason\":null}",
+    "{\"t\":\"stats\",\"queue_ms\":12,\"dropped_blocks\":0,\"media_volume\":0.6,\"battery_pct\":81,\"charging\":false,\"thermal\":\"none\",\"cpu_pct\":7.5}",
+    "{\"t\":\"phone_info\",\"phone_name\":\"Desk phone\"}",
+    "{\"t\":\"meter\",\"score\":68,\"label\":\"good\",\"tip\":\"ready\"}",
+    "{\"t\":\"gesture\",\"kind\":\"poke\",\"acted\":true}",
+    "{\"t\":\"request_start\"}",
+    "{\"t\":\"error\",\"code\":\"bad_message\",\"message\":\"Unknown audio format 3.\"}",
+    "{\"t\":\"bye\",\"reason\":\"user_quit\"}"
+  ],
+  "pair": {
+    "bodies": [
+      "{\"t\":\"pair_hello\",\"v\":1,\"pc_id\":\"AQEBAQEBAQEBAQEBAQEBAQ\",\"pc_name\":\"Desk\",\"app\":\"veyl-desktop/0.0.1\",\"commit\":\"FLn4EfWhZDhL3squoG_62QYXemnhxG5z08UZduLaIek\"}",
+      "{\"t\":\"pair_reply\",\"v\":1,\"phone_id\":\"AgICAgICAgICAgICAgICAg\",\"phone_name\":\"Phone\",\"model\":\"Test phone\",\"app\":\"veyl-android/0.0.1\",\"e_pub\":\"3p7bfXt9wbTTW2HC7OQ1Nz-DQ8hbeGdNrfx-FG-IK08\",\"nonce\":\"IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI\"}",
+      "{\"t\":\"pair_reveal\",\"e_pub\":\"hSDwCYkwp1R0i33ctD73Wg2_Og0mOBr066SpjqqbTmo\",\"nonce\":\"ERERERERERERERERERERERERERERERERERERERERERE\"}"
+    ],
+    "commit": "14b9f811f5a164384bdecaaea06ffad906177a69e1c46e73d3c51976e2da21e9",
+    "confirm_pc": "621fc09630b09ff929b6685daae82b235003c6fa5aa71117e9d17d850660aa1f",
+    "confirm_phone": "3f4127e09b9716cf7a00436dbcbeffb4c02bb49917104187f17a19082c24a43b",
+    "k_link": "301c392d60ef9a8c2b1f4db8767105cd982f5e7b1ba7ba86df1e2dfaffc559fe",
+    "k_sas": "9b701663e943867aa728e9df32a0bcbb870c373fb90905a8f3d170a56e0e5304",
+    "okm": "301c392d60ef9a8c2b1f4db8767105cd982f5e7b1ba7ba86df1e2dfaffc559fe9b701663e943867aa728e9df32a0bcbb870c373fb90905a8f3d170a56e0e5304",
+    "pc_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+    "pc_private": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+    "pc_public": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+    "phone_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+    "phone_private": "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb",
+    "phone_public": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+    "sas": "194 454",
+    "shared": "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742",
+    "transcript": "8abea053a71a0e6eabe787d4d29e5c17eb6ecf022d5844cf34d419ebd776f1e8"
+  },
+  "ping": {
+    "payload": "cb04fb711f010000",
+    "pc_ns": 1234567890123
+  },
+  "pong": {
+    "payload": "cb04fb711f0100002efd69b6ffffffff",
+    "pc_ns": 1234567890123,
+    "phone_ns": -1234567890
+  },
+  "protocol_version": 1,
+  "session": {
+    "bodies": [
+      "{\"t\":\"hello\",\"v\":1,\"pc_id\":\"AQEBAQEBAQEBAQEBAQEBAQ\",\"app\":\"veyl-desktop/0.0.1\",\"e_pub\":\"HV1qFy-XTuUaoF__v1sszOtrsWirAqcihnei9CdNPwQ\",\"nonce\":\"MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM\"}",
+      "{\"t\":\"hello_reply\",\"v\":1,\"phone_id\":\"AgICAgICAgICAgICAgICAg\",\"app\":\"veyl-android/0.0.1\",\"e_pub\":\"-Bqshim6GXO1RTbLYqK0aXWdRC4Sr4Xa-HIuqCHF-FA\",\"nonce\":\"REREREREREREREREREREREREREREREREREREREREREQ\"}"
+    ],
+    "k_pc_to_phone": "59ec6c487ed1b6cd9b646aad69b9c202d306b717a9df42992a9300663a820e0b",
+    "k_phone_to_pc": "66a9f23991dcd734478bb5d275d13c5e42f22bb9661d36e62f24b52309ae48ff",
+    "okm": "59ec6c487ed1b6cd9b646aad69b9c202d306b717a9df42992a9300663a820e0b66a9f23991dcd734478bb5d275d13c5e42f22bb9661d36e62f24b52309ae48ff",
+    "pc_nonce": "3333333333333333333333333333333333333333333333333333333333333333",
+    "pc_private": "1972333e5f5ba2143ba1e677bfc3ce4e2ccb606df137ee3bfeb178f6848a6758",
+    "pc_public": "1d5d6a172f974ee51aa05fffbf5b2ccceb6bb168ab02a7228677a2f4274d3f04",
+    "pc_to_phone": [
+      {
+        "counter": 0,
+        "payload": "7b2274223a227265616479222c227063223a7b2270635f6e616d65223a224465736b222c226170705f76657273696f6e223a22302e302e31227d2c2277616e74223a7b226d65746572223a747275657d7d",
+        "type": 16,
+        "wire": "0000006b020000000000000000d4cbcfab35d4473cedf0fc21a3f7154b52094a8de2a576f9c8bfed05ea6c40e735d68e3c41e0c3ef175f75cafe9fa5d7dbc1437a1368f0dadd98fd21b594325981103bebbcd2cfd0ea2d64baad6c256a23f765ba6f1ad769c3120d541a926192299e"
+      },
+      {
+        "counter": 1,
+        "payload": "cb04fb711f010000",
+        "type": 48,
+        "wire": "00000022020000000000000001c2c86e6b80d322a6d245a021cba857fedf366b8b0a7aecbfe7"
+      },
+      {
+        "counter": 2,
+        "payload": "000102ff",
+        "type": 126,
+        "wire": "0000001e0200000000000000020ce451a5d8c34353bd3c79f2178d3e64116510b7a2"
+      }
+    ],
+    "phone_nonce": "4444444444444444444444444444444444444444444444444444444444444444",
+    "phone_private": "d901c2043a75fd60c4c839d7c0359e7d10f42d880e0dea82493dbcf755fc2b1f",
+    "phone_public": "f81aac8629ba1973b54536cb62a2b469759d442e12af85daf8722ea821c5f850",
+    "phone_to_pc": [
+      {
+        "counter": 0,
+        "payload": "7b2274223a227265616479222c22646576696365223a7b226d616e756661637475726572223a2254657374222c226d6f64656c223a22546573742070686f6e65222c22616e64726f69645f73646b223a32362c226170705f76657273696f6e223a22302e302e31222c2270686f6e655f6e616d65223a2250686f6e65227d2c2263617074757265223a7b227374617465223a2269646c65222c22736f75726365223a2263617074757265222c22726f757465223a22737065616b6572222c22726561736f6e223a6e756c6c7d7d",
+        "type": 16,
+        "wire": "000000e7020000000000000000d9940e10105469401cb58b0b1c82a36ce4fd098e9022672dbbdbeb50e0dd26d10a3f33693ce11ee4636a0439298fc15fc17f77e16898ae1d5f3333c7b294a15b830e8f75d5edbaed7c7cea8607f093fcacad087c1bfea036278b3329925be4c4e37efa48a52208f8eb6469cb84131be72ba22f16047896dc0f1d60a4e64b6a79504ad62afb4358dec84fcbf8821cb4c475d90e5ccde12fac64e85534adb435fab281789a35f862a87c9267a9cfc66ff72bb9631a4a71f92c78fc52302e969c66ed8c8d7140c9500c6c5b53b4278db6cba8142f4dcee2fb345c82f6720d42"
+      },
+      {
+        "counter": 1,
+        "payload": "00020180bb00000000000000000000000000002efd69b6ffffffff04000c000000c0c10000403f008085ff000064003930ff7fffff0100",
+        "type": 32,
+        "wire": "00000051020000000000000001ff6f537db05d5f593c031a258f543139ae0ff1deaea3c29893fad5fffbb12618f5754efc9bdb071edf6f47ed67446178ca3a32b21f8e56e7f35013ea85e5ba3e083afa26e1fd48ad"
+      },
+      {
+        "counter": 2,
+        "payload": "cb04fb711f0100002efd69b6ffffffff",
+        "type": 49,
+        "wire": "0000002a020000000000000002087650dca1ae12c0c1fc5f600d384bd82c978d80b46e28d8f111e0fe0e45a3e7f8"
+      }
+    ],
+    "shared": "f21a91e5c37c8eb762f5f1238296161d89acecd3f63f892a9d2c2803a130322e",
+    "transcript": "02ec288bef1255e0575cd407b0db1f7588b8e83d00c5ccdd61d6058a8481f434"
+  }
+}

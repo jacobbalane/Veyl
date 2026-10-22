@@ -33,11 +33,10 @@ jobs:
       - run: cargo test -p veyl-link
       # Scenario and end-to-end tests run optimized so they finish in minutes.
       - run: cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab
-      # Enable the shared protocol vectors after M1.3.
-      # - name: Protocol test vectors are current
-      #   run: |
-      #     cargo run -q -p veyl-link --example gen_vectors > "$RUNNER_TEMP/v1.json"
-      #     diff -u protocol/test-vectors/v1.json "$RUNNER_TEMP/v1.json"
+      - name: Protocol test vectors are current
+        run: |
+          cargo run -q -p veyl-link --example gen_vectors > "$RUNNER_TEMP/v1.json"
+          diff -u protocol/test-vectors/v1.json "$RUNNER_TEMP/v1.json"
 
   windows:
     needs: checks

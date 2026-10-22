@@ -1,7 +1,7 @@
 # Third-party notices
 
 Veyl's original application code and brand assets are MIT licensed. Third-party components retain
-their own licenses. This inventory lists direct dependencies in the M0 foundation. Bundled
+their own licenses. This inventory lists direct dependencies through M1. Bundled
 components include their own notices where required.
 
 ## Manrope
@@ -44,18 +44,27 @@ These are direct external dependencies of the workspace crates, including build 
 
 | Crate                        | Locked version | License           |
 | ---------------------------- | -------------- | ----------------- |
+| aes-gcm                      | 0.11.1         | Apache-2.0 OR MIT |
 | base64                       | 0.23.1         | MIT OR Apache-2.0 |
 | getrandom                    | 0.4.3          | MIT OR Apache-2.0 |
+| hkdf                         | 0.13.0         | MIT OR Apache-2.0 |
+| hmac                         | 0.13.0         | MIT OR Apache-2.0 |
+| proptest                     | 1.12.0         | MIT OR Apache-2.0 |
 | rustfft                      | 6.4.1          | MIT OR Apache-2.0 |
 | serde                        | 1.0.229        | MIT OR Apache-2.0 |
 | serde_json                   | 1.0.154        | MIT OR Apache-2.0 |
+| sha2                         | 0.11.1         | MIT OR Apache-2.0 |
+| subtle                       | 2.6.1          | BSD-3-Clause      |
 | tauri                        | 2.12.5         | Apache-2.0 OR MIT |
 | tauri-build                  | 2.7.4          | Apache-2.0 OR MIT |
 | tauri-plugin-single-instance | 2.5.4          | Apache-2.0 OR MIT |
 | tempfile                     | 3.27.0         | MIT OR Apache-2.0 |
+| tokio                        | 1.54.1         | MIT               |
 | tracing                      | 0.1.44         | MIT               |
 | tracing-appender             | 0.2.5          | MIT               |
 | tracing-subscriber           | 0.3.23         | MIT               |
+| x25519-dalek                 | 3.0.0          | BSD-3-Clause      |
+| zeroize                      | 1.9.1          | Apache-2.0 OR MIT |
 
 ## Android dependencies
 
