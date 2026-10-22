@@ -92,6 +92,7 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
         let (mut configured, mut running, mut stats, mut pongs) = (false, false, false, 0);
         let mut capture_start = None;
         let mut total = 0;
+        let mut ended = false;
         loop {
             let frame = connection.receive().await.unwrap();
             // A counter skip, reordering or bad tag fails here before accepting a block.
@@ -114,7 +115,7 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
                     Control::CaptureState { capture } if capture.state == "running" => {
                         running = true
                     }
-                    Control::CaptureState { capture } if capture.state == "idle" => break,
+                    Control::CaptureState { capture } if capture.state == "idle" => ended = true,
                     Control::Stats { dropped_blocks, .. } => {
                         assert_eq!(dropped_blocks, 0);
                         stats = true;
@@ -168,9 +169,12 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
                 }
                 _ => panic!("Unexpected simulator message."),
             }
+            if ended && pongs == 20 {
+                break;
+            }
         }
         assert_eq!(counts, [4000, 4000]);
-        assert!(stats && pongs >= 19);
+        assert!(stats && pongs == 20);
         connection
             .send(
                 &authenticated
