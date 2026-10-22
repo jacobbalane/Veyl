@@ -34,6 +34,8 @@ sequenceDiagram
 
 Confirmations may arrive in either order. A valid peer MAC alone never permits storing a pairing.
 Cancel, timeout, commitment mismatch and invalid MAC end the attempt and discard pending secrets.
+Both roles expose `cancel` before the code is available as well as during confirmation. A UI
+confirmation submitted before the code exists is ignored; it cannot preapprove an unseen code.
 
 ```mermaid
 sequenceDiagram

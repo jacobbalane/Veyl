@@ -101,6 +101,8 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
 
 ## Verification
 
+This table records the M0 release checks. M1's protocol verification is recorded in its section below.
+
 | Check                                                   | Result                                                    |
 | ------------------------------------------------------- | --------------------------------------------------------- |
 | `npm ci`                                                | Passed from the committed lockfile                        |
@@ -249,7 +251,7 @@ committed file; `.\gradlew :core:test`.
 **M1.1–M1.3:** Rust now has bounded blocking/Tokio framing, all message codecs, X25519/HKDF/HMAC,
 strict AES-GCM counters, pairing/session machines for both roles, and async PC helpers. The helpers
 retain partial reads/writes across cancellation and service both directions while confirmations
-are sent. Twenty-four Rust tests pass, including a full pairing/session run over a 19-byte duplex
+are sent. Twenty-six Rust tests pass, including a full pairing/session run over a 19-byte duplex
 buffer, fake-clock timeout, codec property tests, rate limits, unknown extensions, corruption,
 replay, counter exhaustion, audio queue loss and liveness. Clippy passes with warnings denied.
 The deterministic vector generator matches the committed file and RFC 7748's X25519 known answer;
@@ -257,11 +259,24 @@ CI's vector comparison is enabled.
 
 **M1.4–M1.5:** Kotlin reproduces every committed vector byte for byte: X25519, commitment, raw JSON
 transcripts, HKDF, the comparison code, both confirmation MACs, session keys and all six sealed
-frames. Sixteen core JVM tests pass, including malformed messages, counter/authentication failures,
+frames. Seventeen core JVM tests pass, including malformed messages, counter/authentication failures,
 pairing/session gates, timeouts, key cleanup and the phone audio queue. Both languages prepare one
 final `bad_message` response for authenticated malformed AUDIO, discard channel keys and prohibit
 reuse. Debug APK/lint and a signed release build/lint pass; the permanent signer is unchanged.
 Protocol documentation now includes the complete spec, message examples, two Mermaid sequence
 diagrams and caller responsibilities. Android uses only Bouncy Castle's low-level X25519, with
 its license bundled; other crypto uses the platform APIs. Kotlin sources are formatted with
-ktfmt 0.65's four-space style. Final cross-language CI acceptance is pending the push.
+ktfmt 0.65's four-space style. Both roles can cancel before a code exists; the PC helper services
+that decision immediately and bounds the final abort write. Final cross-language CI acceptance is
+pending the final cancellation-fix build.
+
+## Dependency follow-up
+
+[Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the
+Linux-only GTK dependency `glib` 0.18.5
+([RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html)). Dependabot's update
+attempt reports `security_update_not_possible`: the current GTK dependency chain cannot resolve
+the fixed 0.20.0 release. The alert remains open. `cargo tree --locked -p veyl-desktop --target
+x86_64-pc-windows-msvc --invert glib@0.18.5` and the ARM64 equivalent both report no dependency:
+this crate is not compiled into either supported Windows binary. Android does not use GTK. This
+separate Dependabot maintenance failure is not a Build Veyl test or packaging failure.

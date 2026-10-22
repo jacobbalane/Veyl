@@ -211,6 +211,11 @@ class PhonePairing(
         }
     }
 
+    fun cancel(): List<Frame> {
+        check(phase != Phase.DONE && phase != Phase.FAILED) { "Pairing closed." }
+        return abort("user_cancelled")
+    }
+
     fun takePairing(): PairedPeer? = paired.also { paired = null }
 
     override fun close() {

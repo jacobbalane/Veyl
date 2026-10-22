@@ -342,6 +342,12 @@ impl Pairing {
         self.finish();
         Ok(vec![frame])
     }
+    pub fn cancel(&mut self) -> io::Result<Vec<Frame>> {
+        if matches!(self.phase, Phase::Done | Phase::Failed) {
+            return Err(invalid("Pairing is closed."));
+        }
+        self.abort("user_cancelled")
+    }
     fn finish(&mut self) {
         if self.own_confirmed && self.peer_confirmed {
             let keys = self.keys.take().unwrap();

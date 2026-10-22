@@ -200,6 +200,7 @@ where
     connection.sender.enqueue(&hello)?;
     let mut shown = false;
     let mut confirmed = false;
+    let mut abort_deadline = None;
     let mut ticks = time::interval(Duration::from_millis(100));
     loop {
         if connection.sender.is_empty() {
@@ -210,6 +211,9 @@ where
                 return Err(invalid("Pairing ended without confirmation."));
             }
         }
+        if machine.failure().is_some() && abort_deadline.is_none() {
+            abort_deadline = Some(Instant::now() + Duration::from_millis(100));
+        }
         if !shown {
             if let Some(sas) = machine.sas() {
                 show_code(sas);
@@ -218,8 +222,16 @@ where
         }
         let elapsed = || start.elapsed().as_millis().min(u64::MAX as u128) as u64;
         let outbound = tokio::select! {
-            frame = connection.receiver.receive(), if !machine.is_done() && machine.failure().is_none() => machine.receive(&frame?, elapsed())?,
-            decision = confirmations.recv(), if shown && !confirmed && !machine.is_done() && machine.failure().is_none() => { confirmed = true; machine.confirm(decision.unwrap_or(false), elapsed())? }
+            frame = connection.receiver.receive(), if !machine.is_done() => {
+                let frame = frame?;
+                if machine.failure().is_none() { machine.receive(&frame, elapsed())? } else { vec![] }
+            }
+            decision = confirmations.recv(), if !confirmed && !machine.is_done() && machine.failure().is_none() => {
+                if !decision.unwrap_or(false) { confirmed = true; machine.cancel()? }
+                else if shown { confirmed = true; machine.confirm(true, elapsed())? }
+                else { vec![] }
+            }
+            _ = time::sleep_until(abort_deadline.unwrap_or(start + Duration::from_secs(150))), if abort_deadline.is_some() => return Err(invalid("Pairing ended without confirmation.")),
             _ = ticks.tick() => machine.tick(elapsed())?,
             result = connection.sender.flush(), if !connection.sender.is_empty() => { result?; vec![] }
         };

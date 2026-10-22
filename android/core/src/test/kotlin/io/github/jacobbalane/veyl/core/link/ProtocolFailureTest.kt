@@ -7,6 +7,23 @@ import org.junit.Test
 
 class ProtocolFailureTest {
     @Test
+    fun cancellationBeforeHelloOrRevealDoesNotWaitForTheCode() {
+        val hello = Frame(Frames.HANDSHAKE, body(fixture().obj("pair")["bodies"]!!.jsonArray[0]))
+        for (receivedHello in listOf(false, true)) {
+            PhonePairing(identity(), 0, true, false, PairingRateLimit()).use { phone ->
+                if (receivedHello) phone.receive(hello, 0)
+                assertEquals(
+                    "user_cancelled",
+                    Messages.parseHandshake(phone.cancel().single()).text("reason"),
+                )
+                assertNull(phone.sas)
+                assertNull(phone.takePairing())
+                assertFails { phone.cancel() }
+            }
+        }
+    }
+
+    @Test
     fun authenticatedMalformedAudioReturnsOneFinalErrorBeforeClose() {
         val plain = fixture().obj("audio").hex("plain")
         plain[2] = 0
