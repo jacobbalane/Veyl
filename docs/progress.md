@@ -394,7 +394,7 @@ test recordings and a fake phone allow end-to-end testing before hardware review
 - [x] **M3.1** Phone LinkServer/LinkSession over core, NSD advertising, network information,
       Keystore-protected PairingStore, pairing dialog, connected/waiting Home, request-start
       notification, stats, audio configuration, capture state and forgetting PCs.
-- [ ] **M3.2** Desktop DNS-SD discovery, connection manager, pairing flow/dialog, Phones tab,
+- [x] **M3.2** Desktop DNS-SD discovery, connection manager, pairing flow/dialog, Phones tab,
       add-by-address, DPAPI pairings, SoundSource/PhoneSource, level-meter engine stub and Help
       diagnostics: block rates, levels, drops, RTT, arrival latency and battery.
 - [ ] **M3.3** `veyl-lab fake-phone` and end-to-end test: pair, session, forty seconds of poke_basic,
@@ -440,7 +440,7 @@ passed at `58dfb9f415215e40cc9a4aac1a193f48330f206c`
 and signed/debug APKs, native Windows x64 tests/installer and the ARM64 installer cross-build.
 The website deployment also passed. No tag or release was created.
 
-**M3.2 in progress.** The Windows DNS-SD adapter copies native callback data into bounded Tokio
+**M3.2 foundation complete.** The Windows DNS-SD adapter copies native callback data into bounded Tokio
 channels, frees Windows allocations, and keeps cancellation contexts alive until the terminal
 callback. Opaque tokens and owned references protect overlapping/late callbacks. Nearby phone
 records validate protocol/TXT fields, coalesce the short identity, update addresses and expire
@@ -452,7 +452,7 @@ behavior; clippy passes with warnings denied. This foundation
 [passed CI](https://github.com/jacobbalane/Veyl/actions/runs/39767015607) at
 `8bb59e475ef56afcc3d1db4235d6717e9eb80bc6`, including both Windows installers and signed Android.
 
-**M3.2 implementation and local verification complete; full CI pending.** The connection manager
+**M3.2 implementation and verification complete.** The connection manager
 now browses continuously, prefers the last paired phone, connects by IPv4/hostname with one
 three-second DNS/connect deadline, authenticates, reconnects with bounded backoff and requests a
 start notice on the phone. New discovery refreshes can expedite a pending reconnect. Pairing
@@ -478,6 +478,29 @@ signer is unchanged. Rust/Kotlin expose authenticated peer readiness; cancellati
 confirmation remains possible, known version errors are preserved, and both shared writer queues
 prioritize control messages with bounded backlog. Regenerated wire vectors remain identical.
 The required DSP/simulator/lab release tests pass. No tag or release was created.
+
+**M3.2 CI passed** at `9bf137620084cf3ff85adaa60bc0b97e7435c124`
+([Build Veyl](https://github.com/jacobbalane/Veyl/actions/runs/39773026506)): all portable checks,
+Android tests/lint/APKs, native Windows x64 tests/installer and the ARM64 installer cross-build.
+The website deployment passed too. M3.3 now builds the simulated phone and its required
+`poke_basic` acoustic input; the broader simulator and engine gates remain M4.
+
+**M3.3 implementation and local verification complete; CI pending.** The loopback-only simulator
+uses Veyl Link's real phone pairing/session machines, compares codes through an interactive
+terminal, keeps confirmed pairings only in memory and accepts one PC at a time. It sends ready,
+configuration, capture state, statistics and both filtered audio streams, answers heartbeats,
+rejects busy clients and closes on shutdown. Fast mode uses socket backpressure; real-time mode
+paces by frame time. Recording replay checks the shared folder format, preserves PCM/headers,
+gaps and unknown timestamps, and rebases known capture times without changing stream offsets.
+
+The `poke_basic` prerequisite renders Bright Loop through speaker EQ/nonlinearity, direct/static/
+diffuse/hand echo paths, fractional delay, microphone noise and the privacy filter. It supplies ten
+truth turns and raw level metadata before 16-bit quantization; the other twenty scenarios remain
+M4 work. Six DSP, five simulator, one recording-reader and two end-to-end tests pass in release,
+with clippy warnings denied. The forty-second encrypted run receives exactly 4,000 blocks per
+stream, checks every PCM sample and header, and reports zero decryption errors. Separate checks
+cover pacing, busy rejection, a deliberately corrupted tag and listener shutdown. No gesture
+results or device acceptance are claimed. Codes and audio are absent from test output.
 
 ### Waiting on M3 device tests
 

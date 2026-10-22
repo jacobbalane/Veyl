@@ -77,8 +77,28 @@ The Windows host uses system DNS-SD and connects out; manual host/IPv4 plus port
 discovery is blocked. Pairings use current-user DPAPI and are bound to both identities. The engine
 worker currently measures levels through a bounded queue; it does not yet detect a hand or poke.
 
-`cargo run -p veyl-lab -- scenarios` lists the planned scenario names. Rendering, analysis and
-the acoustic scene model arrive in M4; the command does not claim to simulate them yet.
+`cargo run -p veyl-lab -- scenarios` distinguishes available scenarios from M4's planned scenes.
+The M3 fake phone renders forty seconds of `poke_basic` with real delayed acoustic paths, filtered
+16-bit PCM, ten truth pokes and two streams of 4,000 ten-millisecond blocks. It does not yet run the
+echo engine or judge gesture detections.
+
+```sh
+cargo run --release -p veyl-lab -- fake-phone --scenario poke_basic --realtime
+# Or replay an explicitly selected, filtered test recording:
+cargo run --release -p veyl-lab -- fake-phone --recording PATH --realtime
+```
+
+Open the desktop's Phones tab, use Add by address with `127.0.0.1:47820`, then pair and compare the
+code with the simulator's interactive terminal. The simulated phone confirms its own side. It
+listens only on loopback; pairings exist only in memory and change when it restarts. Codes are not
+printed when output is redirected. Ctrl+C closes the listener and active connection. Omit
+`--realtime` to send as fast as the connection allows. `--seed N` chooses a nonzero scenario seed;
+`--port N` changes the listening port. Replays retain frame offsets, sequence gaps, raw level
+metadata and unknown timestamps, rebasing known capture times to the simulator's current clock.
+Reported battery, volume and CPU values are simulated constants. No input audio is played or saved.
+
+`cargo test --release -p veyl-lab` runs the portable end-to-end pairing/session/stream test as well
+as replay and pacing checks. All scenario rendering and full analysis commands follow in M4.
 
 Generate the shared brand assets with `node scripts/render-icons.mjs`. It uses the committed
 Manrope source font, creates an outlined ExtraBold wordmark, renders the icons, and copies font

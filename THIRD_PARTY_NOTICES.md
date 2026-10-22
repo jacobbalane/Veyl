@@ -49,6 +49,7 @@ These are direct external dependencies of the workspace crates, including build 
 | getrandom                    | 0.4.3          | MIT OR Apache-2.0 |
 | hkdf                         | 0.13.0         | MIT OR Apache-2.0 |
 | hmac                         | 0.13.0         | MIT OR Apache-2.0 |
+| hound                        | 3.5.1          | Apache-2.0        |
 | proptest                     | 1.12.0         | MIT OR Apache-2.0 |
 | rustfft                      | 6.4.1          | MIT OR Apache-2.0 |
 | serde                        | 1.0.229        | MIT OR Apache-2.0 |

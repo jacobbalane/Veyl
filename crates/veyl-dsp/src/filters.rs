@@ -10,14 +10,40 @@ impl fmt::Display for FilterError {
 }
 impl Error for FilterError {}
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct Biquad {
+// Filter state contains audio, so it deliberately has no Debug implementation.
+#[derive(Clone, Copy)]
+pub struct Biquad {
     b: [f32; 3],
     a: [f32; 2],
     state: [f32; 2],
 }
 
 impl Biquad {
+    pub fn high_pass(rate: u32, cutoff: f32, q: f32) -> Self {
+        Self::new(rate, cutoff, q, true)
+    }
+    pub fn low_pass(rate: u32, cutoff: f32, q: f32) -> Self {
+        Self::new(rate, cutoff, q, false)
+    }
+    /// RBJ high shelf with slope one: https://www.w3.org/TR/audio-eq-cookbook/.
+    pub fn high_shelf(rate: u32, cutoff: f32, gain_db: f32) -> Self {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let (sin, cos) = (2.0 * PI * cutoff / rate as f32).sin_cos();
+        let beta = 2.0 * a.sqrt() * sin / std::f32::consts::SQRT_2;
+        let a0 = (a + 1.0) - (a - 1.0) * cos + beta;
+        Self {
+            b: [
+                a * ((a + 1.0) + (a - 1.0) * cos + beta) / a0,
+                -2.0 * a * ((a - 1.0) + (a + 1.0) * cos) / a0,
+                a * ((a + 1.0) + (a - 1.0) * cos - beta) / a0,
+            ],
+            a: [
+                2.0 * ((a - 1.0) - (a + 1.0) * cos) / a0,
+                ((a + 1.0) - (a - 1.0) * cos - beta) / a0,
+            ],
+            state: [0.0; 2],
+        }
+    }
     pub(crate) fn new(rate: u32, cutoff: f32, q: f32, highpass: bool) -> Self {
         let omega = 2.0 * PI * cutoff / rate as f32;
         let (sin, cos) = omega.sin_cos();
@@ -35,7 +61,7 @@ impl Biquad {
         }
     }
 
-    pub(crate) fn process(&mut self, input: f32) -> f32 {
+    pub fn process(&mut self, input: f32) -> f32 {
         let output = self.b[0] * input + self.state[0];
         self.state[0] = self.b[1] * input - self.a[0] * output + self.state[1];
         self.state[1] = self.b[2] * input - self.a[1] * output;
@@ -44,7 +70,6 @@ impl Biquad {
 }
 
 /// Removes voice frequencies at the source, before audio reaches a link or recorder.
-#[derive(Debug)]
 pub struct PrivacyFilter {
     channels: Vec<[Biquad; 4]>,
 }
@@ -107,6 +132,25 @@ mod tests {
         let tail = &samples[rate as usize / 2..];
         let power = tail.iter().map(|x| (x * x) as f64).sum::<f64>() / tail.len() as f64;
         (10.0 * (power / 0.5).log10()) as f32
+    }
+    #[test]
+    fn speaker_shelf_has_the_requested_midpoint_and_endpoint_gains() {
+        for (hz, expected) in [(1000.0, 0.0), (14000.0, -1.5), (22000.0, -3.0)] {
+            let mut filter = Biquad::high_shelf(48000, 14000.0, -3.0);
+            let mut power = 0.0;
+            for n in 0..48000 {
+                let input = (2.0 * std::f64::consts::PI * hz * n as f64 / 48000.0).sin() as f32;
+                let output = filter.process(input);
+                if n >= 24000 {
+                    power += (output * output) as f64;
+                }
+            }
+            let actual = 10.0 * (power / 24000.0 / 0.5).log10();
+            assert!(
+                (actual - expected).abs() < 0.1,
+                "Shelf response at {hz} Hz."
+            );
+        }
     }
 
     #[test]

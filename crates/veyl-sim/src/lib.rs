@@ -1,4 +1,7 @@
-//! Scenario catalogue; acoustic scene rendering is implemented in M4.
+//! Deterministic acoustic inputs. M3's fake phone uses poke_basic; M4 expands the catalogue.
+pub mod basic;
+mod sampling;
+pub use basic::{poke_basic, BlockMeta, PokeTruth, Rendered, TruthSample};
 pub const SCENARIOS: &[&str] = &[
     "still",
     "poke_basic",

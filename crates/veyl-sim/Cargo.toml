@@ -4,3 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+
+[dependencies]
+veyl-dsp = {path="../veyl-dsp"}
+rustfft = "6"
+serde = {version="1",features=["derive"]}
