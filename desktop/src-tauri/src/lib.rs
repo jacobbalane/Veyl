@@ -1,3 +1,5 @@
+pub mod discovery;
+pub mod pairings;
 mod settings;
 
 use settings::Settings;

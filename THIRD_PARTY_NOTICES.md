@@ -1,7 +1,7 @@
 # Third-party notices
 
 Veyl's original application code and brand assets are MIT licensed. Third-party components retain
-their own licenses. This inventory lists direct dependencies through M2. Bundled
+their own licenses. This inventory lists direct dependencies through M3. Bundled
 components include their own notices where required.
 
 ## Manrope
@@ -59,11 +59,13 @@ These are direct external dependencies of the workspace crates, including build 
 | tauri-build                  | 2.7.4          | Apache-2.0 OR MIT |
 | tauri-plugin-single-instance | 2.5.4          | Apache-2.0 OR MIT |
 | tempfile                     | 3.27.0         | MIT OR Apache-2.0 |
+| time                         | 0.3.55         | MIT OR Apache-2.0 |
 | tokio                        | 1.54.1         | MIT               |
 | tracing                      | 0.1.44         | MIT               |
 | tracing-appender             | 0.2.5          | MIT               |
 | tracing-subscriber           | 0.3.23         | MIT               |
 | x25519-dalek                 | 3.0.0          | BSD-3-Clause      |
+| windows-sys                  | 0.61.2         | MIT OR Apache-2.0 |
 | zeroize                      | 1.9.1          | Apache-2.0 OR MIT |
 
 ## Android dependencies

@@ -435,7 +435,20 @@ identity-bound ciphertext; notification tests cover forgery, replay, expiry and 
 All 26 Rust Link tests pass; regenerated vectors remain byte-for-byte identical. Android release
 lint and the signed release build pass; its permanent signing certificate is unchanged. These
 tests do not establish real LAN discovery or Android Keystore behavior on a device. CI acceptance
-will be recorded after the source push.
+passed at `58dfb9f415215e40cc9a4aac1a193f48330f206c`
+([Build Veyl](https://github.com/jacobbalane/Veyl/actions/runs/39765745065)): all checks, Android tests
+and signed/debug APKs, native Windows x64 tests/installer and the ARM64 installer cross-build.
+The website deployment also passed. No tag or release was created.
+
+**M3.2 in progress.** The Windows DNS-SD adapter copies native callback data into bounded Tokio
+channels, frees Windows allocations, and keeps cancellation contexts alive until the terminal
+callback. Opaque tokens and owned references protect overlapping/late callbacks. Nearby phone
+records validate protocol/TXT fields, coalesce the short identity, update addresses and expire
+after ninety seconds. No desktop listening socket is opened. DPAPI pairing storage uses the
+current user with UI forbidden, binds ciphertext to both device identities, writes atomically,
+keeps unknown fields and exposes only metadata to the UI. Seven desktop Rust tests pass, including
+native DPAPI restart/tamper/identity checks, save failure, callback lifetime and discovery-table
+behavior; clippy passes with warnings denied. Connection management and interface wiring remain.
 
 ### Waiting on M3 device tests
 

@@ -4553,11 +4553,15 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-single-instance",
  "tempfile",
+ "time",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "veyl-dsp",
  "veyl-link",
+ "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]
