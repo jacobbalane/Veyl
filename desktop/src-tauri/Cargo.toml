@@ -1,0 +1,33 @@
+[package]
+name = "veyl-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Control your PC with a poke in the air."
+default-run = "veyl-desktop"
+
+[lib]
+name = "veyl_desktop_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[features]
+default = []
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+getrandom = "0.4"
+base64 = "0.23"
+tempfile = "3"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+veyl-dsp = { path = "../../crates/veyl-dsp" }
+veyl-link = { path = "../../crates/veyl-link" }
