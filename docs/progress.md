@@ -180,6 +180,16 @@ The local signed release APK builds and `apksigner verify` confirms the permanen
 both installers and the debug Android build before signing secrets were configured. CI now selects
 the release APK when the configured secrets are available.
 
+The first signed CI run found that AGP does not create `:app:testReleaseUnitTest` for this app's
+current configuration. The release path now runs the existing debug app unit-test task and JVM
+core tests, then release lint and signed packaging. The app task still has no test sources; the
+two core tests supply the current Android logic coverage.
+
+At the maintainer's request, all four signing values were exported to
+`../VEYL_SIGNING_SECRETS.txt`, outside the Git repository, for saving in 1Password. This temporary
+export is plaintext, restricted to the current user and SYSTEM, and must not be committed. Delete
+it after the maintainer confirms the values are saved safely.
+
 Still required for M0.9: the maintainer must save the actual password in a password manager and
 make two independent backups of the key and password. Instructions are in
 `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`; the DPAPI file alone is not a portable backup.

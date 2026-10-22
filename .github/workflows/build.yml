@@ -121,7 +121,7 @@ jobs:
           VEYL_KEY_PASSWORD: ${{ secrets.VEYL_KEY_PASSWORD }}
         run: |
           if [ -n "$VEYL_KEYSTORE_PATH" ]; then
-            ./gradlew --no-daemon :core:test :app:lintRelease :app:testReleaseUnitTest :app:assembleRelease
+            ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
           else
             ./gradlew --no-daemon :core:test :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
           fi
