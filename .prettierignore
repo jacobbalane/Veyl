@@ -1,0 +1,10 @@
+node_modules
+dist
+target
+android
+desktop/src-tauri/gen
+desktop/src-tauri/icons
+package-lock.json
+protocol/test-vectors
+.cache
+lab

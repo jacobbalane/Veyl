@@ -1,0 +1,104 @@
+# Development
+
+Veyl's M0 foundation includes runnable desktop and Android interfaces, a three-page website,
+portable filter and test-sound code, and build workflows. Sensing, pairing and actions come in
+later milestones. See [progress](progress.md) for verification and the maintainer steps.
+
+## Prerequisites
+
+Node.js 24+ and Git support the website and desktop UI. Windows native builds also need Rust
+stable with rustfmt and clippy, Visual Studio C++ Build Tools with the Windows SDK, and WebView2.
+Android builds need a compatible JDK, Android SDK, and the committed Gradle wrapper.
+
+Ask the maintainer before installing system-wide tools unless the session already authorizes
+them. The maintainer approved the local toolchain setup on 2026-10-21. Node 26, Rust stable,
+Visual Studio 2022 C++ Build Tools, Java 17 and the Android command-line SDK are installed.
+
+Android uses Gradle 9.8.2 (the wrapper checks its SHA-256), Android Gradle Plugin 9.4.1, Kotlin
+2.4.21 and SDK 37.2. Java and Kotlin target 17; minSdk remains 26. AGP supplies Kotlin support in
+`:app`; only `:core` applies the JVM Kotlin plugin. No Android Studio installation is required.
+
+Set `ANDROID_HOME` to your SDK directory, or put `sdk.dir=C:/path/to/Android/Sdk` in the ignored
+`android/local.properties`. The current command-line tools also expose `android sdk install`;
+their package paths use slashes, for example `platforms/android-37.2` and `build-tools/36.0.0`.
+The older `sdkmanager` interface is deprecated in those tools.
+
+## Commands
+
+Run at the repository root unless a command changes directory.
+
+```powershell
+npm ci
+npm run format:check
+node --test scripts/
+node scripts/check-version.mjs
+npm run -w desktop dev
+npm run -w desktop typecheck
+npm run -w desktop test
+npm run -w desktop build
+npm run -w site dev
+npm run -w site build
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --exclude veyl-desktop
+cargo test -p veyl-desktop
+npm run -w desktop desktop
+npm run -w desktop package
+```
+
+```powershell
+Set-Location android
+.\gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+```
+
+Use a Visual Studio Developer PowerShell if the MSVC linker is missing. Git's `link.exe` is not
+the Microsoft linker. Linux CI tests the portable crates without compiling the Tauri app.
+DSP scenario tests run in release mode once M4 supplies the scenarios.
+
+`cargo run -p veyl-lab -- scenarios` lists the planned scenario names. Rendering, analysis and
+the acoustic scene model arrive in M4; the command does not claim to simulate them yet.
+
+Generate the shared brand assets with `node scripts/render-icons.mjs`. It uses the committed
+Manrope source font, creates an outlined ExtraBold wordmark, renders the icons, and copies font
+licenses into each app's resources. Run `npm run format` afterwards if the master SVG changed.
+
+The native desktop app starts hidden and opens on `ui_ready`. Closing its window keeps it in the
+tray; choose **Quit Veyl** to exit. `--hidden` keeps it in the tray at launch. For isolated debug
+checks, set `VEYL_DATA_DIR` to an ignored folder before launching the debug executable. Release
+builds always use the standard app data directory. Settings persist a random PC identity and
+retain unknown fields. Logging contains lifecycle messages only.
+
+Release signing on Android reads `VEYL_KEYSTORE_PATH`, `VEYL_KEYSTORE_PASSWORD`, `VEYL_KEY_ALIAS`
+and `VEYL_KEY_PASSWORD`. Without them, local release builds are unsigned. Debug APKs use the
+standard Android debug key. Only the maintainer creates the permanent release key.
+
+If the environment blocks Node's test worker processes with `spawn EPERM`, run
+`node --test --test-isolation=none scripts/` to exercise the same tests in one process. This does
+not establish that the normal CI command passes. Keep that verification pending.
+
+## Versions and release notes
+
+`node scripts/check-version.mjs` checks every version source and Android's integer versionCode.
+It also checks workspace versions in an npm lockfile when one exists. A tag build requires the
+exact matching tag and nonempty release notes in `CHANGELOG.md`.
+
+`node scripts/bump-version.mjs X.Y.Z` validates every source before updating it, then tries to
+refresh both lockfiles without a command shell. A missing tool or failed refresh produces exit
+code 1 and prints the commands still needed. Source versions remain updated, so inspect the
+changes and finish dependency resolution before committing. Minor and patch must be below 100;
+prerelease versions and Android versionCodes outside 1–2100000000 are rejected.
+
+`node scripts/changelog-section.mjs X.Y.Z` prints exactly one release's notes, preserving Markdown.
+Missing, empty or duplicate sections fail. No version command creates a tag or release.
+
+## Layout
+
+- `desktop/`: React interface and Windows Tauri host.
+- `android/`: Kotlin JVM core and Android application.
+- `crates/`: portable DSP, Veyl Link, simulator and lab CLI.
+- `site/`: home, docs and changelog for GitHub Pages.
+- `protocol/test-vectors/`: shared wire examples, added in M1.
+- `assets/brand/`: editable brand sources and generated icons.
+- `scripts/`: versions, release notes and icon generation.
+- `docs/`: user and contributor docs, decisions and progress.
+- `lab/recordings/`: ignored opt-in device recordings, never committed.
