@@ -39,6 +39,7 @@ pub struct PhoneSource {
     dropped: Arc<AtomicU64>,
     gaps: Arc<[AtomicBool; 2]>,
     recorder: Option<Recorder>,
+    generation: Arc<AtomicU64>,
 }
 impl PhoneSource {
     #[cfg(test)]
@@ -55,7 +56,11 @@ impl PhoneSource {
             dropped,
             gaps: Arc::new([AtomicBool::new(false), AtomicBool::new(false)]),
             recorder,
+            generation: Arc::new(AtomicU64::new(0)),
         }
+    }
+    pub(crate) fn next_generation(&self) -> u64 {
+        self.generation.fetch_add(1, Ordering::AcqRel) + 1
     }
     pub async fn disconnected(&self, generation: u64) -> io::Result<()> {
         if let Some(recorder) = &self.recorder {
@@ -69,14 +74,25 @@ impl PhoneSource {
         }
         let _ = self.sender.try_send(EngineInput::Disconnected(generation));
     }
-    pub(crate) fn phone_ready(&self, ready: &veyl_link::messages::Ready) {
+    pub(crate) fn phone_ready(&self, generation: u64, ready: &veyl_link::messages::Ready) {
+        if generation < self.generation.load(Ordering::Acquire) {
+            return;
+        }
         if let (Some(recorder), veyl_link::messages::Ready::Phone { device, .. }) =
             (&self.recorder, ready)
         {
             recorder.source_info(serde_json::json!(device), serde_json::json!({"desktop": env!("CARGO_PKG_VERSION"), "phone": device.app_version}));
         }
     }
-    pub(crate) fn source_info(&self, device: serde_json::Value, versions: serde_json::Value) {
+    pub(crate) fn source_info(
+        &self,
+        generation: u64,
+        device: serde_json::Value,
+        versions: serde_json::Value,
+    ) {
+        if generation < self.generation.load(Ordering::Acquire) {
+            return;
+        }
         if let Some(recorder) = &self.recorder {
             recorder.source_info(device, versions);
         }
@@ -90,6 +106,12 @@ impl PhoneSource {
 }
 impl SoundSource for PhoneSource {
     async fn configure(&self, generation: u64, format: AudioConfig) -> io::Result<()> {
+        if generation < self.generation.fetch_max(generation, Ordering::AcqRel) {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "Sound source was replaced.",
+            ));
+        }
         if ![44100, 48000].contains(&format.sample_rate)
             || format.frames_per_block as u32 != format.sample_rate / 100
             || !(1..=2).contains(&format.ref_channels)
@@ -112,6 +134,9 @@ impl SoundSource for PhoneSource {
         Ok(())
     }
     async fn status(&self, generation: u64, status: Capture) -> io::Result<()> {
+        if generation != self.generation.load(Ordering::Acquire) {
+            return Ok(());
+        }
         self.control(EngineInput::Status(generation, status.clone()))
             .await?;
         if let Some(recorder) = &self.recorder {
@@ -125,6 +150,9 @@ impl SoundSource for PhoneSource {
         mut block: AudioBlock,
         arrival_ms: Option<f64>,
     ) -> io::Result<bool> {
+        if generation != self.generation.load(Ordering::Acquire) {
+            return Ok(false);
+        }
         if let Some(recorder) = &self.recorder {
             recorder.audio(generation, &block);
         }
@@ -175,6 +203,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(2);
         let dropped = Arc::new(AtomicU64::new(0));
         let source = PhoneSource::new(tx, dropped.clone());
+        assert_eq!(source.next_generation(), 1);
         assert!(source.audio(1, block(0), None).unwrap());
         assert!(source.audio(1, block(1), None).unwrap());
         assert!(!source.audio(1, block(2), None).unwrap());

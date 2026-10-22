@@ -81,7 +81,7 @@ impl EngineHost {
                 while let Some(message) = receiver.blocking_recv() {
                     let mut state = target.lock().unwrap_or_else(|error| error.into_inner());
                     match message {
-                        EngineInput::Config(next, config) => {
+                        EngineInput::Config(next, config) if next >= generation => {
                             generation = next;
                             format = Some(config);
                             *state = LevelsView {
@@ -292,6 +292,9 @@ mod tests {
         assert_eq!(second.sample_rate, Some(44100));
         assert_eq!(second.microphone.filtered_dbfs, -120.0);
         assert_eq!(second.microphone.gaps, 0);
+        assert!(source.configure(1, format(7, 48000)).await.is_err());
+        assert!(!source.audio(1, block(4, 48000, 1), None).unwrap());
+        assert_eq!(host.levels().run_id, Some(8));
         source
             .status(
                 2,

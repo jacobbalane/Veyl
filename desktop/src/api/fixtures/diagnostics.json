@@ -49,5 +49,29 @@
       "nearby": [],
       "paired": []
     }
+  },
+  "source": {
+    "capture": null,
+    "choiceDone": false,
+    "devices": {
+      "defaultMicrophoneId": null,
+      "defaultSpeakerId": null,
+      "error": "loading",
+      "hasBattery": null,
+      "microphones": [],
+      "recommendedSource": "phone",
+      "revision": 0,
+      "speakers": []
+    },
+    "error": null,
+    "microphone": null,
+    "microphoneId": null,
+    "mode": "phone",
+    "reference": null,
+    "revision": 0,
+    "speaker": null,
+    "speakerId": null,
+    "state": "idle",
+    "tip": null
   }
 }

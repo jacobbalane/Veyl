@@ -4,6 +4,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   emptyLink,
   emptyLevels,
+  emptySource,
+  type SourceView,
   type AppState,
   type Diagnostics,
   type LinkUpdate,
@@ -25,6 +27,7 @@ export async function getAppState(): Promise<AppState> {
         pcName: 'Windows PC',
         actionsEnabled: false,
         link: structuredClone(emptyLink),
+        source: structuredClone(emptySource),
       }
     : invoke<AppState>('get_app_state');
 }
@@ -62,9 +65,18 @@ export const watchRecording = async (
     : listen<RecordingInfo | null>('veyl://recording', ({ payload }) => update(payload));
 export async function getDiagnostics(): Promise<Diagnostics> {
   return browserPreview
-    ? { link: structuredClone(emptyLink), levels: structuredClone(emptyLevels) }
+    ? {
+        link: structuredClone(emptyLink),
+        levels: structuredClone(emptyLevels),
+        source: structuredClone(emptySource),
+      }
     : invoke<Diagnostics>('get_diagnostics');
 }
+export const setSource = (source: string) => command('set_source', { source });
+export const setPcDevices = (speakerId: string | null, microphoneId: string | null) =>
+  command('set_pc_devices', { speakerId, microphoneId });
+export const watchSource = async (update: (source: SourceView) => void): Promise<UnlistenFn> =>
+  browserPreview ? () => {} : listen<SourceView>('veyl://source', ({ payload }) => update(payload));
 export async function copyDiagnostics(): Promise<string> {
   return browserPreview
     ? JSON.stringify(await getDiagnostics(), null, 2)

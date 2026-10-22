@@ -41,12 +41,31 @@ pub fn request_phone_start(state: tauri::State<'_, Runtime>) -> Result<(), Strin
 }
 #[tauri::command]
 pub fn get_diagnostics(state: tauri::State<'_, Runtime>) -> Diagnostics {
-    state.connection.diagnostics()
+    let mut diagnostics = state.connection.diagnostics();
+    diagnostics.source = Some(state.sources.snapshot());
+    diagnostics
 }
 #[tauri::command]
 pub fn copy_diagnostics(state: tauri::State<'_, Runtime>) -> Result<String, String> {
-    serde_json::to_string_pretty(&state.connection.diagnostics())
+    serde_json::to_string_pretty(&get_diagnostics(state))
         .map_err(|_| "Veyl could not copy diagnostics.".into())
+}
+
+#[tauri::command]
+pub async fn set_source(state: tauri::State<'_, Runtime>, source: String) -> Result<(), String> {
+    state.sources.set_source(source).await
+}
+#[tauri::command]
+pub async fn set_pc_devices(
+    state: tauri::State<'_, Runtime>,
+    speaker_id: Option<String>,
+    microphone_id: Option<String>,
+) -> Result<(), String> {
+    state.sources.set_devices(speaker_id, microphone_id).await
+}
+#[tauri::command]
+pub fn list_audio_devices(state: tauri::State<'_, Runtime>) -> crate::pc_devices::AudioDevices {
+    state.sources.snapshot().devices
 }
 
 #[tauri::command]

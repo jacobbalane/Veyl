@@ -182,6 +182,15 @@ wording; change it only through a decision record.
 
 ### C.9 PC source and device feedback (M3P)
 
-| Where               | Text         |
-| ------------------- | ------------ |
-| Missing device name | Audio device |
+| Where                     | Text                                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Missing device name       | Audio device                                                                                                                                                          |
+| Starting PC capture       | Starting this PC's sound…                                                                                                                                             |
+| Missing selected endpoint | Unavailable device                                                                                                                                                    |
+| No speakers               | Choose speakers in Settings.                                                                                                                                          |
+| Endpoint changed          | Your audio device changed. Veyl is reconnecting it.                                                                                                                   |
+| Capture failure           | Veyl couldn't open these audio devices. Check them in Settings.                                                                                                       |
+| Sound settings error      | Veyl couldn't save your sound settings. Try again.                                                                                                                    |
+| PC placement heading      | Placing your microphone                                                                                                                                               |
+| PC placement              | On a laptop, hold your hand about 20 cm in front of the screen. On a desktop, keep the microphone within about 50 cm of where you poke, with speakers on and audible. |
+| Capture diagnostics       | Format · Raw mode · Resampling · Buffer latency · Pro Audio scheduling · Clock drift · On · Off                                                                       |

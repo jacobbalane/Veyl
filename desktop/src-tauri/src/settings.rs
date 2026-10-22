@@ -25,6 +25,8 @@ pub struct Settings {
     pub onboarding_done: bool,
     pub last_phone_id: Option<String>,
     pub source: String,
+    #[serde(default)]
+    pub source_choice_done: bool,
     pub pc_speaker_id: Option<String>,
     pub pc_mic_id: Option<String>,
     #[serde(flatten)]
@@ -56,6 +58,7 @@ impl Settings {
             onboarding_done: false,
             last_phone_id: None,
             source: "phone".into(),
+            source_choice_done: false,
             pc_speaker_id: None,
             pc_mic_id: None,
             extra: BTreeMap::new(),

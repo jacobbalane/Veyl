@@ -118,7 +118,7 @@ impl CaptureGroup {
                 }
             }
             let reference = group.reference.as_ref().unwrap(); let mic = group.microphone.as_ref().unwrap();
-            group.source.source_info(serde_json::json!({"os":"windows", "speaker": speaker, "microphone": microphone, "reference":reference, "capture":mic}), serde_json::json!({"desktop":env!("CARGO_PKG_VERSION")}));
+            group.source.source_info(generation, serde_json::json!({"os":"windows", "speaker": speaker, "microphone": microphone, "reference":reference, "capture":mic}), serde_json::json!({"desktop":env!("CARGO_PKG_VERSION")}));
             group.source.configure(generation, AudioConfig {
                 run_id: generation, source: "pc".into(), sample_rate: 48000, frames_per_block: 480,
                 ref_channels: reference.format.output_channels(), mic_channels: mic.format.output_channels(),

@@ -10,7 +10,8 @@ import {
   type AppState,
 } from './api/native';
 import { emptyLink, type LinkSnapshot, type LinkUpdate } from './api/types';
-import { copy, connectionError, linkCopy } from './copy';
+import { copy, connectionError, linkCopy, pcCopy, pcTip } from './copy';
+import { SourceChoice, SourceSettings, useSources } from './ui/Sources';
 import { Phones, PairingDialog, connectionLabel } from './ui/Connection';
 import { Diagnostics } from './ui/Diagnostics';
 import { RecordingStatus, RecordingDialogs, SavedRecordings, useRecordings } from './ui/Recordings';
@@ -30,10 +31,13 @@ export function App() {
   const [error, setError] = useState('');
   const link = app?.link ?? emptyLink;
   const recordings = useRecordings();
+  const sources = useSources(app?.source);
+  const pc = sources.source.mode === 'pc';
   const canRecord =
     !browserPreview &&
-    link.connection.state === 'connected' &&
-    link.connection.capture?.state === 'running';
+    (pc
+      ? sources.source.state === 'running'
+      : link.connection.state === 'connected' && link.connection.capture?.state === 'running');
   const updateLink = (link: LinkSnapshot, update: LinkUpdate): LinkSnapshot =>
     'capture' in update
       ? { ...link, connection: { ...link.connection, capture: update.capture } }
@@ -90,10 +94,18 @@ export function App() {
         <span
           className="connection"
           aria-live="polite"
-          data-connected={link.connection.state === 'connected'}
+          data-connected={
+            pc ? sources.source.state === 'running' : link.connection.state === 'connected'
+          }
         >
           <i />
-          {connectionLabel(link.connection, link.phones.nearby.length)}
+          {pc
+            ? sources.source.state === 'running'
+              ? pcCopy.listening
+              : sources.source.state === 'starting'
+                ? pcCopy.starting
+                : pcCopy.noSound
+            : connectionLabel(link.connection, link.phones.nearby.length)}
         </span>
         <div className="actions" title={copy.actionsTooltip}>
           <span>
@@ -128,8 +140,10 @@ export function App() {
           <span>v{app?.version ?? '0.0.1'}</span>
         </div>
         {error && <p role="alert">{error}</p>}
+        {sources.error && tab !== 'Settings' && <p role="alert">{sources.error}</p>}
+        {app && !sources.source.choiceDone && <SourceChoice controls={sources} />}
         <RecordingStatus recording={recordings} />
-        {link.connection.error && connectionError(link.connection.error) && (
+        {!pc && link.connection.error && connectionError(link.connection.error) && (
           <p role="alert">{connectionError(link.connection.error)}</p>
         )}
         {tab === 'Live' && (
@@ -147,8 +161,11 @@ export function App() {
                   <div />
                 </div>
               ))}
-              <p className="tip">Tap Start in Veyl on your phone.</p>
-              {link.connection.state === 'connected' &&
+              <p className="tip">
+                {pc ? pcTip(sources.source.tip) : 'Tap Start in Veyl on your phone.'}
+              </p>
+              {!pc &&
+                link.connection.state === 'connected' &&
                 link.connection.capture?.state !== 'running' && (
                   <button
                     disabled={browserPreview}
@@ -166,7 +183,7 @@ export function App() {
                 <span>{copy.noHand}</span>
               </div>
               <div className="echo-map">
-                <span className="axis">{copy.echoAxis}</span>
+                <span className="axis">{pc ? pcCopy.axis : copy.echoAxis}</span>
                 <div className="distance-labels">
                   <span>60 cm</span>
                   <span>40</span>
@@ -175,7 +192,7 @@ export function App() {
                 </div>
                 <div className="echo-empty">
                   <AudioLines size={35} />
-                  <p>{copy.echoEmpty}</p>
+                  <p>{pc ? pcCopy.empty : copy.echoEmpty}</p>
                 </div>
               </div>
             </section>
@@ -194,17 +211,18 @@ export function App() {
             </section>
           </div>
         )}
-        {tab === 'Phones' && <Phones link={link} />}
+        {tab === 'Phones' &&
+          (pc ? (
+            <section className="panel">
+              <p>{pcCopy.phonesNote}</p>
+            </section>
+          ) : (
+            <Phones link={link} />
+          ))}
         {tab === 'Settings' && (
           <section className="panel settings">
             <h1>Settings</h1>
-            <label>
-              Sound source
-              <select disabled>
-                <option>With my phone</option>
-                <option>With this PC</option>
-              </select>
-            </label>
+            <SourceSettings controls={sources} />
             <label>
               Poke action
               <select disabled>
@@ -241,10 +259,16 @@ export function App() {
             <p>Touch the air. Your screen follows.</p>
             <h2>Privacy</h2>
             <p>Sound stays on your devices. Veyl has no accounts, analytics or cloud services.</p>
-            <h2>Placing your phone</h2>
+            <h2>{pc ? pcCopy.placementTitle : 'Placing your phone'}</h2>
             <p>
-              Lay it flat, screen up, in front of your monitor. Keep its speaker and microphones
-              uncovered.
+              {pc ? (
+                pcCopy.placement
+              ) : (
+                <>
+                  Lay it flat, screen up, in front of your monitor. Keep its speaker and microphones
+                  uncovered.
+                </>
+              )}
             </p>
             <a href="https://github.com/jacobbalane/Veyl" target="_blank" rel="noreferrer">
               Source code
@@ -255,7 +279,9 @@ export function App() {
           </section>
         )}
       </main>
-      <PairingDialog key={link.pairing?.sessionId} pairing={link.pairing} onError={setError} />
+      {!pc && (
+        <PairingDialog key={link.pairing?.sessionId} pairing={link.pairing} onError={setError} />
+      )}
       <RecordingDialogs recording={recordings} />
       <footer>
         Touch the air. Your screen follows.<span>Sound stays home.</span>

@@ -75,13 +75,79 @@ export interface LevelsView {
 export interface Diagnostics {
   link: LinkSnapshot;
   levels: LevelsView;
+  source: SourceView | null;
 }
 export interface AppState {
   version: string;
   pcName: string;
   actionsEnabled: boolean;
   link: LinkSnapshot;
+  source: SourceView;
 }
+export interface AudioDevice {
+  id: string;
+  name: string;
+  formFactor: string;
+  rawSupported: boolean;
+  bluetooth: boolean;
+  builtIn: boolean;
+}
+export interface AudioDevices {
+  speakers: AudioDevice[];
+  microphones: AudioDevice[];
+  defaultSpeakerId: string | null;
+  defaultMicrophoneId: string | null;
+  hasBattery: boolean | null;
+  recommendedSource: string;
+  revision: number;
+  error: string | null;
+}
+export interface CaptureDetails {
+  format: { sampleRate: number; channels: number; encoding: string; frameStride: number };
+  rawMode: boolean;
+  eventDriven: boolean;
+  bufferMs: number;
+  proAudioThread: boolean;
+}
+export interface SourceView {
+  mode: string;
+  choiceDone: boolean;
+  state: string;
+  speakerId: string | null;
+  microphoneId: string | null;
+  speaker: AudioDevice | null;
+  microphone: AudioDevice | null;
+  reference: CaptureDetails | null;
+  capture: CaptureDetails | null;
+  devices: AudioDevices;
+  tip: string | null;
+  error: string | null;
+  revision: number;
+}
+export const emptySource: SourceView = {
+  mode: 'phone',
+  choiceDone: false,
+  state: 'idle',
+  speakerId: null,
+  microphoneId: null,
+  speaker: null,
+  microphone: null,
+  reference: null,
+  capture: null,
+  tip: null,
+  error: null,
+  revision: 0,
+  devices: {
+    speakers: [],
+    microphones: [],
+    defaultSpeakerId: null,
+    defaultMicrophoneId: null,
+    hasBattery: null,
+    recommendedSource: 'phone',
+    revision: 0,
+    error: 'loading',
+  },
+};
 export interface RecordingInfo {
   id: string;
   seconds: number;

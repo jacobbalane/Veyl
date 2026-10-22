@@ -32,6 +32,7 @@ pub enum Command {
     Disconnect,
     Forget(String),
     RequestStart,
+    SetActive(bool, oneshot::Sender<()>),
     Shutdown(oneshot::Sender<()>),
 }
 #[derive(Clone)]
@@ -39,8 +40,23 @@ pub struct ConnectionManager {
     commands: mpsc::Sender<Command>,
     view: Arc<Mutex<LinkSnapshot>>,
     engine: Arc<EngineHost>,
+    source: PhoneSource,
 }
 impl ConnectionManager {
+    #[cfg(test)]
+    pub(crate) fn isolated() -> (Self, mpsc::Receiver<Command>) {
+        let (commands, receiver) = mpsc::channel(32);
+        let (engine, source) = EngineHost::start();
+        (
+            Self {
+                commands,
+                view: Arc::new(Mutex::new(LinkSnapshot::default())),
+                engine: Arc::new(engine),
+                source,
+            },
+            receiver,
+        )
+    }
     pub fn start(
         settings: Arc<Mutex<Settings>>,
         directory: &Path,
@@ -53,6 +69,7 @@ impl ConnectionManager {
         let view = Arc::new(Mutex::new(LinkSnapshot::default()));
         let (engine, source) = EngineHost::with_recorder(Some(recorder));
         let engine = Arc::new(engine);
+        let active = settings.lock().unwrap().source == "phone";
         let actor = Actor {
             settings,
             settings_path: directory.join("settings.json"),
@@ -60,7 +77,8 @@ impl ConnectionManager {
             view: view.clone(),
             observer,
             nearby: NearbyTable::default(),
-            source,
+            source: source.clone(),
+            active,
             worker: None,
             generation: 0,
             goal: None,
@@ -74,7 +92,19 @@ impl ConnectionManager {
             commands,
             view,
             engine,
+            source,
         })
+    }
+    pub(crate) fn source(&self) -> PhoneSource {
+        self.source.clone()
+    }
+    pub async fn set_active(&self, active: bool) -> Result<(), String> {
+        let (done, wait) = oneshot::channel();
+        self.commands
+            .send(Command::SetActive(active, done))
+            .await
+            .map_err(|_| "Connection manager stopped.")?;
+        wait.await.map_err(|_| "Connection manager stopped.".into())
     }
     pub fn send(&self, command: Command) -> Result<(), String> {
         self.commands
@@ -95,6 +125,7 @@ impl ConnectionManager {
         Diagnostics {
             link,
             levels: self.engine.levels(),
+            source: None,
         }
     }
     pub async fn shutdown(&self) {
@@ -121,6 +152,7 @@ struct Actor {
     observer: Observer,
     nearby: NearbyTable,
     source: PhoneSource,
+    active: bool,
     worker: Option<Worker>,
     generation: u64,
     goal: Option<Goal>,
@@ -136,7 +168,11 @@ impl Actor {
         let (dns, dns_rx) = mpsc::channel(128);
         let mut dns_rx = dns_rx;
         #[cfg(windows)]
-        let mut browse = crate::discovery::NativeRequest::browse(dns.clone()).ok();
+        let mut browse = if self.active {
+            crate::discovery::NativeRequest::browse(dns.clone()).ok()
+        } else {
+            None
+        };
         #[cfg(windows)]
         let mut resolves =
             std::collections::BTreeMap::<String, (crate::discovery::NativeRequest, Instant)>::new();
@@ -149,10 +185,26 @@ impl Actor {
                 command=commands.recv()=> {
                     let Some(command)=command else {break};
                     if let Command::Shutdown(done)=command {shutdown=Some(done);break}
+                    if let Command::SetActive(active, done) = command {
+                        if self.active != active {
+                            self.stop("user_quit").await;
+                            self.active = active;
+                            self.goal = None; self.retry_at = None; self.paused = false;
+                            self.nearby = NearbyTable::default();
+                            { let mut view = self.view.lock().unwrap(); view.pairing = None; view.connection = ConnectionState::default(); view.phone_stats = PhoneStats::default(); }
+                            #[cfg(windows)]
+                            { resolves.clear(); browse.take(); if active { browse = crate::discovery::NativeRequest::browse(dns.clone()).ok(); } }
+                            while dns_rx.try_recv().is_ok() {}
+                            self.publish_phones(); self.connection(if active { "browsing" } else { "idle" }, None);
+                            last_browse = Instant::now();
+                        }
+                        let _ = done.send(()); continue;
+                    }
                     self.command(command,&events).await;
                 },
                 event=event_rx.recv()=> {if let Some(event)=event {self.event(event).await;}},
                 event=dns_rx.recv()=> {
+                    if !self.active { continue; }
                     match event {
                         Some(DiscoveryEvent::Resolved(service))=> {
                             let id=service.properties.get("id").map(|id|id.to_ascii_lowercase());let address=service.address.to_string();
@@ -175,12 +227,12 @@ impl Actor {
                     if self.nearby.expire(Instant::now()) {self.publish_phones();}
                     #[cfg(windows)]
                     resolves.retain(|_,(request,started)|!request.is_done() && started.elapsed()<Duration::from_secs(5));
-                    if last_browse.elapsed()>=Duration::from_secs(30) {
+                    if self.active && last_browse.elapsed()>=Duration::from_secs(30) {
                         #[cfg(windows)]
                         {browse.take();browse=crate::discovery::NativeRequest::browse(dns.clone()).ok();}
                         last_browse=Instant::now();
                     }
-                    if self.worker.is_none() {
+                    if self.active && self.worker.is_none() {
                         if self.retry_at.is_some_and(|at|Instant::now()>=at) {self.launch(false,&events).await;}
                         else if self.goal.is_none() && !self.paused {self.auto_connect(&events).await;}
                     }
@@ -305,6 +357,9 @@ impl Actor {
         }
     }
     async fn command(&mut self, command: Command, events: &mpsc::Sender<Event>) {
+        if !self.active && !matches!(&command, Command::Forget(_)) {
+            return;
+        }
         let pair = matches!(&command, Command::Pair(_));
         match command {
             Command::Pair(target) | Command::Connect(target) => match self.target(target) {
@@ -374,17 +429,18 @@ impl Actor {
                     }
                 }
             }
-            Command::Shutdown(_) => {}
+            Command::Shutdown(_) | Command::SetActive(..) => {}
         }
     }
     async fn stop(&mut self, reason: &'static str) {
-        self.generation = self.generation.saturating_add(1);
+        self.source.disconnect_now(self.generation);
+        self.generation = self.source.next_generation();
         if let Some(worker) = self.worker.take() {
             worker.stop(reason).await;
         }
     }
     async fn launch(&mut self, pair: bool, events: &mpsc::Sender<Event>) {
-        if self.settings.lock().unwrap().source != "phone" {
+        if !self.active || self.settings.lock().unwrap().source != "phone" {
             self.connection("idle", None);
             self.retry_at = None;
             return;
@@ -392,7 +448,7 @@ impl Actor {
         let Some(goal) = self.goal.clone() else {
             return;
         };
-        self.generation = self.generation.saturating_add(1);
+        self.generation = self.source.next_generation();
         let generation = self.generation;
         let mode = if pair {
             Mode::Pair
@@ -504,7 +560,7 @@ impl Actor {
             | Event::Probed(g, ..)
             | Event::Ended(g, ..) => *g,
         };
-        if generation != self.generation {
+        if !self.active || generation != self.generation {
             return;
         }
         match event {
@@ -699,6 +755,7 @@ mod tests {
             observer: Arc::new(|_| {}),
             nearby: NearbyTable::default(),
             source,
+            active: true,
             worker: None,
             generation: 7,
             goal: None,
@@ -791,7 +848,7 @@ mod tests {
     #[test]
     fn diagnostics_remove_comparison_codes_and_targets_reject_ambiguous_fields() {
         let (commands, _) = mpsc::channel(1);
-        let (engine, _) = EngineHost::start();
+        let (engine, source) = EngineHost::start();
         let snapshot = LinkSnapshot {
             pairing: Some(PairingEvent {
                 session_id: "current".into(),
@@ -806,6 +863,7 @@ mod tests {
             commands,
             view: Arc::new(Mutex::new(snapshot)),
             engine: Arc::new(engine),
+            source,
         };
         assert!(manager.snapshot().pairing.unwrap().code.is_some());
         assert!(manager.diagnostics().link.pairing.unwrap().code.is_none());

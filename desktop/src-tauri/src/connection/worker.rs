@@ -187,7 +187,7 @@ async fn run(
                 return Err(bad_message());
             };
             source.status(generation, capture.clone()).await?;
-            source.phone_ready(&authenticated.ready);
+            source.phone_ready(plan.generation, &authenticated.ready);
             let _ = events
                 .send(Event::Ready(generation, authenticated.ready, address))
                 .await;

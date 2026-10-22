@@ -1,14 +1,16 @@
 # Implementation progress
 
-Last updated: 2026-10-22.
+Last updated: 2026-10-23.
 
 Section 0 followed: the full plan and the listed Glim references were read before writing source.
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
 complete. The maintainer reports that both installed apps open: Windows shows the phone-search
 placeholder and Android shows the waiting-for-PC placeholder. M0's listed acceptance criteria pass;
 the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
-checks are complete; hardware acceptance remains pending. M3 (connecting the apps) is in progress
-under §0.1.2. The published 0.0.1 preview still contains the M0 interface skeleton.
+checks are complete; hardware acceptance remains pending. M3's connection and recording implementation
+is complete. M3P (PC mode) is in progress under §0.1.2. The published 0.0.1 preview still contains the
+M0 interface skeleton. The maintainer authorized continuing non-destructive implementation while
+away and limited all GitHub work to this repository. Physical review remains deferred.
 
 The maintainer approved installing build tools and supplied the Git author identity. Rust,
 Visual Studio C++ Build Tools, Java 17 and the Android command-line SDK are now installed. Git
@@ -565,7 +567,7 @@ a phone. This milestone is marked parallel-ok in the plan; work begins while M3.
 
 - [x] **M3P.1** Enumerate render/capture endpoints, form factors, raw support and Bluetooth;
       default-device notifications and a hardware-based mode recommendation.
-- [ ] **M3P.2** WASAPI loopback/microphone threads, raw fallback, format conversion/resampling,
+- [x] **M3P.2** WASAPI loopback/microphone threads, raw fallback, format conversion/resampling,
       privacy filtering and timed ten-millisecond blocks behind a fake-able capture interface.
 - [ ] **M3P.3** Source switching, device settings/pickers, onboarding path, PC tips and diagnostics.
 - [ ] **M3P.4** Test-sound playback and Check this PC's sound.
@@ -593,7 +595,7 @@ M3P.1 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39784617
 including both Windows installers, x64 native tests, Android and portable checks. No tag or release
 was created.
 
-**M3P.2 implemented locally; CI pending.** Separate capture owners initialize WASAPI loopback and
+**M3P.2 implemented and verified.** Separate capture owners initialize WASAPI loopback and
 microphone streams, try raw mode and event callbacks with the documented shared/polling fallbacks,
 and request MMCSS Pro Audio scheduling. COM objects, events, QPC positions and acquired buffers
 stay on those threads; each buffer is released even when processing fails. Neither stream starts
@@ -611,8 +613,31 @@ All 31 desktop tests and clippy pass; seven new tests cover formats, stereo isol
 voice suppression and high-band pitch at four input rates, timestamps, gaps, failed preparation
 and two fake capture threads feeding the engine plus a consented PC recording read by the lab.
 The required DSP/simulator/lab release tests pass. No real PC audio was captured or played. The
-source/device settings and production startup wiring are M3P.3; real capture and acoustics remain
-for the final P1/P4/P5 checks.
+source/device settings and production startup wiring follow in M3P.3; real capture and acoustics
+remain for the final P1/P4/P5 checks. M3P.2 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39790045174)
+at `de3ef95`, including Windows x64 tests/installer, ARM64 cross-build, Android and portable checks.
+
+**M3P.3 implemented locally; CI pending.** A source owner persists deliberate mode and endpoint
+choices, closes phone discovery/connections in PC mode, and stops PC capture before resuming phone
+mode. Startup is cancellable. A shared generation rejects old configurations and callbacks before
+they can affect the new engine stream. Device notifications restart changed defaults; missing
+explicit choices stay selected and show an actionable tip. Invalidated streams retry after 100 ms,
+other capture failures after five seconds. This scheduling is covered by the source lifecycle;
+actual one-second recovery remains a physical device gate.
+
+The first-run source cards show the hardware recommendation without choosing for the user. A
+separate persisted flag leaves M7 onboarding pending. Settings offers source and endpoint controls;
+Live, Phones and Help use the plan's PC wording and placement. Diagnostics reports device names,
+actual input formats, raw mode, resampling, buffer latency and Pro Audio registration. Clock drift
+remains unavailable until M4/M5. PC capture enables consented recordings through the existing path.
+Decision 0009 records the interim choice and additional wording.
+
+Thirty-three native tests and eleven UI tests pass, with strict TypeScript, desktop production
+build, clippy and root formatting/version/script checks. New fake-backend tests cover source
+switching, default changes, missing explicit devices, failed durable saves and cancellation during
+preparation. Metadata events cannot be overwritten by a delayed initial UI snapshot. Browser checks
+cover the source cards, device controls, placement, both themes and 760-pixel layout. No native
+microphone or speaker was opened for these tests; installed preview and hardware gates stay pending.
 
 ## Dependency follow-up
 

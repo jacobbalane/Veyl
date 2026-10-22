@@ -580,6 +580,35 @@ footer {
   color: var(--muted);
   font-size: 10px;
 }
+.source-choice {
+  margin-bottom: 18px;
+}
+.source-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.source-options button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  min-width: 0;
+}
+.source-options button span {
+  width: 100%;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--muted);
+}
+.source-options button small {
+  color: var(--aqua);
+}
+.settings select {
+  min-width: 0;
+  max-width: 100%;
+}
 @media (prefers-color-scheme: light) {
   :root {
     color: #0b0f14;

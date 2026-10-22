@@ -10,6 +10,7 @@ pub mod pc_source;
 pub mod recorder;
 mod settings;
 pub mod source;
+pub mod sources;
 
 use settings::Settings;
 use std::sync::{
@@ -26,6 +27,7 @@ struct Runtime {
     settings: Arc<Mutex<Settings>>,
     connection: connection::ConnectionManager,
     recorder: recorder::Recorder,
+    sources: sources::Sources,
     recording_events_stop: tokio::sync::watch::Sender<bool>,
     exiting: AtomicBool,
     hidden: bool,
@@ -39,6 +41,7 @@ struct AppState {
     pc_name: String,
     actions_enabled: bool,
     link: events::LinkSnapshot,
+    source: sources::SourceView,
 }
 
 #[tauri::command]
@@ -48,6 +51,7 @@ fn get_app_state(state: tauri::State<'_, Runtime>) -> AppState {
         pc_name: state.settings.lock().unwrap().pc_name.clone(),
         actions_enabled: false,
         link: state.connection.snapshot(),
+        source: state.sources.snapshot(),
     }
 }
 
@@ -137,10 +141,13 @@ pub fn run() {
                 }),
                 recorder.clone(),
             )?;
+            let source_events = app.handle().clone();
+            let sources = sources::Sources::start(settings.clone(), &directory, connection.clone(), pc_devices::DeviceMonitor::start()?, Arc::new(move |source| { let _ = source_events.emit("veyl://source", source); }));
             app.manage(Runtime {
                 settings,
                 connection,
                 recorder,
+                sources,
                 recording_events_stop,
                 exiting: AtomicBool::new(false),
                 hidden: std::env::args().any(|arg| arg == "--hidden"),
@@ -212,6 +219,9 @@ pub fn run() {
             commands::list_recordings,
             commands::delete_recording,
             commands::open_recordings_folder
+            ,commands::set_source,
+            commands::set_pc_devices,
+            commands::list_audio_devices
         ])
         .build(tauri::generate_context!())
         .expect("Veyl could not start.")
@@ -223,8 +233,10 @@ pub fn run() {
                         let _ = state.recording_events_stop.send(true);
                         let connection = state.connection.clone();
                         let recorder = state.recorder.clone();
+                        let sources = state.sources.clone();
                         let app = app.clone();
                         tauri::async_runtime::spawn(async move {
+                            sources.shutdown().await;
                             connection.shutdown().await;
                             let _ = recorder.stop().await;
                             app.exit(code.unwrap_or(0));

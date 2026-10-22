@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { App } from './App';
-import { emptyLink, emptyLevels } from './api/types';
+import { emptyLink, emptyLevels, emptySource } from './api/types';
 
 vi.mock('./api/native', () => ({
   browserPreview: true,
@@ -10,12 +10,15 @@ vi.mock('./api/native', () => ({
     pcName: 'Test PC',
     actionsEnabled: false,
     link: structuredClone(emptyLink),
+    source: structuredClone(emptySource),
   }),
   uiReady: async () => {},
   watchLink: async () => () => {},
+  watchSource: async () => () => {},
   getDiagnostics: async () => ({
     link: structuredClone(emptyLink),
     levels: structuredClone(emptyLevels),
+    source: structuredClone(emptySource),
   }),
 }));
 afterEach(cleanup);

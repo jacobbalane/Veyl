@@ -16,6 +16,58 @@ export const copy = {
     'When actions are on, each poke clicks where your pointer is. Press Ctrl+Alt+V to switch them on or off.',
 } as const;
 
+export const pcCopy = {
+  choose: 'How do you want to use Veyl?',
+  source: 'Sound source',
+  pc: 'With this PC',
+  phone: 'With my phone',
+  recommended: 'Recommended',
+  pcDetail: "Your PC's speakers play and its microphone listens. No phone needed.",
+  phoneDetail: 'Your phone plays and listens. Works with any PC.',
+  speakers: 'Speakers',
+  microphone: 'Microphone',
+  defaultDevice: 'Default device',
+  missingDevice: 'Unavailable device',
+  listening: 'Listening through this PC',
+  noSound: "This PC isn't hearing any sound",
+  starting: "Starting this PC's sound…",
+  axis: 'Distance from microphone',
+  empty: 'Move your hand in front of your microphone to see it here.',
+  phonesNote: "Veyl is using this PC's speakers and microphone. Switch to phone mode in Settings.",
+  placementTitle: 'Placing your microphone',
+  placement:
+    'On a laptop, hold your hand about 20 cm in front of the screen. On a desktop, keep the microphone within about 50 cm of where you poke, with speakers on and audible.',
+  saveFailed: "Veyl couldn't save your sound settings. Try again.",
+  format: 'Format',
+  raw: 'Raw mode',
+  resampling: 'Resampling',
+  buffer: 'Buffer latency',
+  scheduling: 'Pro Audio scheduling',
+  drift: 'Clock drift',
+  on: 'On',
+  off: 'Off',
+} as const;
+export function pcTip(code: string | null | undefined): string {
+  switch (code) {
+    case 'pc_headphones':
+      return "Your PC's sound is going to headphones. Veyl needs speakers.";
+    case 'pc_no_mic':
+      return 'Choose a microphone in Settings.';
+    case 'pc_no_speaker':
+      return 'Choose speakers in Settings.';
+    case 'mic_silenced':
+      return 'Another app is using the microphone. Close it, or choose another microphone.';
+    case 'pc_bluetooth':
+      return 'Bluetooth speakers add delay. Built-in or wired speakers work better.';
+    case 'device_invalidated':
+      return 'Your audio device changed. Veyl is reconnecting it.';
+    case 'pc_audio_error':
+      return "Veyl couldn't open these audio devices. Check them in Settings.";
+    default:
+      return 'Play some music or a video on this PC.';
+  }
+}
+
 export const recordingCopy = {
   title: 'Record a test',
   consent: (seconds: number) =>

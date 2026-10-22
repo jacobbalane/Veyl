@@ -1,8 +1,39 @@
 import { useEffect, useState } from 'react';
 import { getDiagnostics, copyDiagnostics } from '../api/native';
-import type { Diagnostics as DiagnosticsValue, StreamLevels } from '../api/types';
+import type { Diagnostics as DiagnosticsValue, StreamLevels, CaptureDetails } from '../api/types';
 import { connectionLabel } from './Connection';
-import { linkCopy } from '../copy';
+import { linkCopy, pcCopy } from '../copy';
+
+function PcFormat({ name, details }: { name: string; details: CaptureDetails | null }) {
+  return (
+    <section>
+      <h3>{name}</h3>
+      {details ? (
+        <dl className="diagnostic-values">
+          <dt>{pcCopy.format}</dt>
+          <dd>
+            {details.format.sampleRate} Hz · {details.format.channels} ch ·{' '}
+            {details.format.encoding}
+          </dd>
+          <dt>{pcCopy.raw}</dt>
+          <dd>{details.rawMode ? pcCopy.on : pcCopy.off}</dd>
+          <dt>{pcCopy.resampling}</dt>
+          <dd>
+            {details.format.sampleRate === 48000
+              ? pcCopy.off
+              : `${details.format.sampleRate} → 48000 Hz`}
+          </dd>
+          <dt>{pcCopy.buffer}</dt>
+          <dd>{details.bufferMs.toFixed(1)} ms</dd>
+          <dt>{pcCopy.scheduling}</dt>
+          <dd>{details.proAudioThread ? pcCopy.on : pcCopy.off}</dd>
+        </dl>
+      ) : (
+        <p>{linkCopy.unavailable}</p>
+      )}
+    </section>
+  );
+}
 
 function Level({ name, level }: { name: string; level: StreamLevels }) {
   return (
@@ -55,12 +86,17 @@ export function Diagnostics() {
   };
   const number = (value: number | null | undefined, suffix: string, digits = 1) =>
     value == null ? linkCopy.unavailable : `${value.toFixed(digits)} ${suffix}`;
+  const pc = value?.source?.mode === 'pc';
   return (
     <section className="diagnostics">
       <h2>{linkCopy.diagnostics}</h2>
       <p>
         {value
-          ? connectionLabel(value.link.connection, value.link.phones.nearby.length)
+          ? pc
+            ? value.source?.state === 'running'
+              ? pcCopy.listening
+              : pcCopy.noSound
+            : connectionLabel(value.link.connection, value.link.phones.nearby.length)
           : linkCopy.unavailable}
       </p>
       {value && (
@@ -71,20 +107,36 @@ export function Diagnostics() {
           </div>
           <dl className="diagnostic-values">
             <dt>{linkCopy.dropped}</dt>
-            <dd>{value.link.phoneStats.droppedBlocks}</dd>
+            <dd>{pc ? linkCopy.unavailable : value.link.phoneStats.droppedBlocks}</dd>
             <dt>{linkCopy.engineDrops}</dt>
             <dd>{value.levels.engineDrops}</dd>
             <dt>{linkCopy.roundTrip}</dt>
-            <dd>{number(value.link.phoneStats.rttMs, 'ms')}</dd>
+            <dd>{number(pc ? null : value.link.phoneStats.rttMs, 'ms')}</dd>
             <dt>{linkCopy.arrivalDelay}</dt>
             <dd>{number(value.levels.arrivalMs, 'ms')}</dd>
             <dt>{linkCopy.phoneQueue}</dt>
-            <dd>{value.link.phoneStats.queueMs} ms</dd>
+            <dd>{pc ? linkCopy.unavailable : `${value.link.phoneStats.queueMs} ms`}</dd>
             <dt>{linkCopy.sampleRate}</dt>
             <dd>{number(value.levels.sampleRate, 'Hz', 0)}</dd>
             <dt>{linkCopy.battery}</dt>
-            <dd>{number(value.link.phoneStats.batteryPct, '%', 0)}</dd>
+            <dd>{number(pc ? null : value.link.phoneStats.batteryPct, '%', 0)}</dd>
           </dl>
+          {pc && value.source && (
+            <>
+              <PcFormat
+                name={value.source.speaker?.name ?? pcCopy.speakers}
+                details={value.source.reference}
+              />
+              <PcFormat
+                name={value.source.microphone?.name ?? pcCopy.microphone}
+                details={value.source.capture}
+              />
+              <dl className="diagnostic-values">
+                <dt>{pcCopy.drift}</dt>
+                <dd>{linkCopy.unavailable}</dd>
+              </dl>
+            </>
+          )}
         </>
       )}
       <button onClick={() => void copy()}>{linkCopy.copyDiagnostics}</button>

@@ -81,6 +81,7 @@ pub struct LinkSnapshot {
 pub struct Diagnostics {
     pub link: LinkSnapshot,
     pub levels: LevelsView,
+    pub source: Option<crate::sources::SourceView>,
 }
 pub enum Notice {
     Connection(ConnectionState),
@@ -100,10 +101,12 @@ mod fixtures {
             pc_name: "Test PC".into(),
             actions_enabled: false,
             link: LinkSnapshot::default(),
+            source: crate::sources::SourceView::default(),
         };
         let diagnostics = Diagnostics {
             link: LinkSnapshot::default(),
             levels: LevelsView::default(),
+            source: Some(crate::sources::SourceView::default()),
         };
         let pairing = PairingEvent {
             session_id: "test-comparison".into(),
@@ -119,6 +122,10 @@ mod fixtures {
                 serde_json::to_value(diagnostics).unwrap(),
             ),
             ("pairing.json", serde_json::to_value(pairing).unwrap()),
+            (
+                "source.json",
+                serde_json::to_value(crate::sources::SourceView::default()).unwrap(),
+            ),
             (
                 "recording.json",
                 serde_json::to_value(crate::recorder::RecordingInfo {
