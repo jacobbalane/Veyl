@@ -47,6 +47,8 @@ data class CaptureInfo(
     val effectsOff: List<String>,
     val effectsOn: List<String> = emptyList(),
     val microphones: List<MicMetadata> = emptyList(),
+    val cutoff: Int = 8000,
+    val soundCheck: CheckedMic? = null,
 )
 
 data class MicMetadata(
@@ -114,6 +116,15 @@ class VeylRuntime(context: Context) {
     private val lastPublish = Array(2) { AtomicLong() }
     @Volatile var pcConnected = false
     private val changes = ArrayDeque<String>()
+    val link: PhoneLinkRuntime
+
+    init {
+        link = PhoneLinkRuntime(context, this)
+    }
+
+    fun noteLink(reason: String) {
+        event(reason)
+    }
 
     @Synchronized
     private fun event(value: String) {
@@ -142,6 +153,7 @@ class VeylRuntime(context: Context) {
                 status = CaptureReducer.start(mutable.value.status, id, source),
                 startedMs = SystemClock.elapsedRealtime(),
             )
+        link.captureChanged()
         return id
     }
 
@@ -151,12 +163,13 @@ class VeylRuntime(context: Context) {
         )
         if (generation.get() == id)
             mutable.update { it.copy(status = CaptureReducer.running(it.status, id), info = info) }
+        link.captureChanged()
     }
 
     fun block(id: Long, block: AudioBlock) {
         if (generation.get() != id || mutable.value.state != "running") return
-        // This is the M2 null link: validate the real wire payload and discard filtered samples.
-        block.encode()
+        // The link sees only the packer's filtered PCM. No PC means an intentional null sink.
+        link.audio(id, block)
         val count = counts[block.stream].incrementAndGet()
         val now = SystemClock.elapsedRealtime()
         if (now - lastPublish[block.stream].get() >= 200) {
@@ -184,16 +197,20 @@ class VeylRuntime(context: Context) {
                     status = CaptureReducer.stopped(it.status, id, reason),
                 )
             }
+        link.captureChanged()
     }
 
     fun route(route: String) {
         if (mutable.value.route != route) event("route=$route")
         mutable.update { it.copy(route = route) }
+        link.captureChanged()
     }
 
     fun silenced(id: Long, value: Boolean) {
+        if (mutable.value.status.runId != id || mutable.value.micSilenced == value) return
         if (mutable.value.micSilenced != value && mutable.value.status.runId == id)
             event("mic_silenced=$value")
         mutable.update { it.copy(status = CaptureReducer.silenced(it.status, id, value)) }
+        link.captureChanged()
     }
 }

@@ -7,12 +7,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import io.github.jacobbalane.veyl.R
 import io.github.jacobbalane.veyl.runtime.CaptureSnapshot
+import io.github.jacobbalane.veyl.runtime.PhoneLinkState
 
 @Composable
-fun ListeningContent(state: CaptureSnapshot, onStop: () -> Unit) {
+fun ListeningContent(state: CaptureSnapshot, link: PhoneLinkState, onStop: () -> Unit) {
     Text(stringResource(R.string.listening_channel), style = MaterialTheme.typography.headlineLarge)
-    Text(stringResource(R.string.waiting_pc))
-    Text(stringResource(R.string.no_pc_meter), style = MaterialTheme.typography.displaySmall)
+    Text(
+        if (link.pcName == null) stringResource(R.string.waiting_pc)
+        else stringResource(R.string.connected_to, link.pcName),
+    )
+    PhoneScore(link.meter)
     Text(stringResource(R.string.listening_reminder))
     if (state.route == "external")
         Text(stringResource(R.string.not_speaker), color = MaterialTheme.colorScheme.error)

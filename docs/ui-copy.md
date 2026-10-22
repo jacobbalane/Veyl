@@ -147,3 +147,12 @@ wording; change it only through a decision record.
 | Navigation             | Back · Home · Permissions · Placement guide                                                                                                                                                                                                      |
 | Listening without a PC | Waiting for your PC… · No PC meter yet · Phone listening is ready for a device check. Pairing and PC connection are coming soon.                                                                                                                 |
 | Diagnostics            | Copy diagnostics · Diagnostics copied. · None · Not available · Microphone error · Capture error                                                                                                                                                 |
+
+### C.6 Local network permission (M3)
+
+| Where                    | Text                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local network permission | Local network · Veyl connects directly to your PC on your local network. Sound stays between your devices. · Allow local network · Not now |
+| Permission denied        | Veyl needs local network access to connect to your PC. · Open settings                                                                     |
+| No local network         | Connect this phone and your PC to the same network.                                                                                        |
+| Pairing storage          | Veyl couldn't save paired devices. Try again. · Veyl couldn't load paired devices. Try again.                                              |

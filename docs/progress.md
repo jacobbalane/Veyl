@@ -6,8 +6,9 @@ Section 0 followed: the full plan and the listed Glim references were read befor
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
 complete. The maintainer reports that both installed apps open: Windows shows the phone-search
 placeholder and Android shows the waiting-for-PC placeholder. M0's listed acceptance criteria pass;
-the additional device checks below remain unreported. M1 is complete. M2 is in progress; connecting the
-apps is M3. The published 0.0.1 preview still contains the M0 interface skeleton.
+the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
+checks are complete; hardware acceptance remains pending. M3 (connecting the apps) is in progress
+under §0.1.2. The published 0.0.1 preview still contains the M0 interface skeleton.
 
 The maintainer approved installing build tools and supplied the Git author identity. Rust,
 Visual Studio C++ Build Tools, Java 17 and the Android command-line SDK are now installed. Git
@@ -357,8 +358,11 @@ and exact reference bytes. Debug/release builds and Android lint pass with no wa
 permanent APK signature verifies. The required Rust DSP/simulator/lab release tests also pass.
 These checks do not verify hardware capture. The M2.1 capture-spike CI build passed at
 `a535c9da154196d2b67e9a4004498ae233f8d22b`
-([Build Veyl](https://github.com/jacobbalane/Veyl/actions/runs/39734647978)); the complete M2 CI result
-will be recorded after its push.
+([Build Veyl](https://github.com/jacobbalane/Veyl/actions/runs/39734647978)). The complete M2 build at
+`62d25de4dc7dccedf483c1f1eb4c1e152a78b238` also
+[passed CI](https://github.com/jacobbalane/Veyl/actions/runs/39740178033): all checks, Android's 37 JVM
+tests/debug+release lint and APKs, Windows x64 tests/installer and the Windows ARM64 cross-build.
+No tag or release was created.
 
 ### Waiting on M2 device tests
 
@@ -381,6 +385,75 @@ route, lock, PiP, player and sound-check checks remain open; unavailable devices
 The maintainer asked to defer app review until implementation is finished and to proceed through
 the remaining milestones without stopping for intermediate device results. M2 acceptance therefore
 remains pending hardware; carry these checks forward while continuing M3 under the device exception.
+
+## M3 — Connect and stream
+
+**Goal:** phone and PC pair, connect and stream encrypted audio. PC diagnostics show the signals;
+test recordings and a fake phone allow end-to-end testing before hardware review.
+
+- [x] **M3.1** Phone LinkServer/LinkSession over core, NSD advertising, network information,
+      Keystore-protected PairingStore, pairing dialog, connected/waiting Home, request-start
+      notification, stats, audio configuration, capture state and forgetting PCs.
+- [ ] **M3.2** Desktop DNS-SD discovery, connection manager, pairing flow/dialog, Phones tab,
+      add-by-address, DPAPI pairings, SoundSource/PhoneSource, level-meter engine stub and Help
+      diagnostics: block rates, levels, drops, RTT, arrival latency and battery.
+- [ ] **M3.3** `veyl-lab fake-phone` and end-to-end test: pair, session, forty seconds of poke_basic,
+      correct block counts and no decryption errors. Gesture checks begin in M6.
+- [ ] **M3.4** Desktop opt-in test recordings: dialog, Space marks, retention and `veyl-lab analyze`
+      reading stream statistics.
+- [ ] **M3.5 [device]** D2/D10, thirty-minute stream with less than 0.1% drops and maintainer
+      recordings R1–R10. Defer results to the final app review as requested.
+
+**Acceptance:** end-to-end CI passes, D2/D10 pass and R1–R10 exist. Hardware checks remain pending
+until actually performed.
+
+**Verify:** `cargo test --release -p veyl-lab`; `cargo test -p veyl-desktop`; both streams at 100
+blocks per second on a connected device.
+
+**M3.1 implemented.** Android now accepts one IPv4 PC connection, advertises the actual listening
+port through NSD and shows its local address. A busy listener rejects other PCs; an occupied
+default port falls back to an ephemeral port. Networking runs while an activity or the listening
+service runs. Android 17's local-network explanation, grant, denial and revocation paths are
+implemented; older versions keep their existing behavior. See decision 0005.
+
+Pairing requires Veyl in front, the current comparison dialog and both confirmation MACs. Paired
+keys are wrapped with Android Keystore AES-GCM, bound to the PC identity, and written atomically
+under no-backup storage. Settings lists paired PCs and can forget them. Reconnected sessions show
+the PC name, send capture state/configuration and one-second device statistics, and accept meter
+updates. Only filtered audio enters the bounded queue. Control/PONG messages take priority;
+overflow drops old audio and marks gaps. A replaced or stopped capture run cannot resume through
+a late audio callback. Read deadlines and liveness continue even during a partial socket frame.
+Request-start notifications require a one-use, expiring token for the current authenticated
+session; an arbitrary launcher intent cannot start capture.
+
+**M3.1 local verification:** 33 core and 14 app JVM tests pass. New loopback TCP tests cover real
+pairing/session handshakes, both confirmations, stale-dialog rejection, configuration before both
+audio streams, strict decryption counters, PONG, forgotten-peer closure, background pairing
+refusal, stopped/replaced runs and a corrupted authentication tag. Listener tests cover port
+fallback, busy rejection and shutdown. Storage tests cover restart, atomic-write failure and
+identity-bound ciphertext; notification tests cover forgery, replay, expiry and session changes.
+All 26 Rust Link tests pass; regenerated vectors remain byte-for-byte identical. Android release
+lint and the signed release build pass; its permanent signing certificate is unchanged. These
+tests do not establish real LAN discovery or Android Keystore behavior on a device. CI acceptance
+will be recorded after the source push.
+
+### Waiting on M3 device tests
+
+The maintainer requested the final app review after implementation. Keep these checks pending:
+
+1. Install matching final Windows/Android builds and open Veyl on both devices on the same LAN.
+   On Android 17+, allow local-network access. Confirm that Phones lists the phone and that its
+   displayed address also works with Add by address. Denying/revoking the grant must close the
+   phone listener without silently granting access or starting capture.
+2. For D2, pair ten times, forgetting between attempts. Compare both codes each time, confirm on
+   both screens, and require at least nine first-attempt successes. Cancel on either side once;
+   backgrounding the phone during comparison must stop pairing. Reopen both apps to check saved
+   pairings, then forget the PC on the phone and confirm reconnection requires pairing again.
+3. For D10, start a filtered stream, turn phone Wi-Fi off/on and measure reconnection after Wi-Fi
+   returns (at most five seconds). The phone must show the connected PC and keep its listening
+   indicator. Run thirty minutes; record block/drop counts and require under 0.1% dropped blocks.
+4. After M3.4 provides the consent flow, collect R1–R10 using the plan's instructions. Keep audio
+   local. Record versions, devices, pass/fail and failures here; none of these checks has run yet.
 
 ## Dependency follow-up
 

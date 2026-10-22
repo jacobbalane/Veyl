@@ -12,6 +12,13 @@ class WriterQueue {
     val size: Int
         get() = queue.size
 
+    val audioQueueMs: Int
+        get() =
+            maxOf(
+                queue.count { it is Outbound.Audio && it.block.stream == 0 },
+                queue.count { it is Outbound.Audio && it.block.stream == 1 },
+            ) * 10
+
     fun pushAudio(block: AudioBlock): Boolean {
         block.encode()
         val dropped = queue.count { it is Outbound.Audio && it.block.stream == block.stream } >= 100
@@ -33,10 +40,23 @@ class WriterQueue {
             "Not a priority message."
         }
         Messages.validatePayload(type, payload)
+        check(queue.count { it is Outbound.Message } < 256) { "Priority queue exhausted." }
         queue.addLast(Outbound.Message(type, payload.copyOf()))
     }
 
-    fun pop(): Outbound? = if (queue.isEmpty()) null else queue.removeFirst()
+    fun pop(): Outbound? {
+        if (queue.isEmpty()) return null
+        val priority = queue.indexOfFirst { it is Outbound.Message }
+        return queue.removeAt(if (priority >= 0) priority else 0)
+    }
+
+    fun clearAudio() {
+        queue.removeAll { it is Outbound.Audio }
+    }
+
+    fun clear() {
+        queue.clear()
+    }
 }
 
 class PhoneLiveness(nowMs: Long) {

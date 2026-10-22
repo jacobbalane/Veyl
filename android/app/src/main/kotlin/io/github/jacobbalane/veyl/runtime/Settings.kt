@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.jacobbalane.veyl.core.util.Base64Url
+import io.github.jacobbalane.veyl.core.util.Utf8
 import java.io.IOException
 import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,7 @@ data class CheckedMic(
 
 data class PhoneSettings(
     val phoneId: String = "",
-    val phoneName: String = Build.MODEL.take(40),
+    val phoneName: String = Utf8.prefix(Build.MODEL).ifEmpty { "Veyl" },
     val cutoff: Int = 8000,
     val dim: Boolean = true,
     val pip: Boolean = true,
@@ -70,7 +71,7 @@ class Settings(context: Context, private val scope: CoroutineScope) {
     fun explained() = edit { it[EXPLAINED] = true }
 
     fun name(value: String) = edit {
-        it[PHONE_NAME] = value.trim().take(40).ifEmpty { Build.MODEL.take(40) }
+        it[PHONE_NAME] = Utf8.prefix(value).ifEmpty { Utf8.prefix(Build.MODEL).ifEmpty { "Veyl" } }
     }
 
     fun source(value: String) {
@@ -129,7 +130,7 @@ class Settings(context: Context, private val scope: CoroutineScope) {
             .getOrDefault(emptyList())
         return PhoneSettings(
             p[PHONE_ID] ?: "",
-            p[PHONE_NAME] ?: Build.MODEL.take(40),
+            Utf8.prefix(p[PHONE_NAME] ?: Build.MODEL).ifEmpty { "Veyl" },
             p[CUTOFF]?.takeIf { it in listOf(6000, 7000, 8000) } ?: 8000,
             p[DIM] ?: true,
             p[PIP] ?: true,

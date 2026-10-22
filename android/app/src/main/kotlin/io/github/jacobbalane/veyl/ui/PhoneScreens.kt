@@ -111,6 +111,7 @@ fun SettingsContent(
 ) {
     val settings by runtime.settings.state.collectAsStateWithLifecycle()
     var name by rememberSaveable { mutableStateOf(settings.phoneName) }
+    val link by runtime.link.state.collectAsStateWithLifecycle()
     var lower by remember { mutableStateOf<Int?>(null) }
     var copied by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -155,6 +156,17 @@ fun SettingsContent(
     TextButton(onClick = onBattery) { Text(stringResource(R.string.battery_setting)) }
     Text(stringResource(R.string.battery_detail))
     Button(onClick = onCheck) { Text(stringResource(R.string.run_check)) }
+    Text(stringResource(R.string.paired_pcs), style = MaterialTheme.typography.titleMedium)
+    for (pc in link.pcs) Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Text(pc.name, Modifier.weight(1f))
+        TextButton(onClick = { runtime.link.forget(pc.id) }) {
+            Text(stringResource(R.string.forget))
+        }
+    }
+    ConnectionError(link.error)
     TextButton(onClick = onAbout) { Text(stringResource(R.string.about)) }
     TextButton(
         onClick = {

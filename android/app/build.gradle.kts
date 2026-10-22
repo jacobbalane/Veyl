@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.kotlinx.serialization.json)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)

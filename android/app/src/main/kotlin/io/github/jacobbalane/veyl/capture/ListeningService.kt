@@ -73,6 +73,7 @@ class ListeningService : Service() {
     override fun onCreate() {
         super.onCreate()
         runtime = (application as VeylApp).runtime
+        runtime.link.serviceRunning(true)
         runtime.serviceStopping(false)
         Notifications.create(this)
         ContextCompat.registerReceiver(
@@ -143,7 +144,7 @@ class ListeningService : Service() {
             ServiceCompat.startForeground(
                 this,
                 Notifications.LISTENING_ID,
-                Notifications.listening(this),
+                Notifications.listening(this, runtime.link.state.value.pcName),
                 types,
             )
         } catch (_: RuntimeException) {
@@ -210,6 +211,7 @@ class ListeningService : Service() {
                         ::stop,
                         settings.cutoff,
                         preferred,
+                        settings.checkedMic,
                     )
                 run = capture
                 if (!stopping.get())
@@ -290,6 +292,7 @@ class ListeningService : Service() {
     }
 
     override fun onDestroy() {
+        runtime.link.serviceRunning(false)
         stop("user")
         main.removeCallbacks(liveness)
         route?.close()

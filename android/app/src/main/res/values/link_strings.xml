@@ -1,0 +1,35 @@
+<resources>
+    <string name="connected_to">Connected to %1$s</string>
+    <string name="tap_start">Tap to start listening</string>
+    <string name="pc_ready">%1$s is ready.</string>
+    <string name="pair_title">Pair with %1$s?</string>
+    <string name="pair_check">Check that your PC shows the same code:</string>
+    <string name="codes_match">Codes match</string>
+    <string name="paired_with">Paired with %1$s</string>
+    <string name="pair_failed">Pairing didn\'t finish. Try again on your PC.</string>
+    <string name="paired_pcs">Paired PCs</string>
+    <string name="forget">Forget</string>
+    <string name="local_network">Local network</string>
+    <string name="local_network_explanation">Veyl connects directly to your PC on your local network. Sound stays between your devices.</string>
+    <string name="allow_network">Allow local network</string>
+    <string name="network_denied">Veyl needs local network access to connect to your PC.</string>
+    <string name="same_network">Connect this phone and your PC to the same network.</string>
+    <string name="pair_store_write_failed">Veyl couldn\'t save paired devices. Try again.</string>
+    <string name="pair_store_read_failed">Veyl couldn\'t load paired devices. Try again.</string>
+    <string name="label_great">Great</string>
+    <string name="label_good">Good</string>
+    <string name="label_fair">Fair</string>
+    <string name="label_poor">Poor</string>
+    <string name="label_no_sound">No sound</string>
+    <string name="tip_capture_off">Tap Start in Veyl on your phone.</string>
+    <string name="tip_capture_blocked">This app doesn\'t share its sound with Veyl. Try YouTube, YouTube Music, the Veyl player or the test sound.</string>
+    <string name="tip_nothing_playing">Play some music or a video on your phone.</string>
+    <string name="tip_mic_silenced">Another app is using your phone\'s microphone.</string>
+    <string name="tip_clipping">Turn the volume down a little. The sound is distorting.</string>
+    <string name="tip_volume_low">Turn your phone\'s volume up.</string>
+    <string name="tip_few_high">This track has few high sounds. A brighter song works better.</string>
+    <string name="tip_gaps">This track has many quiet moments.</string>
+    <string name="tip_unclear">The echo is unclear. Keep the phone\'s speaker and microphones uncovered.</string>
+    <string name="tip_noisy">Sudden noises near the phone make the echo hard to read.</string>
+    <string name="tip_ready">Ready. Poke toward your phone.</string>
+</resources>

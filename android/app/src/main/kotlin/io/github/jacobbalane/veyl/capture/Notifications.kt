@@ -37,15 +37,19 @@ object Notifications {
         PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    fun listening(context: Context): Notification =
+    fun listening(context: Context, pcName: String? = null): Notification =
         NotificationCompat.Builder(context, "listening")
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(context.getString(R.string.listening_notification))
-            .setContentText(context.getString(R.string.notification_waiting))
+            .setContentText(
+                if (pcName == null) context.getString(R.string.notification_waiting)
+                else context.getString(R.string.connected_to, pcName),
+            )
             .setContentIntent(open(context))
             .setOngoing(true)
             .setSilent(true)
@@ -60,6 +64,47 @@ object Notifications {
                 ),
             )
             .build()
+
+    private fun permitted(context: Context): Boolean =
+        android.os.Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+
+    @android.annotation.SuppressLint("MissingPermission")
+    fun updateConnected(context: Context, pcName: String?) {
+        if (permitted(context))
+            context
+                .getSystemService(NotificationManager::class.java)
+                .notify(LISTENING_ID, listening(context, pcName))
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    fun requestStart(context: Context, pcName: String, token: String) {
+        if (!permitted(context)) return
+        val intent =
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra("veyl_start_token", token)
+        val open =
+            PendingIntent.getActivity(
+                context,
+                3,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        context
+            .getSystemService(NotificationManager::class.java)
+            .notify(
+                50,
+                NotificationCompat.Builder(context, "alerts")
+                    .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                    .setContentTitle(context.getString(R.string.tap_start))
+                    .setContentText(context.getString(R.string.pc_ready, pcName))
+                    .setContentIntent(open)
+                    .setAutoCancel(true)
+                    .build(),
+            )
+    }
 
     fun alert(context: Context, reason: String) {
         if (

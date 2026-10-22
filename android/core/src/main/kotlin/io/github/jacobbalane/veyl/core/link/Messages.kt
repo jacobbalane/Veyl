@@ -244,19 +244,19 @@ object Messages {
     }
 }
 
-internal fun JsonObject.text(key: String): String {
+fun JsonObject.text(key: String): String {
     val value = this[key] as? JsonPrimitive ?: error("Missing string field.")
     require(value.isString) { "Expected string field." }
     return value.content
 }
 
-internal fun JsonObject.integer(key: String): Long {
+fun JsonObject.integer(key: String): Long {
     val value = this[key] as? JsonPrimitive ?: error("Missing integer field.")
     require(!value.isString)
     return value.longOrNull ?: error("Expected integer field.")
 }
 
-internal fun JsonElement.unsigned(max: ULong = ULong.MAX_VALUE): ULong {
+fun JsonElement.unsigned(max: ULong = ULong.MAX_VALUE): ULong {
     val value = this as? JsonPrimitive ?: error("Expected unsigned integer.")
     require(!value.isString)
     return (value.content.toULongOrNull() ?: error("Expected unsigned integer.")).also {
@@ -264,10 +264,10 @@ internal fun JsonElement.unsigned(max: ULong = ULong.MAX_VALUE): ULong {
     }
 }
 
-internal fun JsonObject.unsigned(key: String, max: ULong = ULong.MAX_VALUE): ULong =
+fun JsonObject.unsigned(key: String, max: ULong = ULong.MAX_VALUE): ULong =
     (this[key] ?: error("Missing integer field.")).unsigned(max)
 
-internal fun JsonElement.number(): Float {
+fun JsonElement.number(): Float {
     val value = this as? JsonPrimitive ?: error("Expected number.")
     require(!value.isString)
     return (value.floatOrNull ?: error("Expected number.")).also {
@@ -275,26 +275,25 @@ internal fun JsonElement.number(): Float {
     }
 }
 
-internal fun JsonObject.number(key: String): Float =
-    (this[key] ?: error("Missing number field.")).number()
+fun JsonObject.number(key: String): Float = (this[key] ?: error("Missing number field.")).number()
 
-internal fun JsonObject.version(): ULong = unsigned("v")
+fun JsonObject.version(): ULong = unsigned("v")
 
-internal fun JsonObject.boolean(key: String): Boolean {
+fun JsonObject.boolean(key: String): Boolean {
     val value = this[key] as? JsonPrimitive ?: error("Missing boolean field.")
     require(!value.isString)
     return value.booleanOrNull ?: error("Expected boolean field.")
 }
 
-internal fun JsonObject.obj(key: String): JsonObject =
+fun JsonObject.obj(key: String): JsonObject =
     this[key] as? JsonObject ?: error("Missing object field.")
 
-internal fun JsonObject.name(key: String): String =
+fun JsonObject.name(key: String): String =
     text(key).also {
         require(it.toByteArray(Charsets.UTF_8).size <= 40) { "Name exceeds 40 UTF-8 bytes." }
     }
 
-internal fun JsonObject.binary(key: String, size: Int): ByteArray =
+fun JsonObject.binary(key: String, size: Int): ByteArray =
     Base64Url.decode(text(key)).also { require(it.size == size) { "Wrong binary field length." } }
 
-internal fun binary(bytes: ByteArray): JsonPrimitive = JsonPrimitive(Base64Url.encode(bytes))
+fun binary(bytes: ByteArray): JsonPrimitive = JsonPrimitive(Base64Url.encode(bytes))

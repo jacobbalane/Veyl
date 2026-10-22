@@ -370,6 +370,15 @@ Pairing aborts use the reasons in §4.6.
 - The phone's writer queue holds at most 1 s of audio per stream (100 blocks). When it is full, drop
   the **oldest** queued AUDIO block of that stream and set `gap_before` on the next block of that
   stream. CONTROL, PING and PONG frames are never dropped.
+  Send those messages before the remaining queued AUDIO. The Android queue also bounds pending
+  messages to 256; exhaustion closes the session rather than discarding control messages.
+
+The Android socket adapter has one frame reader and one sealed-frame writer. Its owner checks
+handshake and liveness deadlines independently of blocking reads; closing the socket interrupts a
+partial frame without restarting its decoder. Capture updates and queue operations share a lock,
+and each audio block is checked against the latest active run. A stopped or replaced run cannot
+enqueue audio behind a new configuration. Authentication counters are allocated in wire order;
+closing never reuses a channel.
 
 ## 4.15 Test vectors
 

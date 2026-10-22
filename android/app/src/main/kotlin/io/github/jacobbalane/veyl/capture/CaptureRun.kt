@@ -9,6 +9,7 @@ import android.os.Process
 import android.os.SystemClock
 import io.github.jacobbalane.veyl.core.audio.BlockPacker
 import io.github.jacobbalane.veyl.core.audio.TimestampTracker
+import io.github.jacobbalane.veyl.runtime.CheckedMic
 import io.github.jacobbalane.veyl.runtime.VeylRuntime
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -25,6 +26,7 @@ class CaptureRun(
     private val error: (String) -> Unit,
     private val cutoff: Int = 8000,
     private val preferredMic: MicChoice? = null,
+    private val checkedMic: CheckedMic? = null,
 ) : AutoCloseable {
     private val active = AtomicBoolean(false)
     private val handles = mutableListOf<RecorderHandle>()
@@ -82,7 +84,7 @@ class CaptureRun(
                 music.start()
             }
         }
-        runtime.running(id, Recorders.info(mic))
+        runtime.running(id, Recorders.info(mic).copy(cutoff = cutoff, soundCheck = checkedMic))
     }
 
     fun command(action: String) {

@@ -28,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -50,6 +51,7 @@ class MainActivity : ComponentActivity() {
 
     private var page by mutableStateOf("welcome")
     private var notificationStep by mutableStateOf(false)
+    private var networkStep by mutableStateOf(false)
     private var captureError by mutableStateOf<Int?>(null)
     private var explain by mutableStateOf(false)
     private var touchAt by mutableLongStateOf(0L)
@@ -71,10 +73,15 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
             finishOnboarding()
         }
+    private val localNetwork =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            runtime.link.refreshPermissions()
+            if (networkStep && page == "permissions") completeOnboarding()
+        }
     private val microphone =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (!granted) captureError = R.string.microphone_denied
-            else if (pendingSource == "onboard") notificationStep = true else afterMicrophone()
+            else if (pendingSource == "onboard") onboardingMicGranted() else afterMicrophone()
         }
     private val music =
         registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -163,8 +170,39 @@ class MainActivity : ComponentActivity() {
         }
 
     private fun finishOnboarding() {
+        if (
+            Build.VERSION.SDK_INT >= 37 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_LOCAL_NETWORK) !=
+                    PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationStep = false
+            networkStep = true
+            return
+        }
+        completeOnboarding()
+    }
+
+    private fun completeOnboarding() {
         runtime.settings.onboard()
         page = "home"
+        networkStep = false
+        notificationStep = false
+    }
+
+    private fun onboardingMicGranted() {
+        if (Build.VERSION.SDK_INT >= 33) notificationStep = true else finishOnboarding()
+    }
+
+    private fun allowNetwork() {
+        if (Build.VERSION.SDK_INT >= 37)
+            localNetwork.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+        else runtime.link.refreshPermissions()
+    }
+
+    private fun appSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()),
+        )
     }
 
     private fun requestMicrophone() {
@@ -174,10 +212,14 @@ class MainActivity : ComponentActivity() {
                 PackageManager.PERMISSION_GRANTED
         )
             microphone.launch(Manifest.permission.RECORD_AUDIO)
-        else if (pendingSource == "onboard") notificationStep = true else afterMicrophone()
+        else if (pendingSource == "onboard") onboardingMicGranted() else afterMicrophone()
     }
 
     private fun requestListening(source: String, laboratory: Boolean) {
+        if (!laboratory && !runtime.pcConnected) {
+            page = "home"
+            return
+        }
         pendingSource = source
         pendingLab = laboratory
         lifecycleScope.launch {
@@ -307,6 +349,10 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         pip = isInPictureInPictureMode
+        runtime.link.pairingForeground(
+            !isInPictureInPictureMode &&
+                lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED),
+        )
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -333,6 +379,7 @@ class MainActivity : ComponentActivity() {
         outState.putBoolean("lab", pendingLab)
         outState.putString("after_check", afterCheck)
         outState.putBoolean("notifications", notificationStep)
+        outState.putBoolean("network", networkStep)
         outState.putBoolean("pip_warned", pipWarned)
         super.onSaveInstanceState(outState)
     }
@@ -360,6 +407,7 @@ class MainActivity : ComponentActivity() {
             pendingLab = it.getBoolean("lab")
             afterCheck = it.getString("after_check")
             notificationStep = it.getBoolean("notifications")
+            networkStep = it.getBoolean("network")
             pipWarned = it.getBoolean("pip_warned")
         }
         enableEdgeToEdge()
@@ -367,6 +415,7 @@ class MainActivity : ComponentActivity() {
             VeylTheme {
                 val capture by runtime.capture.collectAsStateWithLifecycle()
                 val prefs by runtime.settings.state.collectAsStateWithLifecycle()
+                val connection by runtime.link.state.collectAsStateWithLifecycle()
                 val active = capture.state in listOf("starting", "running")
                 LaunchedEffect(prefs.onboarded) {
                     if (prefs.onboarded && page == "welcome") page = "home"
@@ -399,7 +448,12 @@ class MainActivity : ComponentActivity() {
                             else -> "home"
                         }
                 }
-                Scaffold { padding ->
+                Scaffold(
+                    containerColor =
+                        if (active) Color.Black else MaterialTheme.colorScheme.background,
+                    contentColor =
+                        if (active) Color.White else MaterialTheme.colorScheme.onBackground,
+                ) { padding ->
                     Column(
                         Modifier.fillMaxSize()
                             .padding(padding)
@@ -413,7 +467,7 @@ class MainActivity : ComponentActivity() {
                                 stringResource(R.string.app_name),
                                 style = MaterialTheme.typography.titleLarge,
                             )
-                            Text(stringResource(R.string.no_pc_meter))
+                            PhoneScore(connection.meter, small = true)
                         } else
                             when {
                                 page == "check" ->
@@ -445,7 +499,7 @@ class MainActivity : ComponentActivity() {
                                         { folder.launch(null) },
                                     )
                                 active -> {
-                                    ListeningContent(capture) {
+                                    ListeningContent(capture, connection) {
                                         ListeningService.stop(this@MainActivity)
                                     }
                                     if (capture.source == "player")
@@ -454,42 +508,57 @@ class MainActivity : ComponentActivity() {
                                         }
                                 }
                                 page == "permissions" -> {
-                                    Text(
-                                        stringResource(
-                                            if (notificationStep) R.string.notifications_title
-                                            else R.string.microphone_title,
-                                        ),
-                                        style = MaterialTheme.typography.headlineLarge,
-                                    )
-                                    Text(
-                                        stringResource(
-                                            if (notificationStep) R.string.notifications_explanation
-                                            else R.string.microphone_explanation,
-                                        ),
-                                    )
-                                    if (!notificationStep)
-                                        Button(
-                                            onClick = {
-                                                pendingSource = "onboard"
-                                                requestMicrophone()
-                                            },
-                                        ) {
-                                            Text(stringResource(R.string.allow_microphone))
+                                    if (networkStep) {
+                                        Text(
+                                            stringResource(R.string.local_network),
+                                            style = MaterialTheme.typography.headlineLarge,
+                                        )
+                                        Text(stringResource(R.string.local_network_explanation))
+                                        Button(onClick = ::allowNetwork) {
+                                            Text(stringResource(R.string.allow_network))
                                         }
-                                    else {
-                                        Button(
-                                            onClick = {
-                                                if (Build.VERSION.SDK_INT >= 33)
-                                                    notifications.launch(
-                                                        Manifest.permission.POST_NOTIFICATIONS,
-                                                    )
-                                                else finishOnboarding()
-                                            },
-                                        ) {
-                                            Text(stringResource(R.string.allow_notifications))
-                                        }
-                                        TextButton(onClick = ::finishOnboarding) {
+                                        TextButton(onClick = ::completeOnboarding) {
                                             Text(stringResource(R.string.not_now))
+                                        }
+                                    } else {
+                                        Text(
+                                            stringResource(
+                                                if (notificationStep) R.string.notifications_title
+                                                else R.string.microphone_title,
+                                            ),
+                                            style = MaterialTheme.typography.headlineLarge,
+                                        )
+                                        Text(
+                                            stringResource(
+                                                if (notificationStep)
+                                                    R.string.notifications_explanation
+                                                else R.string.microphone_explanation,
+                                            ),
+                                        )
+                                        if (!notificationStep)
+                                            Button(
+                                                onClick = {
+                                                    pendingSource = "onboard"
+                                                    requestMicrophone()
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.allow_microphone))
+                                            }
+                                        else {
+                                            Button(
+                                                onClick = {
+                                                    if (Build.VERSION.SDK_INT >= 33)
+                                                        notifications.launch(
+                                                            Manifest.permission.POST_NOTIFICATIONS,
+                                                        )
+                                                    else finishOnboarding()
+                                                },
+                                            ) {
+                                                Text(stringResource(R.string.allow_notifications))
+                                            }
+                                            TextButton(onClick = ::finishOnboarding) {
+                                                Text(stringResource(R.string.not_now))
+                                            }
                                         }
                                     }
                                 }
@@ -509,34 +578,17 @@ class MainActivity : ComponentActivity() {
                                         { page = "settings" },
                                     )
                                 page == "licenses" -> LicensesContent { page = "about" }
-                                page == "home" -> {
-                                    Text(
-                                        stringResource(R.string.no_pc_title),
-                                        style = MaterialTheme.typography.headlineLarge,
-                                    )
-                                    Text(stringResource(R.string.this_phone, prefs.phoneName))
-                                    Text(
-                                        stringResource(
-                                            R.string.address,
-                                            stringResource(R.string.not_available),
-                                        ),
-                                    )
-                                    Text(stringResource(R.string.waiting_pc))
-                                    Text(stringResource(R.string.listening_ready))
-                                    SourceControls(
+                                page == "home" ->
+                                    PhoneHomeContent(
                                         runtime,
-                                        false,
                                         { requestListening(it, false) },
                                         { music.launch(arrayOf("audio/*")) },
                                         { folder.launch(null) },
+                                        { page = "placement" },
+                                        { page = "settings" },
+                                        ::allowNetwork,
+                                        ::appSettings,
                                     )
-                                    TextButton(onClick = { page = "placement" }) {
-                                        Text(stringResource(R.string.placement_link))
-                                    }
-                                    TextButton(onClick = { page = "settings" }) {
-                                        Text(stringResource(R.string.settings))
-                                    }
-                                }
                                 else -> {
                                     Image(
                                         painterResource(R.drawable.ic_launcher_foreground),
@@ -592,6 +644,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                if (!pip) PairingDialog(runtime)
                 if (explain)
                     AlertDialog(
                         onDismissRequest = { explain = false },
@@ -609,6 +662,41 @@ class MainActivity : ComponentActivity() {
                         },
                     )
             }
+        }
+        handleStartNotification(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runtime.link.activityStarted()
+    }
+
+    override fun onStop() {
+        runtime.link.activityStopped()
+        super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        runtime.link.pairingForeground(!isInPictureInPictureMode)
+        runtime.link.refreshPermissions()
+    }
+
+    override fun onPause() {
+        runtime.link.pairingForeground(false)
+        super.onPause()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleStartNotification(intent)
+    }
+
+    private fun handleStartNotification(intent: Intent) {
+        if (runtime.link.consumeStartToken(intent.getStringExtra("veyl_start_token"))) {
+            page = "home"
+            requestListening(runtime.settings.state.value.source, false)
         }
     }
 }
