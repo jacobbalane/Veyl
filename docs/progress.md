@@ -99,32 +99,34 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
 
 ## Verification
 
-| Check                                                   | Result                                             |
-| ------------------------------------------------------- | -------------------------------------------------- |
-| `npm ci`                                                | Passed from the committed lockfile                 |
-| `npm run format:check`                                  | Passed                                             |
-| `node --test "scripts/*.test.mjs"`                      | 14 passed, none failed or skipped                  |
-| `node scripts/check-version.mjs`                        | All version sources agree at 0.0.1                 |
-| `node scripts/bump-version.mjs 0.0.1`                   | Passed, including real lockfile refresh            |
-| Desktop TypeScript, Vitest and production build         | Passed; 1 UI test                                  |
-| Site Vitest, TypeScript and three-page build            | Passed; 3 tests                                    |
-| `cargo fmt --all -- --check`                            | Passed                                             |
-| `cargo clippy --workspace --all-targets -- -D warnings` | Passed                                             |
-| `cargo test --workspace --exclude veyl-desktop`         | 7 passed                                           |
-| Release portable Rust tests                             | 7 passed                                           |
-| `cargo test -p veyl-desktop`                            | 1 passed                                           |
-| `cargo run -p veyl-lab -- scenarios`                    | Lists the 21 planned scenarios                     |
-| Native Windows app launch with isolated data            | Passed: window, IPC, identity and disabled actions |
-| Android `:core:test`                                    | 2 passed, none failed or skipped                   |
-| Android debug and release lint                          | Zero errors and warnings; baseline remains empty   |
-| Android debug and unsigned release build                | Passed                                             |
-| Windows x64 NSIS packaging                              | Passed                                             |
-| Windows ARM64 NSIS cross-build                          | Passed; runtime check needs an ARM64 PC            |
-| Browser checks at desktop and 360 px widths             | Passed; screenshots remain in ignored `.cache/qa/` |
-| Workflow syntax and expressions (`actionlint`)          | Passed; ShellCheck is unavailable locally          |
-| GitHub Build Veyl                                       | Fixing the first run's Node 24 test command        |
-| GitHub Pages workflow                                   | Passed; site deployed successfully                 |
-| Release signing and attestations                        | Pending M0.9–M0.10                                 |
+| Check                                                   | Result                                                    |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| `npm ci`                                                | Passed from the committed lockfile                        |
+| `npm run format:check`                                  | Passed                                                    |
+| `node --test "scripts/*.test.mjs"`                      | 14 passed, none failed or skipped                         |
+| `node scripts/check-version.mjs`                        | All version sources agree at 0.0.1                        |
+| `node scripts/bump-version.mjs 0.0.1`                   | Passed, including real lockfile refresh                   |
+| Desktop TypeScript, Vitest and production build         | Passed; 1 UI test                                         |
+| Site Vitest, TypeScript and three-page build            | Passed; 3 tests                                           |
+| `cargo fmt --all -- --check`                            | Passed                                                    |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Passed                                                    |
+| `cargo test --workspace --exclude veyl-desktop`         | 7 passed                                                  |
+| Release portable Rust tests                             | 7 passed                                                  |
+| `cargo test -p veyl-desktop`                            | 1 passed                                                  |
+| `cargo run -p veyl-lab -- scenarios`                    | Lists the 21 planned scenarios                            |
+| Native Windows app launch with isolated data            | Passed: window, IPC, identity and disabled actions        |
+| Android `:core:test`                                    | 2 passed, none failed or skipped                          |
+| Android debug and release lint                          | Zero errors and warnings; baseline remains empty          |
+| Android debug and unsigned release build                | Passed                                                    |
+| Windows x64 NSIS packaging                              | Passed                                                    |
+| Windows ARM64 NSIS cross-build                          | Passed; runtime check needs an ARM64 PC                   |
+| Browser checks at desktop and 360 px widths             | Passed; screenshots remain in ignored `.cache/qa/`        |
+| Workflow syntax and expressions (`actionlint`)          | Passed; ShellCheck is unavailable locally                 |
+| GitHub Build Veyl                                       | Passed: checks, Windows x64/ARM64, Android debug          |
+| GitHub Pages workflow                                   | Passed; site deployed successfully                        |
+| Live website browser checks                             | All three pages passed on desktop and mobile              |
+| Downloaded CI artifacts                                 | Both installer checksums and debug APK signature verified |
+| Release signing and attestations                        | Pending M0.9–M0.10                                        |
 
 The Android app has no separate JVM unit-test sources yet: `:app:testDebugUnitTest` reports
 `NO-SOURCE`. Its foundation logic is covered by `:core:test`, and its Compose screens require the
@@ -150,10 +152,21 @@ attestation yet.
 **M0.9:** GitHub CLI is installed and authenticated as `jacobbalane`. After the maintainer continued
 setup, the agent created and pushed [the public repository](https://github.com/jacobbalane/Veyl),
 enabled Pages from Actions, and configured its homepage, topics, private vulnerability reporting,
-Dependabot security alerts/fixes and the `device-report` label. The first Website run built and
-deployed successfully. The first Build Veyl run exposed a Node 24 test-runner
-incompatibility with a directory argument. CI and the documented command now use the explicit
-`scripts/*.test.mjs` glob. Remote build verification remains pending until the fixed run passes.
+Dependabot security alerts/fixes and the `device-report` label. The Website workflow built and
+deployed successfully. Browser checks of the live home, docs and changelog pages passed at desktop
+and mobile widths, including assets/fonts, download fallback and no page errors or overflow.
+
+The first Build Veyl run exposed a Node 24 test-runner incompatibility with a directory argument.
+CI and the documented command now use the explicit `scripts/*.test.mjs` glob. The corrected
+[Build Veyl run](https://github.com/jacobbalane/Veyl/actions/runs/39704676134) passed Linux checks,
+Windows x64 and ARM64 packaging, and Android tests/lint/debug packaging. Both downloaded Windows
+installers match their checksums; the downloaded debug APK's signature verifies. These artifacts
+remain in ignored `.cache/github/`, and have not been published as release downloads.
+
+Workflow actions now use current stable release tags, checked against their upstream releases and
+action inputs, and pass `actionlint`. This replaces the deprecated checkout, Node/Java setup,
+Gradle, artifact, Pages and release action versions. The MSVC environment action's latest release
+still declares Node 20; GitHub runs it with Node 24, and the Windows builds above passed.
 
 Still required: create and back up the permanent Android signing key, then configure the four
 signing secrets using [release.md](release.md). No signing secrets, tags or releases exist yet.

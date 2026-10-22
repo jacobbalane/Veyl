@@ -5,6 +5,11 @@ the public repository, Pages from Actions and repository settings are configured
 and the preview release are still pending. Wait for green CI before tagging a preview.
 Create the signing key outside the repository; keep its password private and retain two backups.
 
+On this machine, one-time setup steps 1–3 and 5 are complete. Continue with step 4, then rerun
+Build Veyl so its Android job verifies the signed release APK. If PowerShell cannot find `gh`,
+close every Windows Terminal window and reopen it, or use `& "C:\Program Files\GitHub CLI\gh.exe"`
+in place of `gh`.
+
 ## One-time setup
 
 1. Install the GitHub CLI and log in: `winget install --id GitHub.cli -e`, then `gh auth login`.
@@ -28,6 +33,11 @@ Create the signing key outside the repository; keep its password private and ret
 
    Keep `veyl-release.p12` and its password in a password manager and one more safe place. Never in
    the repository.
+
+   After all four secrets are configured, run
+   `gh workflow run build.yml --repo jacobbalane/Veyl --ref main`. Check that its Android job uploads
+   `Veyl-android` with a signed `Veyl_0.0.1.apk`, rather than the `debug-android` artifact used before
+   signing setup. Wait for the complete workflow to pass before creating a release tag.
 
 5. Repository settings:
 

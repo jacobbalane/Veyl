@@ -11,15 +11,15 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
       - run: npm ci
       - run: npm run format:check
       - run: node --test "scripts/*.test.mjs"
@@ -53,8 +53,8 @@ jobs:
             msvc: amd64_arm64
             name: arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -62,10 +62,10 @@ jobs:
         with:
           components: clippy
           targets: ${{ matrix.target }}
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
         with:
           arch: ${{ matrix.msvc }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           key: ${{ matrix.target }}
       - run: npm ci
@@ -83,7 +83,7 @@ jobs:
             $hash = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
             "$($hash.Hash.ToLower())  $($_.Name)" | Set-Content -LiteralPath "$($_.FullName).sha256"
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: Veyl-windows-${{ matrix.name }}
           path: |
@@ -96,12 +96,12 @@ jobs:
     env:
       HAS_KEYSTORE: ${{ secrets.VEYL_KEYSTORE_BASE64 != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.1.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6.4.0
       - name: Releases need the signing key
         if: startsWith(github.ref, 'refs/tags/v') && env.HAS_KEYSTORE != 'true'
         run: |
@@ -135,13 +135,13 @@ jobs:
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner"
           "$apksigner" verify --print-certs "out/Veyl_${version}.apk"
           (cd out && sha256sum "Veyl_${version}.apk" > "Veyl_${version}.apk.sha256")
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: env.HAS_KEYSTORE == 'true'
         with:
           name: Veyl-android
           path: android/out/*
       # Pull requests from forks have no secrets: keep their debug APK out of releases.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: env.HAS_KEYSTORE != 'true'
         with:
           name: debug-android
@@ -157,23 +157,23 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
       # The release notes are the version's section of CHANGELOG.md, written for people.
       - run: node scripts/changelog-section.mjs "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           path: artifacts
           pattern: Veyl-*
           merge-multiple: true
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@v4.2.2
         with:
           subject-path: |
             artifacts/*.exe
             artifacts/*.apk
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3.0.3
         with:
           draft: true
           name: Veyl ${{ github.ref_name }}
