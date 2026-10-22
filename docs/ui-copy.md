@@ -131,3 +131,19 @@ wording; change it only through a decision record.
 | Desktop navigation   | Veyl views                                                                                 |
 | Privacy summary      | Sound stays on your devices. Veyl has no accounts, analytics or cloud services.            |
 | Footer               | Sound stays home.                                                                          |
+
+### C.5 Phone listening and debug Lab (M2)
+
+| Where                  | Text                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Lab title              | Lab                                                                                                                                                                                                                                              |
+| Lab introduction       | Device check. Sound stays on this phone. No PC is connected.                                                                                                                                                                                     |
+| Lab instructions       | Play YouTube Music through the phone speaker. Start the capture check and leave it running for five minutes. Both block counts should keep increasing.                                                                                           |
+| Lab start              | Start capture check                                                                                                                                                                                                                              |
+| Lab metrics            | Reference · Microphone · Sample rate: {rate} Hz · Source: {source} · Channels: {channels} · Effects off: {effects} · Blocks: {count} · Level: {db} dBFS · High sounds: {db} dBFS · Elapsed: {seconds} s                                          |
+| Lab recording          | Record 10 seconds · This saves unfiltered sound, including voices, in this debug app. Record only for the device check. Nothing is uploaded. · Record · Cancel · Recording… · Debug recordings saved. · Delete recordings · No debug recordings. |
+| Lab availability       | Playback capture needs Android 10 or later. Use the test sound or Veyl player on this phone.                                                                                                                                                     |
+| Lab errors             | Veyl could not start capture. Check microphone permission and try again. · No sound source is running.                                                                                                                                           |
+| Navigation             | Back · Home · Permissions · Placement guide                                                                                                                                                                                                      |
+| Listening without a PC | Waiting for your PC… · No PC meter yet · Phone listening is ready for a device check. Pairing and PC connection arrive in M3.                                                                                                                    |
+| Diagnostics            | Copy diagnostics · Diagnostics copied. · None · Not available · Microphone error · Capture error                                                                                                                                                 |

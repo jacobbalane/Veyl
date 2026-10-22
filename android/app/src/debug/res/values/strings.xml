@@ -1,0 +1,28 @@
+<resources>
+    <string name="none">None</string>
+    <string name="lab_title">Lab</string>
+    <string name="lab_intro">Device check. Sound stays on this phone. No PC is connected.</string>
+    <string name="lab_instructions">Play YouTube Music through the phone speaker. Start the capture check and leave it running for five minutes. Both block counts should keep increasing.</string>
+    <string name="lab_start">Start capture check</string>
+    <string name="lab_reference">Reference</string>
+    <string name="lab_microphone">Microphone</string>
+    <string name="lab_rate">Sample rate: %1$d Hz</string>
+    <string name="lab_source">Source: %1$s</string>
+    <string name="lab_channels">Channels: %1$d</string>
+    <string name="lab_effects">Effects off: %1$s</string>
+    <string name="lab_blocks">Blocks: %1$d</string>
+    <string name="lab_level">Level: %1$.1f dBFS</string>
+    <string name="lab_high">High sounds: %1$.1f dBFS</string>
+    <string name="lab_elapsed">Elapsed: %1$d s</string>
+    <string name="lab_record">Record 10 seconds</string>
+    <string name="lab_warning">This saves unfiltered sound, including voices, in this debug app. Record only for the device check. Nothing is uploaded.</string>
+    <string name="lab_confirm">Record</string>
+    <string name="lab_recording">Recording…</string>
+    <string name="lab_saved">Debug recordings saved.</string>
+    <string name="lab_delete">Delete recordings</string>
+    <string name="lab_empty">No debug recordings.</string>
+    <string name="lab_unavailable">Playback capture needs Android 10 or later. Use the test sound or Veyl player on this phone.</string>
+    <string name="lab_error">Veyl could not start capture. Check microphone permission and try again.</string>
+    <string name="lab_diagnostics">Copy diagnostics</string>
+    <string name="lab_copied">Diagnostics copied.</string>
+</resources>

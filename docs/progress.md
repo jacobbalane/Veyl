@@ -6,7 +6,7 @@ Section 0 followed: the full plan and the listed Glim references were read befor
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
 complete. The maintainer reports that both installed apps open: Windows shows the phone-search
 placeholder and Android shows the waiting-for-PC placeholder. M0's listed acceptance criteria pass;
-the additional device checks below remain unreported. M1 is complete. M2 is next; connecting the
+the additional device checks below remain unreported. M1 is complete. M2 is in progress; connecting the
 apps is M3. The published 0.0.1 preview still contains the M0 interface skeleton.
 
 The maintainer approved installing build tools and supplied the Git author identity. Rust,
@@ -277,7 +277,76 @@ APK), Windows x64 (native clippy/tests and installer) and Windows ARM64 (cross-b
 The tag-only draft-release job is not applicable to this main push.
 [Website](https://github.com/jacobbalane/Veyl/actions/runs/39730717483) also passed and deployed.
 Local formatting, debug/release Android lint, both APK builds and permanent-signer verification
-passed. M2 has not started; app discovery, pairing UI, protected stores and streaming remain M3.
+passed. App discovery, pairing UI, protected stores and streaming remain M3.
+
+## M2 — Phone listening
+
+**Goal:** the phone captures the digital copy and the microphone reliably, filters and packs them,
+and handles every state before any PC is involved.
+
+- [ ] **M2.1 [device]** Hidden debug Lab: consent → service → playback capture and microphone,
+      live levels, sample rate, microphone source, channel counts, effects and optional 10-second
+      app-private WAVs. **Gate G1:** YouTube Music runs with both streams for five minutes without
+      errors; reference energy exists above 8 kHz; the microphone hears the music. Apply §14 R1 and
+      record a decision if it fails.
+- [ ] **M2.2** `ListeningService` and `CaptureRun` (§5.5): source selection, effects, timestamps,
+      privacy filter, packer, routes and stop/error handling. A null link counts blocks until M3.
+- [ ] **M2.3** `BrightLoop`, test-sound playback, Veyl player, FFT, sound check and runner; Android
+      8–9 capability fallbacks. Test sound and the player require no projection consent.
+- [ ] **M2.4** Listening screen, keep-screen-on, dimming, picture-in-picture, notifications and alerts.
+- [ ] **M2.5** Welcome, permissions, Home without a PC, placement, Settings, About and Licenses.
+- [ ] **M2.6** Tests: privacy filter, block statistics, BrightLoop, FFT, sound check, route
+      classification and state reducers.
+- [ ] **M2.7 [device]** D5, D6, D7, D15, D16 and D17 when Android 8–9 hardware is available;
+      30-minute YouTube Music run; test sound/player without projection consent. Record results.
+
+**Acceptance:** unit tests pass in CI; device results recorded; failed checks have their documented
+fallbacks applied and a decision record.
+
+**Verify:** `.\gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
+
+**M2.1 implementation ready; G1 pending.** Debug builds have a hidden Lab (hold the version label),
+single-use projection consent, simultaneous playback/microphone readers, both pre-filter levels,
+filtered high-band levels, counts, rate, source, channels, effects and metadata-only diagnostics.
+Optional, explicitly confirmed raw WAVs are capped at ten seconds per stream in app-private
+storage. Both the writer and Lab are debug source files. DEX inspection found the recorder in the
+debug APK and no recorder class/private recording path in the release APK. The permanent release
+signer is unchanged. CI now builds a separate `debug-android` artifact even when signing exists;
+its name keeps it out of release assets. See [decision 0004](decisions/0004-capture-lab.md).
+
+**M2.2 underway.** Capture tries 48/44.1 kHz with the specified microphone source/channel order,
+disables available effects, retains active microphone metadata, packs exact ten-millisecond blocks
+with extrapolated timestamps and raw statistics, then filters both streams before the null sink.
+Route/silenced warnings and user, screen-lock, projection, recorder, permission, no-PC and thermal
+stop paths are implemented. Locks renew while capture runs and cleanup closes recorders/effects.
+Stored sound-check choices and changes to the own-player/test-sound sources follow in M2.3; keep
+this checkbox open until those are integrated. Listening/PiP, dimming and notification groundwork
+is present; settings and the rest of the M2 screens remain unfinished.
+
+**Local verification:** 23 core JVM tests and three app JVM tests pass. New tests cover filter
+response at both rates, stability/channel isolation/reset, pre-filter statistics and clipping,
+timestamp extrapolation, the production ten-minute no-PC deadline versus the explicit debug
+thirty-minute check, output routes and bounded little-endian WAVs. Debug/release builds and Android
+lint pass with no warnings. Formatting passes. These checks do not verify hardware capture.
+
+### Waiting on M2 device tests
+
+No Android device is connected through ADB. Gate G1 and M2.7 remain pending. Follow the complete
+[phone device-check instructions](phone-device-checks.md); for the first check:
+
+1. Install `android/app/build/outputs/apk/debug/app-debug.apk` as **Veyl (debug)**, or use
+   `debug-android` from the M2 CI run. The website's published 0.0.1 APK has no Lab.
+2. Hold **Version 0.0.1**, play YouTube Music through the speaker, tap **Start capture check**, allow
+   microphone access, read **One more step**, then approve Android's consent dialog.
+3. Run for five minutes with Veyl visible or in picture-in-picture. Both block counts must keep
+   increasing, Reference → High sounds must respond above silence when the track has high sounds,
+   and the microphone must hear the music. Optional WAVs require an explicit recording confirmation.
+4. Tap **Copy diagnostics**, then **Stop**. Report that metadata, the source commit/APK, phone and
+   Android versions, pass/fail and any problem. Do not upload audio. Record failed checks and apply
+   §14 R1 before acceptance.
+
+Under §0.1.2, continue the remaining work that can be tested without hardware. The later thirty-minute,
+route, lock, PiP, player and sound-check checks remain open; unavailable devices are not passes.
 
 ## Dependency follow-up
 

@@ -9,4 +9,25 @@
     <string name="foundation_detail">This preview build opens the interface. Listening, pairing and actions are coming in v0.1.</string>
     <string name="version">Version %1$s</string>
     <string name="license">Free and open source (MIT)</string>
+    <string name="listening_channel">Listening</string>
+    <string name="alerts_channel">Alerts</string>
+    <string name="listening_notification">Veyl is listening</string>
+    <string name="notification_waiting">Waiting for your PC</string>
+    <string name="stop">Stop</string>
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="microphone_denied">Veyl needs the microphone to hear echoes.</string>
+    <string name="consent_cancelled">Veyl needs this to hear what your phone plays.</string>
+    <string name="consent_explainer">Next, Android asks to record or cast. That\'s how Android lets apps share their sound. Veyl only uses the sound your apps play — never your screen.</string>
+    <string name="screen_locked_alert">Veyl stopped because your screen locked. Open Veyl and tap Start.</string>
+    <string name="capture_error_alert">Veyl stopped because the microphone or sound capture failed. Tap to try again.</string>
+    <string name="thermal_alert">Veyl stopped to let your phone cool down.</string>
+    <string name="no_pc_timeout_alert">Veyl stopped because no PC was connected for 10 minutes.</string>
+    <string name="not_speaker">Sound is going to headphones or Bluetooth. Veyl needs your phone\'s speaker.</string>
+    <string name="mic_silenced">Another app is using the microphone.</string>
+    <string name="no_pc_meter">No PC meter yet</string>
+    <string name="listening_reminder">Keep this screen on. Veyl stops if your phone locks.</string>
+    <string name="one_more_step">One more step</string>
+    <string name="continue_label">Continue</string>
+    <string name="open_settings">Open settings</string>
 </resources>

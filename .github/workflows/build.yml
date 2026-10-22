@@ -120,7 +120,7 @@ jobs:
           VEYL_KEY_PASSWORD: ${{ secrets.VEYL_KEY_PASSWORD }}
         run: |
           if [ -n "$VEYL_KEYSTORE_PATH" ]; then
-            ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+            ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease
           else
             ./gradlew --no-daemon :core:test :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
           fi
@@ -139,9 +139,8 @@ jobs:
         with:
           name: Veyl-android
           path: android/out/*
-      # Pull requests from forks have no secrets: keep their debug APK out of releases.
+      # M2's device Lab is debug only. This artifact's name excludes it from release downloads.
       - uses: actions/upload-artifact@v7.0.2
-        if: env.HAS_KEYSTORE != 'true'
         with:
           name: debug-android
           path: android/app/build/outputs/apk/debug/*.apk

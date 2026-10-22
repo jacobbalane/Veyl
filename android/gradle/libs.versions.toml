@@ -7,6 +7,10 @@ core = "1.19.1"
 junit = "4.13.2"
 bouncycastle = "1.86"
 serialization = "1.12.0"
+coroutines = "1.11.0"
+lifecycle = "2.11.0"
+datastore = "1.3.0"
+media3 = "1.11.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core" }
@@ -20,6 +24,10 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref =
 junit = { module = "junit:junit", version.ref = "junit" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
