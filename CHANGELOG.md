@@ -14,3 +14,7 @@ What changed in each Veyl release. Downloads, checksums and build attestations w
 - Desktop and Android interface foundations. Listening, pairing and actions remain unavailable.
 - Website home, documentation and changelog pages, with Windows and Android download selection.
 - Windows x64/ARM64, Android, draft-release and GitHub Pages workflow definitions.
+
+## 0.0.1 (2026-10-22)
+
+Preview build. Nothing works yet; this release tests downloads.

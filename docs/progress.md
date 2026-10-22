@@ -122,11 +122,12 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
 | Windows ARM64 NSIS cross-build                          | Passed; runtime check needs an ARM64 PC                   |
 | Browser checks at desktop and 360 px widths             | Passed; screenshots remain in ignored `.cache/qa/`        |
 | Workflow syntax and expressions (`actionlint`)          | Passed; ShellCheck is unavailable locally                 |
-| GitHub Build Veyl                                       | Passed: checks, Windows x64/ARM64, Android debug          |
+| GitHub Build Veyl                                       | Passed: checks, Windows x64/ARM64, signed Android release |
 | GitHub Pages workflow                                   | Passed; site deployed successfully                        |
 | Live website browser checks                             | All three pages passed on desktop and mobile              |
-| Downloaded CI artifacts                                 | Both installer checksums and debug APK signature verified |
-| Release signing and attestations                        | Pending M0.9–M0.10                                        |
+| Downloaded CI artifacts                                 | Installer checksums and permanent APK signer verified     |
+| Android release signing                                 | Passed locally and in GitHub CI                           |
+| Release attestations                                    | Pending the maintainer's M0.10 tag                        |
 
 The Android app has no separate JVM unit-test sources yet: `:app:testDebugUnitTest` reports
 `NO-SOURCE`. Its foundation logic is covered by `:core:test`, and its Compose screens require the
@@ -144,7 +145,7 @@ full debug/release lint ran and passed. Gradle also reports an upstream deprecat
 - Website: `site/dist/`.
 
 Build output and local checksums stay ignored. The x64 installer is about 2.18 MiB, ARM64 about
-1.94 MiB, and the unsigned release APK below 1 MiB. These local artifacts have no GitHub provenance
+1.94 MiB, and the signed release APK below 1 MiB. These local artifacts have no GitHub provenance
 attestation yet.
 
 ## Waiting on maintainer setup
@@ -183,22 +184,32 @@ the release APK when the configured secrets are available.
 The first signed CI run found that AGP does not create `:app:testReleaseUnitTest` for this app's
 current configuration. The release path now runs the existing debug app unit-test task and JVM
 core tests, then release lint and signed packaging. The app task still has no test sources; the
-two core tests supply the current Android logic coverage.
+two core tests supply the current Android logic coverage. The corrected
+[signed Build Veyl run](https://github.com/jacobbalane/Veyl/actions/runs/39707563027) passed every
+build job. Its downloaded release APK matches its checksum and the permanent signing certificate.
 
 At the maintainer's request, all four signing values were exported to
 `../VEYL_SIGNING_SECRETS.txt`, outside the Git repository, for saving in 1Password. This temporary
-export is plaintext, restricted to the current user and SYSTEM, and must not be committed. Delete
-it after the maintainer confirms the values are saved safely.
+export was plaintext, restricted to the current user and SYSTEM, and was never committed. The file
+is now absent; confirmation that its contents were saved in 1Password is still pending. Do not
+recreate the deleted plaintext export without the maintainer asking.
 
-Still required for M0.9: the maintainer must save the actual password in a password manager and
-make two independent backups of the key and password. Instructions are in
-`%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`; the DPAPI file alone is not a portable backup.
-No tags or releases exist yet.
+Still required for M0.9: confirm that the keystore backup and its actual password are saved in
+1Password. The protected local signing files remain the other safe copy, as required by plan
+section 10.7. Instructions are in `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`; the DPAPI
+file alone is not a portable password backup. No tags or releases exist yet.
 
-**M0.10:** Add the exact 0.0.1 preview changelog section, run the version script and checks, then
-create/push the tag. Inspect the draft release for x64 and ARM64 installers, the signed APK, all
-three checksums and attestations. Only the maintainer publishes the preview. Keep M0 incomplete
-until the site downloads work and the device results below are recorded.
+**M0.10 preparation:** Added the exact 0.0.1 preview changelog section dated 2026-10-22; later feature
+notes remain under Unreleased. The existing version sources stay at 0.0.1. Version refresh,
+both lockfile refreshes, tag-context version validation, release-note extraction, fourteen Node
+tests, formatting and the production site build passed. CI rebuilds both installers and the signed
+APK from the release preparation commit. Tag-only provenance and draft release checks still need
+the maintainer's tag. No tag or release has been created.
+
+After preparation passes, create/push the tag, inspect the draft's x64 and ARM64 installers, signed
+APK, three checksums and attestations, then publish the preview. Plan section 0.1.7 and AGENTS.md
+reserve tag creation and publication for the maintainer unless explicitly overridden. Keep M0
+incomplete until the site downloads work and the device results below are recorded.
 
 ## Waiting on device tests
 

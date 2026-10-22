@@ -4,7 +4,8 @@ M0 is in progress. These commands document maintainer setup and releases. GitHub
 the public repository, Pages from Actions, repository settings and Android signing secrets are
 configured. Independent signing backups and the preview release are still pending. Wait for green
 CI before tagging a preview.
-Create the signing key outside the repository; keep its password private and retain two backups.
+Create the signing key outside the repository; keep its password private and keep it in a password
+manager and one other safe place.
 
 On this machine, steps 1–5 are configured. At the maintainer's request, the agent generated the
 permanent RSA 4096-bit key and a random 256-bit password, then configured all four signing secrets.
@@ -13,8 +14,9 @@ DPAPI in the same directory. Access is restricted to this Windows user and SYSTE
 release APK verifies against the generated certificate. Reuse this key; do not generate another.
 
 Before releasing, follow `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt` to save the actual
-password in a password manager and make two independent backups of the key and password. The DPAPI
-file depends on the current Windows account and is not a portable password backup.
+password and the keystore backup in 1Password. The protected local signing files remain the other
+safe copy. The DPAPI file depends on the current Windows account and is not a portable password
+backup. The temporary text export has been removed; confirmation of the 1Password backup is pending.
 
 The numbered commands below document the original setup. If PowerShell cannot find `gh`,
 close every Windows Terminal window and reopen it, or use `& "C:\Program Files\GitHub CLI\gh.exe"`
@@ -73,18 +75,29 @@ the website's buttons download those files.
 
 ## The 0.0.1 pipeline check
 
-After main passes CI, add this section to CHANGELOG.md:
+The preview changelog section is prepared in CHANGELOG.md:
 
 ```markdown
-## 0.0.1 (YYYY-MM-DD)
+## 0.0.1 (2026-10-22)
 
 Preview build. Nothing works yet; this release tests downloads.
 ```
 
-Use the actual release date. Keep later feature notes under Unreleased. Run
+If publication happens on another date, update this date before tagging. Later feature notes stay
+under Unreleased. Preparation runs
 `node scripts/bump-version.mjs 0.0.1`, `npm run format:check`, `node --test "scripts/*.test.mjs"` and
 `node scripts/check-version.mjs`, then commit `chore(release): 0.0.1` and push main. After its checks
-pass, the maintainer creates and pushes `v0.0.1` as below.
+pass and the signing backup is confirmed, the maintainer creates and pushes `v0.0.1`:
+
+```powershell
+Set-Location 'C:\Users\balan\OneDrive\Documents\projects\Veyl'
+git tag v0.0.1
+git push origin v0.0.1
+```
+
+The agent does not run these tag commands or publish the release without an explicit override of
+the rule in AGENTS.md and plan section 0.1.7. The draft-producing workflow runs only after the tag
+is pushed; a green main build alone does not publish downloads.
 
 Check the draft's six download files and attestations. Publish it as
 **0.0.1 — preview build (no features yet)**, then perform the installation-only checks in
