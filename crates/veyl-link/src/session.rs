@@ -252,25 +252,30 @@ impl Session {
 /// Clock conversion affects diagnostics, never stream alignment.
 #[derive(Default)]
 pub struct ClockSync {
-    samples: std::collections::VecDeque<(u64, i128)>,
+    rtts: std::collections::VecDeque<u64>,
+    offsets: std::collections::VecDeque<i128>,
 }
 impl ClockSync {
     pub fn observe(&mut self, sent_ns: u64, received_ns: u64, phone_ns: i64) -> Option<i128> {
         let rtt = received_ns.checked_sub(sent_ns)?;
-        self.samples
-            .push_back((rtt, phone_ns as i128 - (sent_ns as i128 + rtt as i128 / 2)));
-        if self.samples.len() > 15 {
-            self.samples.pop_front();
+        self.rtts.push_back(rtt);
+        if self.rtts.len() > 15 {
+            self.rtts.pop_front();
         }
-        let mut rtts: Vec<_> = self.samples.iter().map(|sample| sample.0).collect();
+        let mut rtts: Vec<_> = self.rtts.iter().copied().collect();
         rtts.sort_unstable();
         let median_rtt = rtts[rtts.len() / 2];
-        let mut offsets: Vec<_> = self
-            .samples
-            .iter()
-            .filter(|sample| sample.0 <= median_rtt)
-            .map(|sample| sample.1)
-            .collect();
+        if rtt < median_rtt {
+            self.offsets
+                .push_back(phone_ns as i128 - (sent_ns as i128 + rtt as i128 / 2));
+            if self.offsets.len() > 15 {
+                self.offsets.pop_front();
+            }
+        }
+        if self.offsets.is_empty() {
+            return None;
+        }
+        let mut offsets: Vec<_> = self.offsets.iter().copied().collect();
         offsets.sort_unstable();
         Some(offsets[offsets.len() / 2])
     }

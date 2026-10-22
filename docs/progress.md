@@ -236,10 +236,10 @@ No sensing or audio tests are appropriate for the 0.0.1 foundation. Those begin 
       rate limiting, `proptest` for the codecs, an in-memory client ↔ server run of pairing and session.
 - [x] **M1.3** `examples/gen_vectors.rs` and the committed `protocol/test-vectors/v1.json`; a test that
       regenerates and compares; enable the CI vectors step.
-- [ ] **M1.4** Kotlin `:core`: `Frames`, `Messages`, `Crypto`, `SealedChannel`, `PhonePairing`,
+- [x] **M1.4** Kotlin `:core`: `Frames`, `Messages`, `Crypto`, `SealedChannel`, `PhonePairing`,
       `PhoneSession`, `AudioBlock`, `PingPong`, with JUnit tests that reproduce every vector byte for byte
       and test the phone-side state machines.
-- [ ] **M1.5** `docs/protocol.md` (§4 with Mermaid sequence diagrams).
+- [x] **M1.5** `docs/protocol.md` (§4 with Mermaid sequence diagrams).
 
 **Acceptance:** all protocol tests pass in both languages in CI; the vectors match; docs complete.
 
@@ -249,8 +249,19 @@ committed file; `.\gradlew :core:test`.
 **M1.1–M1.3:** Rust now has bounded blocking/Tokio framing, all message codecs, X25519/HKDF/HMAC,
 strict AES-GCM counters, pairing/session machines for both roles, and async PC helpers. The helpers
 retain partial reads/writes across cancellation and service both directions while confirmations
-are sent. Twenty-two Rust tests pass, including a full pairing/session run over a 19-byte duplex
+are sent. Twenty-four Rust tests pass, including a full pairing/session run over a 19-byte duplex
 buffer, fake-clock timeout, codec property tests, rate limits, unknown extensions, corruption,
 replay, counter exhaustion, audio queue loss and liveness. Clippy passes with warnings denied.
 The deterministic vector generator matches the committed file and RFC 7748's X25519 known answer;
-CI's vector comparison is enabled. Kotlin parity and the final protocol diagrams remain pending.
+CI's vector comparison is enabled.
+
+**M1.4–M1.5:** Kotlin reproduces every committed vector byte for byte: X25519, commitment, raw JSON
+transcripts, HKDF, the comparison code, both confirmation MACs, session keys and all six sealed
+frames. Sixteen core JVM tests pass, including malformed messages, counter/authentication failures,
+pairing/session gates, timeouts, key cleanup and the phone audio queue. Both languages prepare one
+final `bad_message` response for authenticated malformed AUDIO, discard channel keys and prohibit
+reuse. Debug APK/lint and a signed release build/lint pass; the permanent signer is unchanged.
+Protocol documentation now includes the complete spec, message examples, two Mermaid sequence
+diagrams and caller responsibilities. Android uses only Bouncy Castle's low-level X25519, with
+its license bundled; other crypto uses the platform APIs. Kotlin sources are formatted with
+ktfmt 0.65's four-space style. Final cross-language CI acceptance is pending the push.

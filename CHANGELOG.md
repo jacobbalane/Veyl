@@ -1,6 +1,6 @@
 # Changelog
 
-What changed in each Veyl release. Downloads, checksums and build attestations will be on
+What changed in each Veyl release. Downloads, checksums and build attestations are on
 [GitHub Releases](https://github.com/jacobbalane/Veyl/releases).
 
 ## Unreleased
@@ -14,6 +14,8 @@ What changed in each Veyl release. Downloads, checksums and build attestations w
 - Desktop and Android interface foundations. Listening, pairing and actions remain unavailable.
 - Website home, documentation and changelog pages, with Windows and Android download selection.
 - Windows x64/ARM64, Android, draft-release and GitHub Pages workflow definitions.
+- Veyl Link protocol core in Rust and Kotlin, with encrypted frames, pairing and session state
+  machines, shared byte vectors and protocol tests. App connections arrive in M3.
 
 ## 0.0.1 (2026-10-22)
 

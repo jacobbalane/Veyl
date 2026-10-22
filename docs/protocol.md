@@ -1,11 +1,92 @@
-## 4. Veyl Link protocol v1
+# Veyl Link protocol v1
 
 Veyl Link is the private, encrypted connection between one phone and one PC. It is implemented
 twice — in Rust (`crates/veyl-link`, used by the desktop app and by `veyl-lab`) and in Kotlin
-(`android/core`). Shared test vectors (§4.15) keep the two byte-for-byte compatible. The same text
-goes into `docs/protocol.md`.
+(`android/core`). Shared test vectors (§4.15) keep the two byte-for-byte compatible.
 
-### 4.1 Roles
+M1 implements the protocol core and its tests. The installed 0.0.1 preview does not connect:
+Android capture arrives in M2; discovery, sockets, protected pairing storage and app integration
+arrive in M3. The sections below also specify those integration requirements.
+
+## Pairing and session flow
+
+```mermaid
+sequenceDiagram
+    actor PCUser as PC user
+    participant PC as PC client
+    participant Phone as Phone server
+    actor PhoneUser as Phone user
+    PC->>Phone: pair_hello (commit to PC key and nonce)
+    Phone->>Phone: Check version, foreground, busy and rate limit
+    Phone->>PC: pair_reply (fresh public key and nonce)
+    PC->>Phone: pair_reveal (committed public key and nonce)
+    Phone->>Phone: Verify commitment
+    Note over PC,Phone: Hash exact JSON bodies, derive link key and six-digit code
+    PC->>PCUser: Show comparison code
+    Phone->>PhoneUser: Show comparison code
+    PCUser->>PC: Codes match
+    PC->>Phone: pair_confirm (PC MAC)
+    PhoneUser->>Phone: Codes match
+    Phone->>PC: pair_confirm (phone MAC)
+    Note over PC,Phone: Store only after local confirmation and a valid peer MAC
+    Note over PC,Phone: Wipe ephemeral private keys and SAS key
+```
+
+Confirmations may arrive in either order. A valid peer MAC alone never permits storing a pairing.
+Cancel, timeout, commitment mismatch and invalid MAC end the attempt and discard pending secrets.
+
+```mermaid
+sequenceDiagram
+    participant PC as PC client
+    participant Phone as Phone server
+    PC->>Phone: hello (PC identity, fresh public key and nonce)
+    Phone->>Phone: Look up pairing; reject an unknown or busy PC
+    Phone->>PC: hello_reply (phone identity, fresh public key and nonce)
+    PC->>PC: Verify the expected phone identity
+    Note over PC,Phone: Derive fresh keys from DH, link key and exact transcript
+    Phone->>PC: SEALED counter 0: ready (device, capture)
+    PC->>Phone: SEALED counter 0: ready (pc, want)
+    Note over PC,Phone: Session is authenticated; each direction continues at counter 1
+    Phone->>PC: SEALED: audio_config, then filtered AUDIO
+    PC->>Phone: SEALED: PING
+    Phone->>PC: SEALED: PONG
+```
+
+## Implementation and verification
+
+Rust's `Pairing` and `Session` machines support both roles. Kotlin's `PhonePairing` and
+`PhoneSession` implement the phone role. Their inputs are complete frames, user confirmations and
+monotonic milliseconds. They return outbound frames and expose completed pairings or authenticated
+channels. The caller supplies one shared rate limiter for all phone connections. The caller must
+also enforce one active pairing/session, close on errors, and service timeout ticks while idle.
+For an authenticated malformed AUDIO payload, first send the final `bad_message` frame returned by
+`take_close_frame` / `takeCloseFrame`, if present, then close TCP. The channel has already discarded
+its keys; further sealing or opening is prohibited. Unauthenticated failures close immediately.
+
+Rust's `transport::pair` and `session` drive the PC machines. Its `Connection` retains partial
+reads and writes across cancellation. Separate reader/writer halves keep simultaneous confirmations
+moving even with small buffers. Production TCP uses IPv4, a three-second connect timeout and
+`TCP_NODELAY`. State machines do not log messages or secret values. A received unknown sealed type
+still consumes its authenticated counter; the integration ignores it and may log its type once.
+
+Private-key owners and derived key buffers are wiped on completion, abort or close. Rust uses
+zeroizing owners; Kotlin implements `AutoCloseable` and the caller uses `use` or `finally`.
+JVM and cryptographic provider internals may retain copies outside those owned buffers. Link-key
+storage must use the protected platform stores specified below; the protocol core does not write
+keys or audio to disk. Deterministic fixture constructors exist for tests only; live machines use
+OS randomness by default. Bouncy Castle supplies only low-level X25519 on Android; AES-GCM, HMAC,
+SHA-256 and randomness use the platform's Java crypto APIs, including on API 26.
+
+Run `cargo test -p veyl-link`, regenerate with
+`cargo run -q -p veyl-link --example gen_vectors`, then run `.\gradlew :core:test` from `android/`.
+The generator's stdout must equal `protocol/test-vectors/v1.json` exactly, without a BOM. CI checks
+that comparison and both language test suites. Fixtures include public, fixed private keys; they
+are never suitable for real connections. X25519 also checks the independent
+[RFC 7748 section 6.1 known answer](https://www.rfc-editor.org/rfc/rfc7748#section-6.1).
+
+The remaining numbered sections reproduce the protocol specification from the implementation plan.
+
+## 4.1 Roles
 
 - **The phone is the server** (it listens on TCP). **The PC is the client** (it connects out).
 - Why: Windows Defender Firewall prompts for, or blocks, incoming connections to new apps, while
@@ -14,7 +95,7 @@ goes into `docs/protocol.md`.
   Android has no inbound firewall for apps.
 - The phone accepts one session at a time. A second PC gets the error `busy`.
 
-### 4.2 Discovery
+## 4.2 Discovery
 
 **Phone — advertise with `NsdManager` (`PROTOCOL_DNS_SD`):**
 
@@ -51,7 +132,7 @@ InterfaceIndex = 0, QueryName = L"_veyl._tcp.local", pBrowseCallback, pQueryCont
 **Manual fallback:** the user types the address shown on the phone (`host:port`, IPv4 or host
 name, port 1–65535).
 
-### 4.3 Transport and framing
+## 4.3 Transport and framing
 
 TCP over IPv4. Both sides set `TCP_NODELAY`. The PC's connect timeout is 3 s. Every message is a
 frame:
@@ -91,7 +172,7 @@ error.
 
 Unknown types are ignored (log once) so newer peers can add types without breaking older ones.
 
-### 4.4 Encoding conventions
+## 4.4 Encoding conventions
 
 - **JSON:** `snake_case` keys. Binary values are base64url **without padding** (RFC 4648 §5).
   Receivers ignore unknown keys.
@@ -101,7 +182,7 @@ Unknown types are ignored (log once) so newer peers can add types without breaki
 - **Transcript hashes** use the exact JSON bytes as sent and received. Never re-serialize JSON before
   hashing.
 
-### 4.5 Identities and secrets
+## 4.5 Identities and secrets
 
 | Item                  | Size             | Created                                                                                               | Stored                                                                                                                                                                                  |
 | --------------------- | ---------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -115,7 +196,7 @@ Unknown types are ignored (log once) so newer peers can add types without breaki
 
 All random values come from the OS (`OsRng` in Rust, `SecureRandom` on Android).
 
-### 4.6 Pairing (first connection)
+## 4.6 Pairing (first connection)
 
 **Precondition:** the Veyl screen is open in front on the phone. Otherwise the phone answers
 `pair_abort {reason: "not_in_foreground"}`, and the PC shows "Open Veyl on your phone, then try
@@ -162,7 +243,7 @@ handshake (§4.7) on the same connection.
 - Pairing a PC that is already paired replaces its old `k_link`.
 - Zeroize ephemeral private keys and `k_sas` when pairing ends, whatever the outcome.
 
-### 4.7 Session handshake (every later connection)
+## 4.7 Session handshake (every later connection)
 
 ```text
 PC                                                          Phone
@@ -191,9 +272,9 @@ SEALED #0  CONTROL ready {pc, want}  ───▶
 - **Forward secrecy:** session keys come from fresh ephemeral keys, so a `k_link` leaked later does
   not reveal earlier sessions.
 
-### 4.8 Control messages (sealed type `0x10`)
+## 4.8 Control messages (sealed type `0x10`)
 
-All are JSON objects with a `t` field. Full examples: Appendix B.
+All are JSON objects with a `t` field. Full examples: [message examples](#message-examples).
 
 | `t`             | Direction  | When                                              | Main fields                                                                                                                                                   |
 | --------------- | ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -220,7 +301,7 @@ Values:
 - `mic_source`: `unprocessed` · `voice_recognition` · `camcorder` · `mic` (§5.5.3)
 - `thermal`: `none` · `light` · `moderate` · `severe` · `critical` · `emergency` · `shutdown`
 
-### 4.9 AUDIO block (sealed type `0x20`)
+## 4.9 AUDIO block (sealed type `0x20`)
 
 Each stream sends one block per 10 ms: 480 frames at 48 kHz (441 at 44.1 kHz).
 
@@ -247,7 +328,7 @@ close.
 A new `audio_config` (new `run_id`) starts a new capture run: `seq` and `first_frame` restart at 0
 and the PC resets its engine.
 
-### 4.10 PING and PONG
+## 4.10 PING and PONG
 
 - **PING** (`0x30`): `u64 pc_ns` — PC monotonic nanoseconds since the desktop app started.
 - **PONG** (`0x31`): `u64 pc_ns` (copied) + `i64 phone_ns` (`System.nanoTime()` when replying).
@@ -256,7 +337,7 @@ and the PC resets its engine.
 - The offset converts phone capture times into PC time for latency statistics. Alignment of the two
   audio streams never needs it (both come from the phone's clock).
 
-### 4.11 Liveness and reconnection
+## 4.11 Liveness and reconnection
 
 - While capturing, the phone sends AUDIO continuously. Otherwise PINGs and PONGs keep the link
   alive.
@@ -267,7 +348,7 @@ and the PC resets its engine.
   10 minutes."
 - Intentional closes send `bye` first.
 
-### 4.12 Versioning
+## 4.12 Versioning
 
 - `v` is `1` in `pair_hello`, `pair_reply`, `hello` and `hello_reply`. A side that doesn't support
   the peer's version replies with HANDSHAKE `{"t":"error","code":"version","supported":[1]}` and
@@ -276,19 +357,19 @@ and the PC resets its engine.
   ignore them.
 - Breaking changes become v2 with new labels (`veyl session v2`, …) and new test vectors.
 
-### 4.13 Error codes
+## 4.13 Error codes
 
 `not_paired` · `busy` · `version` · `bad_message` · `pairing_disabled` · `rate_limited` · `internal`.
 Pairing aborts use the reasons in §4.6.
 
-### 4.14 Limits and back-pressure
+## 4.14 Limits and back-pressure
 
 - Frame ≤ 1 MiB; HANDSHAKE JSON ≤ 8 KiB; CONTROL JSON ≤ 64 KiB.
 - The phone's writer queue holds at most 1 s of audio per stream (100 blocks). When it is full, drop
   the **oldest** queued AUDIO block of that stream and set `gap_before` on the next block of that
   stream. CONTROL, PING and PONG frames are never dropped.
 
-### 4.15 Test vectors
+## 4.15 Test vectors
 
 - Generated by `cargo run -p veyl-link --example gen_vectors > protocol/test-vectors/v1.json`, with
   fixed private keys, nonces, ids and payloads (deterministic; no randomness).
@@ -302,7 +383,7 @@ Pairing aborts use the reasons in §4.6.
 - **Kotlin `:core` tests:** read the same file (Gradle test resources point at
   `../../protocol/test-vectors`) and reproduce every byte, then decrypt and parse every frame.
 
-### 4.16 Threat model (also in `SECURITY.md`)
+## 4.16 Threat model (also in `SECURITY.md`)
 
 | Threat                                  | Result                                                                                                                              |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -312,3 +393,47 @@ Pairing aborts use the reasons in §4.6.
 | Malware on the PC steals `k_link`       | Could impersonate the PC while the phone listens. The phone always shows which PC is connected; the user can forget PCs. Documented |
 | Replay of recorded traffic              | Fails: fresh ephemeral keys every session; strict counters                                                                          |
 | Flooding the phone's port               | Out of scope; the phone keeps working for its connected PC and drops others                                                         |
+
+## Message examples
+
+Binary fields are base64url without padding; placeholders show their size.
+
+**Pairing (HANDSHAKE frames)**
+
+```json
+{"t":"pair_hello","v":1,"pc_id":"<16 bytes>","pc_name":"DESKTOP-4F2K","app":"veyl-desktop/0.1.0","commit":"<32 bytes>"}
+{"t":"pair_reply","v":1,"phone_id":"<16 bytes>","phone_name":"Pixel 8","model":"Pixel 8","app":"veyl-android/0.1.0","e_pub":"<32 bytes>","nonce":"<32 bytes>"}
+{"t":"pair_reveal","e_pub":"<32 bytes>","nonce":"<32 bytes>"}
+{"t":"pair_confirm","mac":"<32 bytes>"}
+{"t":"pair_abort","reason":"user_cancelled"}
+```
+
+**Session (HANDSHAKE frames)**
+
+```json
+{"t":"hello","v":1,"pc_id":"<16 bytes>","app":"veyl-desktop/0.1.0","e_pub":"<32 bytes>","nonce":"<32 bytes>"}
+{"t":"hello_reply","v":1,"phone_id":"<16 bytes>","app":"veyl-android/0.1.0","e_pub":"<32 bytes>","nonce":"<32 bytes>"}
+{"t":"error","code":"not_paired","message":"This PC isn't paired with this phone."}
+{"t":"error","code":"version","supported":[1]}
+```
+
+**Control (SEALED, type `0x10`)**
+
+```json
+{"t":"ready","device":{"manufacturer":"Google","model":"Pixel 8","android_sdk":35,"app_version":"0.1.0","phone_name":"Pixel 8"},"capture":{"state":"idle","source":"capture","route":"speaker","reason":null}}
+{"t":"ready","pc":{"pc_name":"DESKTOP-4F2K","app_version":"0.1.0"},"want":{"meter":true}}
+{"t":"audio_config","run_id":7,"sample_rate":48000,"frames_per_block":480,"ref_channels":2,"mic_channels":2,"mic_source":"unprocessed","effects_off":["ns","agc"],"hp_cutoff_hz":8000,"source":"capture","sound_check":{"mic_source":"unprocessed","mic_channels":2,"score":0.71,"mean_coherence":0.82},"mics":[{"index":0,"type":"builtin","position_m":[-0.02,-0.075,0.0],"channels":[0]},{"index":1,"type":"builtin","position_m":null,"channels":[1]}]}
+{"t":"capture_state","state":"running","source":"capture","route":"speaker","reason":null}
+{"t":"stats","queue_ms":12,"dropped_blocks":0,"media_volume":0.6,"battery_pct":81,"charging":false,"thermal":"none","cpu_pct":7.5}
+{"t":"phone_info","phone_name":"Desk phone"}
+{"t":"meter","score":68,"label":"good","tip":"ready"}
+{"t":"gesture","kind":"poke","acted":true}
+{"t":"request_start"}
+{"t":"error","code":"bad_message","message":"Unknown audio format 3."}
+{"t":"bye","reason":"user_quit"}
+```
+
+**Binary payloads:** AUDIO (§4.9), PING and PONG (§4.10), IMU (§13.5). Exact bytes for each are in
+`protocol/test-vectors/v1.json`.
+
+---

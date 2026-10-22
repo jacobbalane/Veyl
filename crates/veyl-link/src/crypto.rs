@@ -153,6 +153,7 @@ pub struct SealedChannel {
     rx: Option<Aes256Gcm>,
     send_counter: u64,
     receive_counter: u64,
+    close_frame: Option<Frame>,
 }
 impl SealedChannel {
     pub fn new(tx: Secret, rx: Secret) -> Self {
@@ -161,6 +162,7 @@ impl SealedChannel {
             rx: Some(Aes256Gcm::new(rx.expose().into())),
             send_counter: 0,
             receive_counter: 0,
+            close_frame: None,
         }
     }
     pub fn close(&mut self) {
@@ -169,6 +171,10 @@ impl SealedChannel {
     }
     pub fn is_closed(&self) -> bool {
         self.tx.is_none()
+    }
+    /// An authenticated malformed AUDIO block gets one final bad_message before TCP closes.
+    pub fn take_close_frame(&mut self) -> Option<Frame> {
+        self.close_frame.take()
     }
     pub fn counters(&self) -> (u64, u64) {
         (self.send_counter, self.receive_counter)
@@ -238,7 +244,17 @@ impl SealedChannel {
         let (&kind, payload) = plain
             .split_first()
             .ok_or_else(|| invalid("Empty sealed message."))?;
-        crate::messages::validate_payload(kind, payload)?;
+        if let Err(error) = crate::messages::validate_payload(kind, payload) {
+            if kind == crate::AUDIO {
+                let notice = crate::messages::Control::Error {
+                    code: "bad_message".into(),
+                    message: "Invalid audio block.".into(),
+                }
+                .encode()?;
+                self.close_frame = self.seal_inner(crate::CONTROL, &notice).ok();
+            }
+            return Err(error);
+        }
         self.receive_counter += 1;
         Ok((kind, payload.to_vec()))
     }

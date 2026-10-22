@@ -187,6 +187,54 @@ fn heartbeat_and_reconnect_use_monotonic_deadlines() {
     assert!(!retry.unreachable(30_001));
     assert_eq!(retry.failed(30_001), 500);
 }
+
+#[test]
+fn clock_sync_keeps_recent_low_rtt_offsets_and_ignores_delayed_samples() {
+    let mut clock = session::ClockSync::default();
+    assert_eq!(clock.observe(100, 200, 500), None);
+    assert_eq!(clock.observe(300, 350, 800), Some(475));
+    assert_eq!(clock.observe(400, 1400, 1_000_000), Some(475));
+    assert_eq!(clock.observe(500, 540, 900), Some(475));
+    assert_eq!(clock.observe(600, 640, 960), Some(380));
+    assert_eq!(clock.observe(700, 699, 1), None);
+}
+
+#[test]
+fn authenticated_malformed_audio_yields_one_final_error_and_closes() {
+    use aes_gcm::{
+        aead::{Aead, Payload},
+        Aes256Gcm, KeyInit, Nonce,
+    };
+    let mut plain = audio(0, 0).encode().unwrap();
+    plain[2] = 0;
+    let length = 1 + 8 + plain.len() + 16;
+    let mut aad = (length as u32).to_be_bytes().to_vec();
+    aad.push(SEALED);
+    aad.extend_from_slice(&0u64.to_be_bytes());
+    let cipher = Aes256Gcm::new((&[3u8; 32]).into());
+    let encrypted = cipher
+        .encrypt(
+            &Nonce::from([0u8; 12]),
+            Payload {
+                msg: &plain,
+                aad: &aad,
+            },
+        )
+        .unwrap();
+    let mut body = 0u64.to_be_bytes().to_vec();
+    body.extend_from_slice(&encrypted);
+    let mut receiver = channel();
+    let mut peer = channel();
+    assert!(receiver.open(&Frame { kind: SEALED, body }).is_err());
+    assert!(receiver.is_closed());
+    let final_frame = receiver.take_close_frame().unwrap();
+    assert!(receiver.take_close_frame().is_none());
+    let (kind, payload) = peer.open(&final_frame).unwrap();
+    assert_eq!(kind, CONTROL);
+    assert!(
+        matches!(Control::decode(&payload).unwrap(), Control::Error { code, .. } if code == "bad_message")
+    );
+}
 proptest! {
     #[test]
     fn arbitrary_frames_never_panic(bytes in prop::collection::vec(any::<u8>(), 0..2048)) { let _ = read_frame(bytes.as_slice()); }

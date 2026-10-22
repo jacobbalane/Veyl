@@ -150,7 +150,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
     pub async fn close(&mut self) {
         self.receiver.closed = true;
         self.sender.closed = true;
-        let _ = self.sender.stream.shutdown().await;
+        let _ = time::timeout(Duration::from_millis(100), self.sender.stream.shutdown()).await;
     }
 }
 pub async fn connect(address: SocketAddrV4) -> io::Result<Connection<tokio::net::TcpStream>> {

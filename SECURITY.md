@@ -4,8 +4,8 @@
 
 Report privately through [GitHub's private vulnerability reporting](https://github.com/jacobbalane/Veyl/security/advisories/new).
 Include desktop and phone app versions, Windows and Android versions, and steps to reproduce.
-Never attach real recordings, pairing codes or keys. Repository setup must enable private
-reporting in M0.9; until then, do not put sensitive findings in public issues.
+Never attach real recordings, pairing codes or keys. Private reporting is enabled; do not put
+sensitive findings in public issues.
 
 Useful areas include pairing, the session handshake, sealed frames, capture services, the privacy
 filter, DPAPI and Android Keystore storage, and installation.
@@ -13,11 +13,11 @@ filter, DPAPI and Android Keystore storage, and installation.
 ## Supported versions
 
 Only the latest release will receive security fixes. Veyl is currently in development; the
-foundation has no verified release yet.
+0.0.1 preview has verified downloads and provenance, but no connection, sensing or actions yet.
 
 ## Verifying a download
 
-Every release is planned to include a SHA-256 checksum beside each installer and APK. Compare it
+Every release includes a SHA-256 checksum beside each installer and APK. Compare it
 with a local hash, then verify build provenance:
 
 ```powershell
@@ -29,7 +29,9 @@ Attestations identify the build source. They do not establish sensing accuracy o
 
 ## Threat model
 
-These are design requirements for the forthcoming Veyl Link implementation.
+The protocol core is implemented and tested in Rust and Kotlin. Socket/discovery integration and
+protected pairing storage arrive in M3. This table describes the intended integrated product;
+the 0.0.1 preview does not connect to another device.
 
 | Threat                                 | Result                                                                           |
 | -------------------------------------- | -------------------------------------------------------------------------------- |
