@@ -371,7 +371,8 @@ Pairing aborts use the reasons in §4.6.
   the **oldest** queued AUDIO block of that stream and set `gap_before` on the next block of that
   stream. CONTROL, PING and PONG frames are never dropped.
   Send those messages before the remaining queued AUDIO. The Android queue also bounds pending
-  messages to 256; exhaustion closes the session rather than discarding control messages.
+  messages to 256; exhaustion closes the session rather than discarding control messages. Rust's
+  shared queue follows the same priority and limit.
 
 The Android socket adapter has one frame reader and one sealed-frame writer. Its owner checks
 handshake and liveness deadlines independently of blocking reads; closing the socket interrupts a
@@ -379,6 +380,12 @@ partial frame without restarting its decoder. Capture updates and queue operatio
 and each audio block is checked against the latest active run. A stopped or replaced run cannot
 enqueue audio behind a new configuration. Authentication counters are allocated in wire order;
 closing never reuses a channel.
+
+The Rust async session helper returns the authenticated channel and the peer's first `ready`
+message together. Rust and Kotlin expose peer readiness only after authentication, so connection
+screens can use its current device name and capture state. Rust transport rejections expose only
+known protocol reason codes; arbitrary peer error text is never used as a log message. These
+adapter APIs do not change the wire bytes or test vectors.
 
 ## 4.15 Test vectors
 

@@ -151,6 +151,92 @@ fn phone_gates_and_rate_limit_survive_connections() {
     assert!(!limit.admit(629_999));
     assert!(limit.admit(630_000));
 }
+
+#[tokio::test]
+async fn async_pairing_returns_known_reasons_and_discards_arbitrary_peer_error_text() {
+    for (code, expected) in [
+        ("rate_limited", "rate_limited"),
+        ("untrusted peer text", "bad_message"),
+    ] {
+        let (pc_stream, phone_stream) = tokio::io::duplex(64);
+        let (_confirm, mut confirmations) = tokio::sync::mpsc::channel(1);
+        let pc = async {
+            let mut connection = Connection::new(pc_stream);
+            let error =
+                transport::pair(&mut connection, identity(true), |_| {}, &mut confirmations)
+                    .await
+                    .err()
+                    .unwrap();
+            assert_eq!(
+                error
+                    .get_ref()
+                    .unwrap()
+                    .downcast_ref::<Rejection>()
+                    .unwrap()
+                    .code(),
+                expected
+            );
+        };
+        let phone = async {
+            let mut connection = Connection::new(phone_stream);
+            connection.receive().await.unwrap();
+            connection.send(&Handshake::error(code)).await.unwrap();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            tokio::join!(pc, phone);
+        })
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn async_session_reports_version_mismatch_after_sending_the_version_error() {
+    let (pc_stream, phone_stream) = tokio::io::duplex(64);
+    let pc = async {
+        let mut connection = Connection::new(pc_stream);
+        let error = transport::session(
+            &mut connection,
+            identity(true),
+            paired(true, 7),
+            ready(true),
+        )
+        .await
+        .err()
+        .unwrap();
+        assert_eq!(
+            error
+                .get_ref()
+                .unwrap()
+                .downcast_ref::<Rejection>()
+                .unwrap()
+                .code(),
+            "version"
+        );
+    };
+    let phone = async {
+        let mut connection = Connection::new(phone_stream);
+        connection.receive().await.unwrap();
+        let reply = Handshake::HelloReply {
+            v: 2,
+            phone_id: messages::Bytes(identity(false).id),
+            app: "test".into(),
+            e_pub: messages::Bytes([0; 32]),
+            nonce: messages::Bytes([0; 32]),
+        }
+        .frame()
+        .unwrap();
+        connection.send(&reply).await.unwrap();
+        assert!(
+            matches!(Handshake::parse(&connection.receive().await.unwrap()).unwrap(),Handshake::Error {code,..} if code=="version")
+        );
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        tokio::join!(pc, phone);
+    })
+    .await
+    .unwrap();
+}
 #[test]
 fn sessions_require_ready_identity_correct_key_and_five_second_deadline() {
     let (mut pc, hello) = Session::pc(identity(true), paired(true, 7), ready(true), 0).unwrap();
@@ -165,8 +251,13 @@ fn sessions_require_ready_identity_correct_key_and_five_second_deadline() {
     let frames = phone.receive(&hello, 1).unwrap();
     pc.receive(&frames[0], 2).unwrap();
     assert!(pc.take_channel().is_none() && phone.take_channel().is_none());
+    assert!(pc.take_peer_ready().is_none() && phone.take_peer_ready().is_none());
     let answer = pc.receive(&frames[1], 3).unwrap();
     phone.receive(&answer[0], 4).unwrap();
+    assert!(
+        matches!(pc.take_peer_ready(),Some(Ready::Phone { device,.. }) if device.phone_name=="Phone")
+    );
+    assert!(matches!(phone.take_peer_ready(),Some(Ready::Pc { pc,.. }) if pc.pc_name=="Desk"));
     assert_eq!(pc.take_channel().unwrap().counters(), (1, 1));
     assert_eq!(phone.take_channel().unwrap().counters(), (1, 1));
     let (mut pc, hello) = Session::pc(identity(true), paired(true, 8), ready(true), 0).unwrap();
@@ -220,9 +311,14 @@ async fn async_pc_pairs_and_authenticates_over_fragmented_in_memory_duplex() {
         )
         .await
         .unwrap();
-        let mut channel = transport::session(&mut connection, identity(true), paired, ready(true))
-            .await
-            .unwrap();
+        let authenticated =
+            transport::session(&mut connection, identity(true), paired, ready(true))
+                .await
+                .unwrap();
+        assert!(
+            matches!(authenticated.ready,Ready::Phone { device,.. } if device.phone_name=="Phone")
+        );
+        let mut channel = authenticated.channel;
         connection
             .send(&channel.seal(PING, &Ping(42).encode()).unwrap())
             .await

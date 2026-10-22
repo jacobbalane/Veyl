@@ -155,9 +155,16 @@ fn queues_drop_oldest_audio_per_stream_and_preserve_control_and_gap() {
     }
     assert!(queue.push_audio(audio(0, 100)).unwrap());
     assert_eq!(queue.len(), 201);
+    queue
+        .push_message(PING, veyl_link::audio::Ping(7).encode().to_vec())
+        .unwrap();
     assert!(matches!(
         queue.pop(),
         Some(Outbound::Message { kind: CONTROL, .. })
+    ));
+    assert!(matches!(
+        queue.pop(),
+        Some(Outbound::Message { kind: PING, .. })
     ));
     assert!(
         matches!(queue.pop(), Some(Outbound::Audio(block)) if block.stream == 1 && block.seq == 0 && block.flags == 0)
@@ -165,6 +172,16 @@ fn queues_drop_oldest_audio_per_stream_and_preserve_control_and_gap() {
     assert!(
         matches!(queue.pop(), Some(Outbound::Audio(block)) if block.stream == 0 && block.seq == 1 && block.flags & 1 == 1)
     );
+    let mut messages = WriterQueue::default();
+    for _ in 0..256 {
+        messages
+            .push_message(PING, veyl_link::audio::Ping(7).encode().to_vec())
+            .unwrap();
+    }
+    assert!(messages
+        .push_message(PING, veyl_link::audio::Ping(8).encode().to_vec())
+        .is_err());
+    assert_eq!(messages.len(), 256);
 }
 #[test]
 fn heartbeat_and_reconnect_use_monotonic_deadlines() {

@@ -156,6 +156,10 @@ impl Pairing {
     pub fn failure(&self) -> Option<&str> {
         self.failure.as_deref()
     }
+    /// Unconfirmed metadata is suitable for the comparison screen, never authentication.
+    pub fn peer(&self) -> Option<&Peer> {
+        self.peer.as_ref()
+    }
     pub fn is_done(&self) -> bool {
         self.phase == Phase::Done
     }

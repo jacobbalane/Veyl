@@ -2,7 +2,8 @@
 
 Veyl's M0 foundation includes runnable desktop and Android interfaces, a three-page website,
 portable filter and test-sound code, and build workflows. M1 adds the Rust/Kotlin protocol core and
-shared byte vectors. App connection arrives in M3; sensing and actions come in later milestones.
+shared byte vectors. M2 implements Android capture/player flows; M3 adds secure app connections,
+protected pairing stores and transport-level diagnostics. Sensing and actions come later.
 See [progress](progress.md) for verification and the maintainer steps.
 
 ## Prerequisites
@@ -64,6 +65,17 @@ Kotlin reads it directly as a test resource and reproduces each byte. Generator 
 without a BOM. PowerShell 5's `>` uses UTF-16, so use a UTF-8 writer there or regenerate in CI.
 The Kotlin protocol sources use ktfmt 0.65's `--kotlinlang-style` (four spaces); Android lint and
 core JVM tests check the build. The formatter is a local tool, not an app dependency.
+
+Rust's desktop event test compares its payloads with `desktop/src/api/fixtures/*.json`; TypeScript
+tests assign those fixtures to the corresponding API types. After an intentional API change,
+regenerate them with `VEYL_UPDATE_FIXTURES=1 cargo test -p veyl-desktop --lib
+events::fixtures::rust_payloads_match_committed_interface_fixtures` (set/remove that variable around
+the command in PowerShell). Normal tests never rewrite fixtures. Comparison codes in these
+examples are fixed test data; copied runtime diagnostics always remove the live code.
+
+The Windows host uses system DNS-SD and connects out; manual host/IPv4 plus port entry works when
+discovery is blocked. Pairings use current-user DPAPI and are bound to both identities. The engine
+worker currently measures levels through a bounded queue; it does not yet detect a hand or poke.
 
 `cargo run -p veyl-lab -- scenarios` lists the planned scenario names. Rendering, analysis and
 the acoustic scene model arrive in M4; the command does not claim to simulate them yet.

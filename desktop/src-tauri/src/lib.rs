@@ -1,16 +1,28 @@
+pub mod address;
+mod commands;
+pub mod connection;
 pub mod discovery;
+pub mod engine_host;
+pub mod events;
 pub mod pairings;
 mod settings;
+pub mod source;
 
 use settings::Settings;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 
 struct Runtime {
-    settings: Settings,
+    settings: Arc<Mutex<Settings>>,
+    connection: connection::ConnectionManager,
+    exiting: AtomicBool,
     hidden: bool,
     _logging: tracing_appender::non_blocking::WorkerGuard,
 }
@@ -21,14 +33,16 @@ struct AppState {
     version: &'static str,
     pc_name: String,
     actions_enabled: bool,
+    link: events::LinkSnapshot,
 }
 
 #[tauri::command]
 fn get_app_state(state: tauri::State<'_, Runtime>) -> AppState {
     AppState {
         version: env!("CARGO_PKG_VERSION"),
-        pc_name: state.settings.pc_name.clone(),
+        pc_name: state.settings.lock().unwrap().pc_name.clone(),
         actions_enabled: false,
+        link: state.connection.snapshot(),
     }
 }
 
@@ -77,9 +91,32 @@ pub fn run() {
                 .with_writer(writer)
                 .try_init()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let settings = Settings::load_or_create(&directory.join("settings.json"))?;
+            let settings = Arc::new(Mutex::new(Settings::load_or_create(
+                &directory.join("settings.json"),
+            )?));
+            let handle = app.handle().clone();
+            let connection = connection::ConnectionManager::start(
+                settings.clone(),
+                &directory,
+                Arc::new(move |notice| match notice {
+                    events::Notice::Connection(value) => {
+                        let _ = handle.emit("veyl://connection", value);
+                    }
+                    events::Notice::Phones(value) => {
+                        let _ = handle.emit("veyl://phones", value);
+                    }
+                    events::Notice::Pairing(value) => {
+                        let _ = handle.emit("veyl://pairing", value);
+                    }
+                    events::Notice::Capture(value) => {
+                        let _ = handle.emit("veyl://capture", value);
+                    }
+                }),
+            )?;
             app.manage(Runtime {
                 settings,
+                connection,
+                exiting: AtomicBool::new(false),
                 hidden: std::env::args().any(|arg| arg == "--hidden"),
                 _logging: guard,
             });
@@ -113,20 +150,51 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
-            tracing::info!(
-                "Veyl started. Capture and actions are unavailable in this preview build."
-            );
+            tracing::info!("Veyl started with actions off.");
             Ok(())
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.state::<Runtime>().settings.close_to_tray {
+                if window
+                    .state::<Runtime>()
+                    .settings
+                    .lock()
+                    .unwrap()
+                    .close_to_tray
+                {
                     api.prevent_close();
                     let _ = window.hide();
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![ui_ready, get_app_state])
-        .run(tauri::generate_context!())
-        .expect("Veyl could not start.");
+        .invoke_handler(tauri::generate_handler![
+            ui_ready,
+            get_app_state,
+            commands::list_phones,
+            commands::pair_phone,
+            commands::confirm_pairing,
+            commands::connect_phone,
+            commands::disconnect,
+            commands::forget_phone,
+            commands::request_phone_start,
+            commands::get_diagnostics,
+            commands::copy_diagnostics
+        ])
+        .build(tauri::generate_context!())
+        .expect("Veyl could not start.")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                if let Some(state) = app.try_state::<Runtime>() {
+                    if !state.exiting.swap(true, Ordering::AcqRel) {
+                        api.prevent_exit();
+                        let connection = state.connection.clone();
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            connection.shutdown().await;
+                            app.exit(code.unwrap_or(0));
+                        });
+                    }
+                }
+            }
+        });
 }

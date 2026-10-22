@@ -24,10 +24,12 @@ pub struct Session {
     ephemeral: Option<Ephemeral>,
     hello: Vec<u8>,
     ready: Control,
+    peer_ready: Option<Ready>,
     channel: Option<SealedChannel>,
     phase: Phase,
     started: u64,
     busy: bool,
+    failure: Option<&'static str>,
 }
 impl Session {
     fn new(
@@ -65,10 +67,12 @@ impl Session {
             ephemeral: None,
             hello: vec![],
             ready,
+            peer_ready: None,
             channel: None,
             phase: if pc { Phase::Reply } else { Phase::Hello },
             started: now,
             busy,
+            failure: None,
         })
     }
     pub fn pc(
@@ -107,6 +111,16 @@ impl Session {
     pub fn is_failed(&self) -> bool {
         self.phase == Phase::Failed
     }
+    pub fn failure(&self) -> Option<&'static str> {
+        self.failure
+    }
+    pub fn take_peer_ready(&mut self) -> Option<Ready> {
+        if self.is_done() {
+            self.peer_ready.take()
+        } else {
+            None
+        }
+    }
     pub fn take_channel(&mut self) -> Option<SealedChannel> {
         if self.is_done() {
             self.channel.take()
@@ -116,9 +130,11 @@ impl Session {
     }
     fn close(&mut self) {
         self.phase = Phase::Failed;
+        self.failure.get_or_insert("bad_message");
         self.channel = None;
         self.ephemeral = None;
         self.link = None;
+        self.peer_ready = None;
     }
     pub fn tick(&mut self, now: u64) -> io::Result<()> {
         if !matches!(self.phase, Phase::Done | Phase::Failed)
@@ -144,22 +160,16 @@ impl Session {
         if self.phase == Phase::Ready {
             let channel = self.channel.as_mut().unwrap();
             let (kind, payload) = channel.open(frame)?;
-            if kind != CONTROL
-                || !matches!(
-                    (Control::decode(&payload)?, self.pc),
-                    (
-                        Control::Ready {
-                            ready: Ready::Phone { .. }
-                        },
-                        true
-                    ) | (
-                        Control::Ready {
-                            ready: Ready::Pc { .. }
-                        },
-                        false
-                    )
-                )
-            {
+            if kind != CONTROL {
+                return Err(invalid("Expected peer ready."));
+            }
+            let Control::Ready { ready } = Control::decode(&payload)? else {
+                return Err(invalid("Expected peer ready."));
+            };
+            if !matches!(
+                (&ready, self.pc),
+                (Ready::Phone { .. }, true) | (Ready::Pc { .. }, false)
+            ) {
                 return Err(invalid("Expected peer ready."));
             }
             let outbound = if self.pc {
@@ -167,6 +177,7 @@ impl Session {
             } else {
                 vec![]
             };
+            self.peer_ready = Some(ready);
             self.phase = Phase::Done;
             return Ok(outbound);
         }
@@ -192,6 +203,7 @@ impl Session {
                 };
                 if let Some(code) = error {
                     self.close();
+                    self.failure = Some(code);
                     return Ok(vec![Handshake::error(code)]);
                 }
                 let ephemeral = Ephemeral::generate()?;
@@ -224,6 +236,7 @@ impl Session {
             ) => {
                 if v != 1 {
                     self.close();
+                    self.failure = Some("version");
                     return Ok(vec![Handshake::error("version")]);
                 }
                 if self.peer.as_ref().unwrap().id != phone_id.0 {
@@ -243,7 +256,7 @@ impl Session {
                 self.phase = Phase::Ready;
                 Ok(vec![])
             }
-            (_, Handshake::Error { .. }) => Err(invalid("Peer rejected session.")),
+            (_, Handshake::Error { code, .. }) => Err(crate::rejected(&code)),
             _ => Err(invalid("Unexpected session handshake message.")),
         }
     }

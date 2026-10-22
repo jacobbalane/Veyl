@@ -1,0 +1,31 @@
+{
+  "actionsEnabled": false,
+  "link": {
+    "connection": {
+      "address": null,
+      "attempt": 0,
+      "capture": null,
+      "error": null,
+      "phoneId": null,
+      "phoneName": null,
+      "state": "browsing"
+    },
+    "pairing": null,
+    "phoneStats": {
+      "batteryPct": null,
+      "charging": false,
+      "cpuPct": null,
+      "droppedBlocks": 0,
+      "mediaVolume": null,
+      "queueMs": 0,
+      "rttMs": null,
+      "thermal": null
+    },
+    "phones": {
+      "nearby": [],
+      "paired": []
+    }
+  },
+  "pcName": "Test PC",
+  "version": "0.0.1"
+}

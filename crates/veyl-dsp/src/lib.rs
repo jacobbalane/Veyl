@@ -2,6 +2,8 @@
 
 pub mod filters;
 pub mod testsound;
+pub mod types;
+pub use types::{BlockFlags, BlockIn, Stream};
 
 /// The engine remains idle until the processing stages are implemented in M4.
 #[derive(Debug, Default)]

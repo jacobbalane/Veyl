@@ -223,11 +223,14 @@ class ProtocolVectorsTest {
                         Frames.encode(outbound[1]),
                     )
                     assertFalse(phone.done)
+                    assertNull(phone.peerReady)
                     phone.receive(
                         Frames.decode(session["pc_to_phone"]!!.jsonArray[0].jsonObject.hex("wire")),
                         1,
                     )
                     assertTrue(phone.done)
+                    assertEquals("ready", phone.peerReady!!.text("t"))
+                    assertNotNull(phone.peerReady!!.obj("pc"))
                     phone.takeChannel()!!.use { channel ->
                         assertEquals(1L, channel.sendCounter)
                         assertEquals(1L, channel.receiveCounter)

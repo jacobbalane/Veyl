@@ -1,0 +1,53 @@
+{
+  "levels": {
+    "arrivalMs": null,
+    "engineDrops": 0,
+    "microphone": {
+      "blocks": 0,
+      "blocksPerSecond": 0.0,
+      "filteredDbfs": -120.0,
+      "gaps": 0,
+      "latestFrame": null,
+      "peak": 0.0,
+      "preDbfs": -120.0
+    },
+    "reference": {
+      "blocks": 0,
+      "blocksPerSecond": 0.0,
+      "filteredDbfs": -120.0,
+      "gaps": 0,
+      "latestFrame": null,
+      "peak": 0.0,
+      "preDbfs": -120.0
+    },
+    "runId": null,
+    "running": false,
+    "sampleRate": null
+  },
+  "link": {
+    "connection": {
+      "address": null,
+      "attempt": 0,
+      "capture": null,
+      "error": null,
+      "phoneId": null,
+      "phoneName": null,
+      "state": "browsing"
+    },
+    "pairing": null,
+    "phoneStats": {
+      "batteryPct": null,
+      "charging": false,
+      "cpuPct": null,
+      "droppedBlocks": 0,
+      "mediaVolume": null,
+      "queueMs": 0,
+      "rttMs": null,
+      "thermal": null
+    },
+    "phones": {
+      "nearby": [],
+      "paired": []
+    }
+  }
+}

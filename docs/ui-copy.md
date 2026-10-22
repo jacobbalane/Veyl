@@ -156,3 +156,15 @@ wording; change it only through a decision record.
 | Permission denied        | Veyl needs local network access to connect to your PC. · Open settings                                                                     |
 | No local network         | Connect this phone and your PC to the same network.                                                                                        |
 | Pairing storage          | Veyl couldn't save paired devices. Try again. · Veyl couldn't load paired devices. Try again.                                              |
+
+### C.7 Desktop connection feedback (M3)
+
+| Where                    | Text                                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Connection preview       | Connection preview · You can pair devices and stream sound. Gesture control is coming soon.                                       |
+| Connection controls      | Disconnect · Ask phone to start · Close                                                                                           |
+| Address error            | Enter the address shown on your phone, including its port.                                                                        |
+| Connection command error | Veyl couldn't complete that request. Try again. · Veyl's connection manager is busy. Try again.                                   |
+| Signal levels            | Sound copy · Microphone · Before filter · After filter · Arrival delay · Engine drops · Phone queue · Sample rate · Not available |
+| Diagnostics feedback     | Diagnostics copied. · Veyl could not copy diagnostics.                                                                            |
+| Signal counts            | {n} blocks · {n} gaps                                                                                                             |

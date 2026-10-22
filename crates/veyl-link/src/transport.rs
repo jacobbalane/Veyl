@@ -3,8 +3,8 @@ use crate::{
     crypto::SealedChannel,
     frames::validate,
     invalid,
-    messages::Control,
-    pairing::{Identity, PairedPeer, Pairing},
+    messages::{Control, Ready},
+    pairing::{Identity, PairedPeer, Pairing, Peer},
     session::Session,
     Frame, MAX_FRAME,
 };
@@ -173,6 +173,24 @@ where
     S: AsyncRead + AsyncWrite + Unpin,
     F: FnMut(&str),
 {
+    pair_with_progress(
+        connection,
+        identity,
+        |code, _| show_code(code),
+        confirmations,
+    )
+    .await
+}
+pub async fn pair_with_progress<S, F>(
+    connection: &mut Connection<S>,
+    identity: Identity,
+    mut show_code: F,
+    confirmations: &mut mpsc::Receiver<bool>,
+) -> io::Result<PairedPeer>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+    F: FnMut(&str, &Peer),
+{
     let result = time::timeout(
         Duration::from_secs(150),
         pair_inner(connection, identity, &mut show_code, confirmations),
@@ -193,7 +211,7 @@ async fn pair_inner<S, F>(
 ) -> io::Result<PairedPeer>
 where
     S: AsyncRead + AsyncWrite + Unpin,
-    F: FnMut(&str),
+    F: FnMut(&str, &Peer),
 {
     let start = Instant::now();
     let (mut machine, hello) = Pairing::pc(identity, 0)?;
@@ -207,8 +225,8 @@ where
             if let Some(pairing) = machine.take_pairing() {
                 return Ok(pairing);
             }
-            if machine.failure().is_some() {
-                return Err(invalid("Pairing ended without confirmation."));
+            if let Some(reason) = machine.failure() {
+                return Err(crate::rejected(reason));
             }
         }
         if machine.failure().is_some() && abort_deadline.is_none() {
@@ -216,7 +234,12 @@ where
         }
         if !shown {
             if let Some(sas) = machine.sas() {
-                show_code(sas);
+                show_code(
+                    sas,
+                    machine
+                        .peer()
+                        .ok_or_else(|| invalid("Pairing peer is missing."))?,
+                );
                 shown = true;
             }
         }
@@ -226,12 +249,12 @@ where
                 let frame = frame?;
                 if machine.failure().is_none() { machine.receive(&frame, elapsed())? } else { vec![] }
             }
-            decision = confirmations.recv(), if !confirmed && !machine.is_done() && machine.failure().is_none() => {
+            decision = confirmations.recv(), if !machine.is_done() && machine.failure().is_none() => {
                 if !decision.unwrap_or(false) { confirmed = true; machine.cancel()? }
-                else if shown { confirmed = true; machine.confirm(true, elapsed())? }
+                else if shown && !confirmed { confirmed = true; machine.confirm(true, elapsed())? }
                 else { vec![] }
             }
-            _ = time::sleep_until(abort_deadline.unwrap_or(start + Duration::from_secs(150))), if abort_deadline.is_some() => return Err(invalid("Pairing ended without confirmation.")),
+            _ = time::sleep_until(abort_deadline.unwrap_or(start + Duration::from_secs(150))), if abort_deadline.is_some() => return Err(crate::rejected(machine.failure().unwrap_or("bad_message"))),
             _ = ticks.tick() => machine.tick(elapsed())?,
             result = connection.sender.flush(), if !connection.sender.is_empty() => { result?; vec![] }
         };
@@ -240,22 +263,26 @@ where
         }
     }
 }
+pub struct AuthenticatedSession {
+    pub channel: SealedChannel,
+    pub ready: Ready,
+}
 pub async fn session<S: AsyncRead + AsyncWrite + Unpin>(
     connection: &mut Connection<S>,
     identity: Identity,
     paired: PairedPeer,
     ready: Control,
-) -> io::Result<SealedChannel> {
+) -> io::Result<AuthenticatedSession> {
     let start = Instant::now();
     let result = time::timeout(Duration::from_secs(5), async {
         let (mut machine, hello) = Session::pc(identity, paired, ready, 0)?;
         connection.sender.enqueue(&hello)?;
         loop {
-            if machine.is_failed() && connection.sender.is_empty() { return Err(invalid("Session rejected.")); }
+            if machine.is_failed() && connection.sender.is_empty() { return Err(crate::rejected(machine.failure().unwrap_or("bad_message"))); }
             if machine.is_done() && connection.sender.is_empty() {
-                return machine
-                    .take_channel()
-                    .ok_or_else(|| invalid("Session did not authenticate."));
+                let channel=machine.take_channel().ok_or_else(||invalid("Session did not authenticate."))?;
+                let ready=machine.take_peer_ready().ok_or_else(||invalid("Peer ready is missing."))?;
+                return Ok(AuthenticatedSession { channel,ready });
             }
             tokio::select! {
                 frame = connection.receiver.receive(), if !machine.is_done() && !machine.is_failed() => {

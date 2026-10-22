@@ -47,11 +47,25 @@ impl WriterQueue {
             return Err(invalid("Not a priority message."));
         }
         crate::messages::validate_payload(kind, &payload)?;
+        if self
+            .queue
+            .iter()
+            .filter(|item| matches!(item, Outbound::Message { .. }))
+            .count()
+            >= 256
+        {
+            return Err(invalid("Priority message queue exhausted."));
+        }
         self.queue.push_back(Outbound::Message { kind, payload });
         Ok(())
     }
     pub fn pop(&mut self) -> Option<Outbound> {
-        self.queue.pop_front()
+        let index = self
+            .queue
+            .iter()
+            .position(|item| matches!(item, Outbound::Message { .. }))
+            .unwrap_or(0);
+        self.queue.remove(index)
     }
     pub fn len(&self) -> usize {
         self.queue.len()

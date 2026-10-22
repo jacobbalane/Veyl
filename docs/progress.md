@@ -448,7 +448,36 @@ after ninety seconds. No desktop listening socket is opened. DPAPI pairing stora
 current user with UI forbidden, binds ciphertext to both device identities, writes atomically,
 keeps unknown fields and exposes only metadata to the UI. Seven desktop Rust tests pass, including
 native DPAPI restart/tamper/identity checks, save failure, callback lifetime and discovery-table
-behavior; clippy passes with warnings denied. Connection management and interface wiring remain.
+behavior; clippy passes with warnings denied. This foundation
+[passed CI](https://github.com/jacobbalane/Veyl/actions/runs/39767015607) at
+`8bb59e475ef56afcc3d1db4235d6717e9eb80bc6`, including both Windows installers and signed Android.
+
+**M3.2 implementation and local verification complete; full CI pending.** The connection manager
+now browses continuously, prefers the last paired phone, connects by IPv4/hostname with one
+three-second DNS/connect deadline, authenticates, reconnects with bounded backoff and requests a
+start notice on the phone. New discovery refreshes can expedite a pending reconnect. Pairing
+decisions are tied to the current comparison; stale workers cannot save a pairing or replace a
+connection. Quit/forget attempts a bounded `bye`, then shuts down sockets and native discovery.
+The Phones tab has nearby/saved devices, code comparison, address entry and confirmed forgetting.
+Help shows real block rates, pre/post-filter levels, gaps, queue/drop counts, RTT, arrival delay and
+battery. The source-independent engine queue holds 400 blocks and drops audio without blocking;
+the M3 stub measures levels only. The interface explicitly says gesture control is coming soon
+([decision 0006](decisions/0006-desktop-connection-feedback.md)). Copied diagnostics exclude audio,
+protected keys and comparison codes.
+
+Sixteen desktop Rust tests and all 29 Link tests pass, with clippy warnings denied. Loopback tests
+perform real pairing, sessions, both audio streams, start requests, PING/PONG and intentional close;
+other tests cover pressure/gaps, capture replacement, old session results, durable forgetting,
+native DPAPI and typed interface fixtures. Six desktop Vitest tests and TypeScript/build checks
+pass. Headless Chrome checks the phone/address view, diagnostics, minimum-width layout and real
+modal focus with fixed example data; screenshots are private build artifacts. A separate native
+UI launch was deferred because the installed 0.0.1 app is running. It was left available for the
+maintainer. Native compilation/tests pass; this does not replace the pending LAN/device checks.
+All 47 Android JVM tests, debug/release lint and the signed release build pass; the permanent
+signer is unchanged. Rust/Kotlin expose authenticated peer readiness; cancellation after PC
+confirmation remains possible, known version errors are preserved, and both shared writer queues
+prioritize control messages with bounded backlog. Regenerated wire vectors remain identical.
+The required DSP/simulator/lab release tests pass. No tag or release was created.
 
 ### Waiting on M3 device tests
 

@@ -1,11 +1,22 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { App } from './App';
+import { emptyLink, emptyLevels } from './api/types';
 
 vi.mock('./api/native', () => ({
   browserPreview: true,
-  getAppState: async () => ({ version: '0.0.1', pcName: 'Test PC', actionsEnabled: false }),
+  getAppState: async () => ({
+    version: '0.0.1',
+    pcName: 'Test PC',
+    actionsEnabled: false,
+    link: structuredClone(emptyLink),
+  }),
   uiReady: async () => {},
+  watchLink: async () => () => {},
+  getDiagnostics: async () => ({
+    link: structuredClone(emptyLink),
+    levels: structuredClone(emptyLevels),
+  }),
 }));
 afterEach(cleanup);
 

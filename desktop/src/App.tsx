@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
 import { AudioLines, CircleHelp, Radio, Settings, Smartphone } from 'lucide-react';
 import mark from '../../assets/brand/veyl-mark.svg';
-import { browserPreview, getAppState, uiReady, type AppState } from './api/native';
-import { copy } from './copy';
+import {
+  browserPreview,
+  getAppState,
+  uiReady,
+  watchLink,
+  requestPhoneStart,
+  type AppState,
+} from './api/native';
+import { emptyLink, type LinkSnapshot, type LinkUpdate } from './api/types';
+import { copy, connectionError, linkCopy } from './copy';
+import { Phones, PairingDialog, connectionLabel } from './ui/Connection';
+import { Diagnostics } from './ui/Diagnostics';
 
 const tabs = [
   { name: 'Live', icon: Radio },
@@ -16,11 +26,33 @@ export function App() {
   const [tab, setTab] = useState<Tab>('Live');
   const [app, setApp] = useState<AppState>();
   const [error, setError] = useState('');
+  const link = app?.link ?? emptyLink;
+  const updateLink = (link: LinkSnapshot, update: LinkUpdate): LinkSnapshot =>
+    'capture' in update
+      ? { ...link, connection: { ...link.connection, capture: update.capture } }
+      : { ...link, ...update };
   useEffect(() => {
     let active = true;
-    getAppState()
-      .then((state) => {
-        if (active) setApp(state);
+    let stop: (() => void) | undefined;
+    let loaded = false;
+    const buffered: LinkUpdate[] = [];
+    void watchLink((update) => {
+      if (!active) return;
+      if (!loaded) buffered.push(update);
+      else setApp((state) => (state ? { ...state, link: updateLink(state.link, update) } : state));
+    })
+      .then(async (unlisten) => {
+        if (!active) {
+          unlisten();
+          return;
+        }
+        stop = unlisten;
+        const state = await getAppState();
+        if (active) {
+          for (const update of buffered) state.link = updateLink(state.link, update);
+          loaded = true;
+          setApp(state);
+        }
       })
       .catch(() => {
         if (active) setError('Veyl could not load its settings.');
@@ -31,6 +63,7 @@ export function App() {
     });
     return () => {
       active = false;
+      stop?.();
       cancelAnimationFrame(frame);
     };
   }, []);
@@ -47,9 +80,13 @@ export function App() {
           <img src={mark} width="42" height="42" alt="" />
           <span>veyl</span>
         </a>
-        <span className="connection" aria-live="polite">
+        <span
+          className="connection"
+          aria-live="polite"
+          data-connected={link.connection.state === 'connected'}
+        >
           <i />
-          {copy.status}
+          {connectionLabel(link.connection, link.phones.nearby.length)}
         </span>
         <div className="actions" title={copy.actionsTooltip}>
           <span>
@@ -84,6 +121,9 @@ export function App() {
           <span>v{app?.version ?? '0.0.1'}</span>
         </div>
         {error && <p role="alert">{error}</p>}
+        {link.connection.error && connectionError(link.connection.error) && (
+          <p role="alert">{connectionError(link.connection.error)}</p>
+        )}
         {tab === 'Live' && (
           <div className="live-grid">
             <section className="panel meter">
@@ -100,6 +140,17 @@ export function App() {
                 </div>
               ))}
               <p className="tip">Tap Start in Veyl on your phone.</p>
+              {link.connection.state === 'connected' &&
+                link.connection.capture?.state !== 'running' && (
+                  <button
+                    disabled={browserPreview}
+                    onClick={() =>
+                      void requestPhoneStart().catch(() => setError(linkCopy.failedRequest))
+                    }
+                  >
+                    {linkCopy.askPhoneToStart}
+                  </button>
+                )}
             </section>
             <section className="panel echo">
               <div className="section-title">
@@ -130,15 +181,7 @@ export function App() {
             </section>
           </div>
         )}
-        {tab === 'Phones' && (
-          <section className="panel placeholder">
-            <Smartphone size={36} />
-            <h1>Your phones</h1>
-            <p>{copy.phonesEmpty}</p>
-            <h2>Nearby</h2>
-            <p>Pairing is coming in v0.1.</p>
-          </section>
-        )}
+        {tab === 'Phones' && <Phones link={link} />}
         {tab === 'Settings' && (
           <section className="panel settings">
             <h1>Settings</h1>
@@ -175,7 +218,7 @@ export function App() {
               PC name
               <input value={app?.pcName ?? ''} disabled />
             </label>
-            <p>Listening, pairing and actions are coming in v0.1.</p>
+            <p>{copy.foundationDetail}</p>
           </section>
         )}
         {tab === 'Help' && (
@@ -194,9 +237,11 @@ export function App() {
               Source code
             </a>
             <p>Free and open source (MIT)</p>
+            <Diagnostics />
           </section>
         )}
       </main>
+      <PairingDialog key={link.pairing?.sessionId} pairing={link.pairing} onError={setError} />
       <footer>
         Touch the air. Your screen follows.<span>Sound stays home.</span>
       </footer>

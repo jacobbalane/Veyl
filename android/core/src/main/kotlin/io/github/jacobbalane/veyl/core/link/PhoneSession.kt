@@ -28,6 +28,9 @@ class PhoneSession(
     private val peerId = paired?.peer?.id?.copyOf()
     private var link = paired?.link?.duplicate()
     private var channel: SealedChannel? = null
+    var peerReady: JsonObject? = null
+        private set
+
     val done: Boolean
         get() = phase == Phase.DONE
 
@@ -62,6 +65,7 @@ class PhoneSession(
             ) {
                 "Expected PC ready."
             }
+            peerReady = message
             phase = Phase.DONE
             return emptyList()
         }
@@ -114,5 +118,6 @@ class PhoneSession(
         link = null
         channel?.close()
         channel = null
+        peerReady = null
     }
 }
