@@ -30,7 +30,7 @@ Run at the repository root unless a command changes directory.
 ```powershell
 npm ci
 npm run format:check
-node --test scripts/
+node --test "scripts/*.test.mjs"
 node scripts/check-version.mjs
 npm run -w desktop dev
 npm run -w desktop typecheck
@@ -73,7 +73,7 @@ and `VEYL_KEY_PASSWORD`. Without them, local release builds are unsigned. Debug 
 standard Android debug key. Only the maintainer creates the permanent release key.
 
 If the environment blocks Node's test worker processes with `spawn EPERM`, run
-`node --test --test-isolation=none scripts/` to exercise the same tests in one process. This does
+`node --test --test-isolation=none "scripts/*.test.mjs"` to exercise the same tests in one process. This does
 not establish that the normal CI command passes. Keep that verification pending.
 
 ## Versions and release notes

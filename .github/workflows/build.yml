@@ -22,7 +22,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
       - run: npm run format:check
-      - run: node --test scripts/
+      - run: node --test "scripts/*.test.mjs"
       - run: node scripts/check-version.mjs
       - run: npm run -w desktop typecheck
       - run: npm run -w desktop test

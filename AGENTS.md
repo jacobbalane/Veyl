@@ -16,7 +16,7 @@ record completed work and verification there. Never mark missing or skipped chec
   `./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
 - `protocol/`: shared test vectors. `assets/brand/`: editable brand and generated icons.
 - `docs/`: user docs, decisions and progress. `lab/recordings/`: ignored recordings.
-- Root checks: `npm ci`, `npm run format:check`, `node --test scripts/`,
+- Root checks: `npm ci`, `npm run format:check`, `node --test "scripts/*.test.mjs"`,
   `node scripts/check-version.mjs`. See `docs/development.md` for prerequisites and status.
 
 Every DSP change runs `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab`; scenario gates

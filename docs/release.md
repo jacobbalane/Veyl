@@ -1,7 +1,8 @@
 # Release and maintainer setup
 
-M0 is in progress. These commands are for the maintainer after the local foundation checks pass.
-They have not been run. Repository setup enables CI; wait for green CI before tagging a preview.
+M0 is in progress. These commands document maintainer setup and releases. GitHub CLI sign-in,
+the public repository, Pages from Actions and repository settings are configured. Android signing
+and the preview release are still pending. Wait for green CI before tagging a preview.
 Create the signing key outside the repository; keep its password private and retain two backups.
 
 ## One-time setup
@@ -61,7 +62,7 @@ Preview build. Nothing works yet; this release tests downloads.
 ```
 
 Use the actual release date. Keep later feature notes under Unreleased. Run
-`node scripts/bump-version.mjs 0.0.1`, `npm run format:check`, `node --test scripts/` and
+`node scripts/bump-version.mjs 0.0.1`, `npm run format:check`, `node --test "scripts/*.test.mjs"` and
 `node scripts/check-version.mjs`, then commit `chore(release): 0.0.1` and push main. After its checks
 pass, the maintainer creates and pushes `v0.0.1` as below.
 

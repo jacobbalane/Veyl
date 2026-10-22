@@ -25,7 +25,7 @@ architecture.md`, and stub files for the rest of §9.9.
       `format:check`, `version:bump`, `version:check`; dev dependency `prettier`). Cargo workspace with
       `[workspace.package] version = "0.0.1"` and the release profile. `rust-toolchain.toml`.
       `scripts/bump-version.mjs`, `scripts/check-version.mjs` and `scripts/changelog-section.mjs` with
-      `node:test` tests in `scripts/*.test.mjs` (run by `node --test scripts/` in the CI checks job).
+      `node:test` tests in `scripts/*.test.mjs` (run by `node --test "scripts/*.test.mjs"` in CI).
 - [x] **M0.3** Brand: `assets/brand/veyl-mark.svg`, `veyl-wordmark.svg`, `scripts/render-icons.mjs`
       → desktop icons (`npx tauri icon`), Android adaptive icon (vector foreground, `ink` background,
       monochrome layer), site favicons and `og.png`.
@@ -58,7 +58,7 @@ v0.0.1 downloads from the site; both apps open on the maintainer's devices.
 **Verify:**
 
 ```powershell
-npm ci; npm run format:check; node --test scripts/; npm run -w desktop test; npm run -w site build
+npm ci; npm run format:check; node --test "scripts/*.test.mjs"; npm run -w desktop test; npm run -w site build
 cargo fmt --all -- --check; cargo test --workspace --exclude veyl-desktop
 cargo test -p veyl-desktop                      # Windows with the toolchain, or in CI
 cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or in CI
@@ -103,7 +103,7 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
 | ------------------------------------------------------- | -------------------------------------------------- |
 | `npm ci`                                                | Passed from the committed lockfile                 |
 | `npm run format:check`                                  | Passed                                             |
-| `node --test scripts/`                                  | 14 passed, none failed or skipped                  |
+| `node --test "scripts/*.test.mjs"`                      | 14 passed, none failed or skipped                  |
 | `node scripts/check-version.mjs`                        | All version sources agree at 0.0.1                 |
 | `node scripts/bump-version.mjs 0.0.1`                   | Passed, including real lockfile refresh            |
 | Desktop TypeScript, Vitest and production build         | Passed; 1 UI test                                  |
@@ -122,7 +122,9 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
 | Windows ARM64 NSIS cross-build                          | Passed; runtime check needs an ARM64 PC            |
 | Browser checks at desktop and 360 px widths             | Passed; screenshots remain in ignored `.cache/qa/` |
 | Workflow syntax and expressions (`actionlint`)          | Passed; ShellCheck is unavailable locally          |
-| GitHub CI, Pages and release attestations               | Pending M0.9–M0.10                                 |
+| GitHub Build Veyl                                       | Fixing the first run's Node 24 test command        |
+| GitHub Pages workflow                                   | Passed; site deployed successfully                 |
+| Release signing and attestations                        | Pending M0.9–M0.10                                 |
 
 The Android app has no separate JVM unit-test sources yet: `:app:testDebugUnitTest` reports
 `NO-SOURCE`. Its foundation logic is covered by `:core:test`, and its Compose screens require the
@@ -145,11 +147,16 @@ attestation yet.
 
 ## Waiting on maintainer setup
 
-**M0.9:** Follow [release.md](release.md): install/authenticate GitHub CLI, create and push the public
-repository, enable Pages from Actions, create and back up the permanent Android signing key,
-configure the four signing secrets, homepage, topics, private vulnerability reporting, security
-alerts and the device-report label. Commands are prepared there. No remote, account settings,
-secrets, tags or releases have been created by the agent.
+**M0.9:** GitHub CLI is installed and authenticated as `jacobbalane`. After the maintainer continued
+setup, the agent created and pushed [the public repository](https://github.com/jacobbalane/Veyl),
+enabled Pages from Actions, and configured its homepage, topics, private vulnerability reporting,
+Dependabot security alerts/fixes and the `device-report` label. The first Website run built and
+deployed successfully. The first Build Veyl run exposed a Node 24 test-runner
+incompatibility with a directory argument. CI and the documented command now use the explicit
+`scripts/*.test.mjs` glob. Remote build verification remains pending until the fixed run passes.
+
+Still required: create and back up the permanent Android signing key, then configure the four
+signing secrets using [release.md](release.md). No signing secrets, tags or releases exist yet.
 
 **M0.10:** Add the exact 0.0.1 preview changelog section, run the version script and checks, then
 create/push the tag. Inspect the draft release for x64 and ARM64 installers, the signed APK, all
