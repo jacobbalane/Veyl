@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Veyl",
+  "version": "0.0.1",
+  "identifier": "io.github.jacobbalane.veyl",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Veyl",
+        "width": 960,
+        "height": 640,
+        "minWidth": 760,
+        "minHeight": 520,
+        "center": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico", "icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"],
+    "resources": {
+      "../../LICENSE": "licenses/veyl.txt",
+      "../../THIRD_PARTY_NOTICES.md": "licenses/third-party-notices.md",
+      "../src/assets/fonts/Manrope-LICENSE.txt": "licenses/manrope.txt"
+    },
+    "shortDescription": "Control your PC with a poke in the air",
+    "longDescription": "Veyl uses echoes of the sound already playing to sense a poke in the air. This preview build contains the interface foundation; sensing is coming in v0.1.",
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": { "installMode": "currentUser", "installerIcon": "icons/icon.ico" }
+    }
+  }
+}

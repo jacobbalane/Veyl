@@ -1,0 +1,27 @@
+{
+  "name": "veyl",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "workspaces": [
+    "desktop",
+    "site"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "version:bump": "node scripts/bump-version.mjs",
+    "version:check": "node scripts/check-version.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@resvg/resvg-js": "2.6.2",
+    "@tauri-apps/cli": "2.12.4",
+    "opentype.js": "2.0.0",
+    "prettier": "3.9.10"
+  }
+}
