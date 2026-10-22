@@ -13,21 +13,24 @@ import androidx.core.content.ContextCompat
 import io.github.jacobbalane.veyl.BuildConfig
 import io.github.jacobbalane.veyl.VeylApp
 import io.github.jacobbalane.veyl.core.audio.NoPcDeadline
+import io.github.jacobbalane.veyl.runtime.CheckSnapshot
 import io.github.jacobbalane.veyl.runtime.VeylRuntime
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.runBlocking
 
 class ListeningService : Service() {
     private lateinit var runtime: VeylRuntime
     private val control = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val stopping = AtomicBoolean(false)
+    private val transition = AtomicBoolean(false)
     private var run: CaptureRun? = null
-    private var projection: MediaProjection? = null
+    @Volatile private var projection: MediaProjection? = null
     private var wake: PowerManager.WakeLock? = null
     private var wifi: WifiManager.WifiLock? = null
     private var route: AudioRoute? = null
-    private var runId = 0L
+    @Volatile private var runId = 0L
     private var launched = false
     private var lab = false
     private lateinit var deadline: NoPcDeadline
@@ -70,6 +73,7 @@ class ListeningService : Service() {
     override fun onCreate() {
         super.onCreate()
         runtime = (application as VeylApp).runtime
+        runtime.serviceStopping(false)
         Notifications.create(this)
         ContextCompat.registerReceiver(
             this,
@@ -97,19 +101,45 @@ class ListeningService : Service() {
             stop("user")
             return START_NOT_STICKY
         }
-        if (intent == null || launched) return START_NOT_STICKY
-        launched = true
-        lab = BuildConfig.DEBUG && intent.getBooleanExtra("lab", false)
-        runId = runtime.starting("capture")
-        deadline = NoPcDeadline(SystemClock.elapsedRealtime(), lab)
+        if (intent == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (intent.action?.startsWith("player:") == true) {
+            if (launched && !stopping.get())
+                control.execute { run?.command(intent.action!!.substringAfter(':')) }
+            else stopSelf()
+            return START_NOT_STICKY
+        }
+        if (stopping.get()) return START_NOT_STICKY
+        val source = intent.getStringExtra("source") ?: "capture"
+        if (source !in listOf("capture", "test_sound", "player", "check")) {
+            stop("capture_error")
+            return START_NOT_STICKY
+        }
+        if (!transition.compareAndSet(false, true)) return START_NOT_STICKY
+        if (!launched) {
+            launched = true
+            lab = BuildConfig.DEBUG && intent.getBooleanExtra("lab", false)
+            deadline = NoPcDeadline(SystemClock.elapsedRealtime(), lab)
+        }
+        runId = runtime.starting(if (source == "check") "test_sound" else source)
         try {
             val types =
-                if (Build.VERSION.SDK_INT >= 30)
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                else if (Build.VERSION.SDK_INT >= 29)
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                else 0
+                if (Build.VERSION.SDK_INT >= 29) {
+                    val media =
+                        if (source == "capture" || projection != null)
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                        else 0
+                    val playback =
+                        if (source != "capture") ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                        else 0
+                    media or
+                        playback or
+                        if (Build.VERSION.SDK_INT >= 30)
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                        else 0
+                } else 0
             ServiceCompat.startForeground(
                 this,
                 Notifications.LISTENING_ID,
@@ -124,29 +154,79 @@ class ListeningService : Service() {
         control.execute {
             try {
                 if (stopping.get()) return@execute
-                if (
-                    Build.VERSION.SDK_INT < 29 ||
-                        data == null ||
-                        intent.getIntExtra("result", Activity.RESULT_CANCELED) != Activity.RESULT_OK
-                )
-                    throw CaptureFailure("capture_error")
-                val next =
-                    getSystemService(MediaProjectionManager::class.java)
-                        .getMediaProjection(Activity.RESULT_OK, data)
-                        ?: throw CaptureFailure("capture_error")
-                projection = next
-                next.registerCallback(projectionCallback, main)
-                acquireLocks()
-                val capture = CaptureRun(runtime, runId, CaptureDebug.tap(this), ::stop)
-                run = capture
-                capture.start(getSystemService(AudioManager::class.java), next)
+                run?.close()
+                run = null
+                if (source == "capture" && projection == null) {
+                    if (
+                        Build.VERSION.SDK_INT < 29 ||
+                            data == null ||
+                            intent.getIntExtra("result", Activity.RESULT_CANCELED) !=
+                                Activity.RESULT_OK
+                    )
+                        throw CaptureFailure("capture_error")
+                    val next =
+                        getSystemService(MediaProjectionManager::class.java)
+                            .getMediaProjection(Activity.RESULT_OK, data)
+                            ?: throw CaptureFailure("capture_error")
+                    projection = next
+                    next.registerCallback(projectionCallback, main)
+                    runtime.hasProjection = true
+                }
+                if (wake == null) acquireLocks()
+                main.removeCallbacks(liveness)
                 main.post(liveness)
+                if (source == "check") {
+                    runtime.updateCheck(CheckSnapshot("checking"))
+                    val checked =
+                        SoundCheckRunner(this, stopping::get, runtime::testLoop).run {
+                            current,
+                            total ->
+                            runtime.updateCheck(CheckSnapshot("checking", current, total))
+                        }
+                    if (stopping.get()) return@execute
+                    if (checked == null) {
+                        runtime.updateCheck(CheckSnapshot("error"))
+                        stop("mic_error")
+                        return@execute
+                    }
+                    runBlocking { runtime.settings.checked(checked) }
+                    runtime.updateCheck(CheckSnapshot("done", result = checked))
+                    stop("user")
+                    return@execute
+                }
+                val settings = runBlocking { runtime.settings.read() }
+                val manager = getSystemService(AudioManager::class.java)
+                val preferred =
+                    settings.checkedMic?.let { checked ->
+                        Recorders.choices(manager).find {
+                            it.name == checked.source && it.channels == checked.channels
+                        }
+                    }
+                val capture =
+                    CaptureRun(
+                        runtime,
+                        runId,
+                        CaptureDebug.tap(this),
+                        ::stop,
+                        settings.cutoff,
+                        preferred,
+                    )
+                run = capture
+                if (!stopping.get())
+                    capture.start(this, manager, projection, source, settings.playerItems)
             } catch (_: SecurityException) {
                 stop("permission")
             } catch (failure: CaptureFailure) {
                 stop(failure.reason)
             } catch (_: RuntimeException) {
                 stop("capture_error")
+            } catch (_: java.io.IOException) {
+                stop("capture_error")
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                stop("capture_error")
+            } finally {
+                transition.set(false)
             }
         }
         return START_NOT_STICKY
@@ -184,6 +264,7 @@ class ListeningService : Service() {
         runCatching { projection?.unregisterCallback(projectionCallback) }
         runCatching { projection?.stop() }
         projection = null
+        runtime.hasProjection = false
         runCatching { wake?.let { if (it.isHeld) it.release() } }
         wake = null
         runCatching { wifi?.let { if (it.isHeld) it.release() } }
@@ -192,10 +273,13 @@ class ListeningService : Service() {
 
     private fun stop(reason: String) {
         if (!stopping.compareAndSet(false, true)) return
+        runtime.serviceStopping(true)
         main.removeCallbacks(liveness)
         if (control.isShutdown) return
         control.execute {
             cleanup()
+            if (runtime.check.value.state == "checking")
+                runtime.updateCheck(CheckSnapshot(if (reason == "user") "idle" else "error"))
             runtime.stopped(runId, reason)
             main.post {
                 if (reason != "user") Notifications.alert(this, reason)
@@ -214,6 +298,7 @@ class ListeningService : Service() {
             thermal?.let {
                 getSystemService(PowerManager::class.java).removeThermalStatusListener(it)
             }
+        control.execute { runtime.serviceStopping(false) }
         control.shutdown()
         super.onDestroy()
     }
@@ -221,11 +306,18 @@ class ListeningService : Service() {
     companion object {
         const val STOP = "io.github.jacobbalane.veyl.STOP"
 
-        fun start(context: Context, result: Int, data: Intent, laboratory: Boolean = false) {
+        fun start(
+            context: Context,
+            result: Int = Activity.RESULT_CANCELED,
+            data: Intent? = null,
+            laboratory: Boolean = false,
+            source: String = "capture",
+        ) {
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, ListeningService::class.java)
                     .setAction("capture")
+                    .putExtra("source", source)
                     .putExtra("result", result)
                     .putExtra("consent", data)
                     .putExtra("lab", laboratory),
@@ -234,6 +326,12 @@ class ListeningService : Service() {
 
         fun stop(context: Context) {
             context.startService(Intent(context, ListeningService::class.java).setAction(STOP))
+        }
+
+        fun player(context: Context, command: String) {
+            context.startService(
+                Intent(context, ListeningService::class.java).setAction("player:$command"),
+            )
         }
     }
 }

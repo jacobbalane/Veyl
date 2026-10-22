@@ -144,8 +144,9 @@ object Recorders {
     fun start(
         manager: AudioManager,
         projection: MediaProjection?,
+        preferred: MicChoice? = null,
     ): Pair<RecorderHandle?, RecorderHandle> {
-        for (rate in listOf(48000, 44100)) for (choice in choices(manager)) {
+        for ((rate, choice) in order(choices(manager), preferred)) {
             var mic: RecorderHandle? = null
             var playback: RecorderHandle? = null
             try {
@@ -170,6 +171,11 @@ object Recorders {
         }
         throw CaptureFailure(if (projection == null) "mic_error" else "capture_error")
     }
+
+    fun order(available: List<MicChoice>, preferred: MicChoice?): List<Pair<Int, MicChoice>> =
+        (listOfNotNull(preferred).flatMap { choice -> listOf(48000 to choice, 44100 to choice) } +
+                listOf(48000, 44100).flatMap { rate -> available.map { rate to it } })
+            .distinct()
 
     fun info(mic: RecorderHandle): CaptureInfo =
         CaptureInfo(

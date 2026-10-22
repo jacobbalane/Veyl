@@ -31,18 +31,7 @@ class AudioRoute(private val manager: AudioManager, private val changed: (String
                         manager.getAudioDevicesForAttributes(
                             AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build(),
                         )
-                    if (devices.isEmpty()) "unknown"
-                    else if (
-                        devices.all {
-                            it.type in
-                                setOf(
-                                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
-                                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER_SAFE,
-                                )
-                        }
-                    )
-                        "speaker"
-                    else "external"
+                    classifyActive(devices.map { it.type }.toSet())
                 } else
                     classify(
                         manager
@@ -61,6 +50,17 @@ class AudioRoute(private val manager: AudioManager, private val changed: (String
     }
 
     companion object {
+        fun classifyActive(types: Set<Int>): String =
+            if (types.isEmpty()) "unknown"
+            else if (
+                types.all {
+                    it == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER ||
+                        it == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER_SAFE
+                }
+            )
+                "speaker"
+            else "external"
+
         fun classify(types: Set<Int>): String =
             if (
                 types.any {

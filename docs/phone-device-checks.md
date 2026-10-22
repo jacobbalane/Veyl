@@ -20,7 +20,8 @@ With USB debugging enabled and a phone connected, install with:
 ## Gate G1: simultaneous capture
 
 1. Open **Veyl (debug)**. Hold **Version 0.0.1** to open **Lab**. Read the device-check introduction.
-2. Use the phone's speaker. Disconnect headphones and Bluetooth audio. Open YouTube Music and
+2. In **Settings**, leave **Privacy filter: 8 kHz (recommended)** selected. Return to the Lab and
+   select **Phone sound**. Use the phone's speaker. Disconnect headphones and Bluetooth audio. Open YouTube Music and
    play music with audible high sounds at about half volume or more. Some apps or tracks prevent
    Android playback capture; record which app and track you used if the reference stays silent.
 3. Return to Veyl. Tap **Start capture check**, allow the microphone, then notifications if desired.
@@ -61,7 +62,7 @@ avoids phone playback capture. A device failure needs its own decision record be
 
 ## Remaining M2 checks
 
-Keep these pending until their controls are implemented and exercised on a real phone:
+The controls are implemented. Keep every result pending until exercised on a real phone:
 
 - D5: connect/disconnect headphones or Bluetooth; the speaker warning follows the route and
   capture continues.
@@ -69,14 +70,25 @@ Keep these pending until their controls are implemented and exercised on a real 
   the app does not restart capture automatically. Restarting Phone sound needs fresh consent.
 - D7: use picture-in-picture for five minutes. Confirm music, both counts and keep-screen-on;
   report the Android version and any phone-specific battery settings.
-- D15: play a local MP3, including a 44.1 kHz file, through Veyl player without projection consent.
-  Gesture/poke checks wait for M6.
-- D16: first-run sound check completes in about ten seconds, saves its microphone choice and can
-  be repeated from Settings.
+- D15: stop capture. In the Lab select **Veyl player**, then **Choose music** or **Choose a folder**.
+  Pick local music and start. Exercise Play/Pause, Previous/Next and Shuffle with several tracks.
+  Include a 44.1 kHz MP3; the reference and microphone must share the displayed run rate. Confirm no
+  Android recording/casting dialog, and that the playlist survives closing/reopening the app.
+  Gesture/poke checks wait for M6. Repeat with **Test sound**, which also needs no projection consent.
+- D16: from Home, open **Settings → Run sound check**. Allow the microphone if needed. Confirm music
+  plays at the media volume, the check completes in about ten seconds, and its result survives a
+  restart. Repeat the check. The Lab uses the saved choice on the next run; it deliberately skips
+  the automatic first-run check so G1 can also exercise the default recorder fallback. Production
+  listening runs the check automatically when this Android system version has no saved result.
 - D17: if available, use an Android 8/9 phone with test sound/player; Phone sound must explain that
   it needs Android 10.
 - Leave YouTube Music and the Lab running for thirty minutes; report errors, dropped/stalled
   counts, route, phone temperature warnings and whether music stayed audible.
+- While Phone sound is running, switch to Test sound and back. Confirm the projection stays live,
+  returning to Phone sound needs no second dialog and both counts restart for the new run.
+- Confirm dimming after ten seconds, touch to restore brightness, dim/PiP settings, the optional
+  battery settings link, About/Licenses, microphone refusal with Open settings, cancelled projection
+  consent, notification Stop, and Stop before restarting. None may start recording automatically.
 
 ## Result to record
 

@@ -1,5 +1,6 @@
 package io.github.jacobbalane.veyl.capture
 
+import android.content.Context
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTimestamp
@@ -22,19 +23,70 @@ class CaptureRun(
     private val id: Long,
     private val tap: CaptureTap?,
     private val error: (String) -> Unit,
+    private val cutoff: Int = 8000,
+    private val preferredMic: MicChoice? = null,
 ) : AutoCloseable {
     private val active = AtomicBoolean(false)
     private val handles = mutableListOf<RecorderHandle>()
     private val readers = mutableListOf<Thread>()
+    private var testSound: TestSoundPlayer? = null
+    private var player: VeylPlayer? = null
 
-    fun start(manager: AudioManager, projection: MediaProjection?) {
-        val (playback, mic) = Recorders.start(manager, projection)
+    fun start(
+        context: Context,
+        manager: AudioManager,
+        projection: MediaProjection?,
+        source: String = "capture",
+        items: List<String> = emptyList(),
+    ) {
+        if (source == "capture" && projection == null) throw CaptureFailure("capture_error")
+        val (playback, mic) =
+            Recorders.start(manager, if (source == "capture") projection else null, preferredMic)
         playback?.let(handles::add)
         handles.add(mic)
         active.set(true)
-        runtime.running(id, Recorders.info(mic))
         playback?.let { launch(0, it.record) }
         launch(1, mic.record)
+        val rate = mic.record.sampleRate
+        val packer = BlockPacker(0, rate, 2, cutoff)
+        fun reference(pcm: ShortArray, first: Long, time: Long, flags: Int) {
+            if (!active.get()) return
+            tap?.block(0, rate, 2, pcm)
+            runtime.block(id, packer.pack(pcm, first, time, flags))
+        }
+        when (source) {
+            "test_sound" -> {
+                val sound =
+                    TestSoundPlayer(
+                        context,
+                        runtime.testLoop(rate),
+                        { pcm, first, time -> reference(pcm, first, time, 12) },
+                        error,
+                    )
+                testSound = sound
+                sound.start()
+            }
+            "player" -> {
+                val music =
+                    VeylPlayer(
+                        context,
+                        rate,
+                        items,
+                        { pcm, first, time, gap ->
+                            reference(pcm, first, time, 8 or if (gap) 1 else 0)
+                        },
+                        runtime::updatePlayer,
+                        error,
+                    )
+                player = music
+                music.start()
+            }
+        }
+        runtime.running(id, Recorders.info(mic))
+    }
+
+    fun command(action: String) {
+        player?.command(action)
     }
 
     private fun launch(stream: Int, record: AudioRecord) {
@@ -44,7 +96,7 @@ class CaptureRun(
                     val rate = record.sampleRate
                     val channels = record.channelCount
                     val raw = ShortArray(rate / 100 * channels)
-                    val packer = BlockPacker(stream, rate, channels)
+                    val packer = BlockPacker(stream, rate, channels, cutoff)
                     val timestamp = AudioTimestamp()
                     val clock = TimestampTracker(rate)
                     var firstFrame = 0L
@@ -85,11 +137,12 @@ class CaptureRun(
                                     if (silenceStarted == null)
                                         silenceStarted = SystemClock.elapsedRealtime()
                                     runtime.silenced(
+                                        id,
                                         SystemClock.elapsedRealtime() - silenceStarted >= 2000,
                                     )
                                 } else {
                                     silenceStarted = null
-                                    runtime.silenced(false)
+                                    runtime.silenced(id, false)
                                 }
                             }
                         }
@@ -109,6 +162,10 @@ class CaptureRun(
 
     override fun close() {
         active.set(false)
+        runCatching { testSound?.close() }
+        testSound = null
+        runCatching { player?.close() }
+        player = null
         // Stop normally unblocks reads; bound the join in case a vendor recorder stalls.
         handles.forEach { runCatching { it.record.stop() } }
         try {

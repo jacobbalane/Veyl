@@ -5,8 +5,6 @@
     <string name="get_started">Get started</string>
     <string name="no_pc_title">Open Veyl on your PC</string>
     <string name="waiting_pc">Waiting for your PC…</string>
-    <string name="foundation_title">First release coming soon</string>
-    <string name="foundation_detail">This preview build opens the interface. Listening, pairing and actions are coming in v0.1.</string>
     <string name="version">Version %1$s</string>
     <string name="license">Free and open source (MIT)</string>
     <string name="listening_channel">Listening</string>

@@ -22,9 +22,11 @@ import kotlinx.coroutines.delay
 @Composable
 fun DebugLabContent(
     runtime: VeylRuntime,
-    onStart: () -> Unit,
+    onStart: (String) -> Unit,
     onStop: () -> Unit,
     onBack: () -> Unit,
+    onChooseMusic: () -> Unit,
+    onChooseFolder: () -> Unit,
 ) {
     val state by runtime.capture.collectAsStateWithLifecycle()
     val recording by CaptureDebug.recording.collectAsStateWithLifecycle()
@@ -45,9 +47,12 @@ fun DebugLabContent(
     Text(stringResource(R.string.lab_intro))
     Text(stringResource(R.string.lab_instructions))
     if (Build.VERSION.SDK_INT < 29) Text(stringResource(R.string.lab_unavailable))
-    else
-        Button(onClick = if (active) onStop else onStart, enabled = state.state != "starting") {
-            Text(stringResource(if (active) R.string.stop else R.string.lab_start))
+    SourceControls(runtime, !active, onStart, onChooseMusic, onChooseFolder, R.string.lab_start)
+    if (active) Button(onClick = onStop) { Text(stringResource(R.string.stop)) }
+    if (state.source == "test_sound" && active) Text(stringResource(R.string.test_pause_others))
+    if (state.source == "player" && active)
+        PlayerControls(runtime) {
+            io.github.jacobbalane.veyl.capture.ListeningService.player(context, it)
         }
     if (state.state == "error")
         Text(stringResource(R.string.lab_error), color = MaterialTheme.colorScheme.error)
@@ -91,7 +96,7 @@ fun DebugLabContent(
             val info = state.info
             val diagnostics =
                 "Veyl ${BuildConfig.VERSION_NAME} debug; Android ${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT}); ${Build.MANUFACTURER} ${Build.MODEL}\n" +
-                    "state=${state.state}; reason=${state.reason}; elapsed_s=$elapsed; route=${state.route}; mic_silenced=${state.micSilenced}\n" +
+                    "state=${state.state}; source=${state.source}; reason=${state.reason}; elapsed_s=$elapsed; route=${state.route}; mic_silenced=${state.micSilenced}; hp_cutoff_hz=${runtime.settings.state.value.cutoff}\n" +
                     "rate=${info?.rate}; source=${info?.micSource}; channels=${info?.micChannels}; effects_off=${info?.effectsOff}; effects_on=${info?.effectsOn}\n" +
                     "ref_blocks=${state.reference.blocks}; ref_dbfs=${state.reference.rms}; ref_high_dbfs=${state.reference.highRms}\n" +
                     "mic_blocks=${state.microphone.blocks}; mic_dbfs=${state.microphone.rms}; mic_high_dbfs=${state.microphone.highRms}"

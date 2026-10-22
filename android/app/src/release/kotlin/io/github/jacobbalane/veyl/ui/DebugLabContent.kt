@@ -7,7 +7,9 @@ import io.github.jacobbalane.veyl.runtime.VeylRuntime
 @Suppress("UNUSED_PARAMETER")
 fun DebugLabContent(
     runtime: VeylRuntime,
-    onStart: () -> Unit,
+    onStart: (String) -> Unit,
     onStop: () -> Unit,
     onBack: () -> Unit,
+    onChooseMusic: () -> Unit,
+    onChooseFolder: () -> Unit,
 ) {}

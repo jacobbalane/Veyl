@@ -1,7 +1,7 @@
 # Third-party notices
 
 Veyl's original application code and brand assets are MIT licensed. Third-party components retain
-their own licenses. This inventory lists direct dependencies through M1. Bundled
+their own licenses. This inventory lists direct dependencies through M2. Bundled
 components include their own notices where required.
 
 ## Manrope
@@ -78,11 +78,15 @@ These are direct external dependencies of the workspace crates, including build 
 | JUnit                                    | 4.13.2         | EPL-1.0               |
 | kotlinx.serialization JSON               | 1.12.0         | Apache-2.0            |
 | Bouncy Castle provider                   | 1.86           | Bouncy Castle Licence |
+| kotlinx.coroutines Android               | 1.11.0         | Apache-2.0            |
+| AndroidX Lifecycle Compose               | 2.11.0         | Apache-2.0            |
+| AndroidX DataStore Preferences           | 1.3.0          | Apache-2.0            |
+| AndroidX Media3 ExoPlayer                | 1.11.1         | Apache-2.0            |
 | Gradle wrapper                           | 9.8.2          | Apache-2.0            |
 
 AndroidX and Kotlin libraries retain their upstream notices in the distribution. The Gradle
 wrapper's upstream license is in android/gradle/wrapper/LICENSE. The Android Licenses screen
-will be completed with the app in M7.
+bundles Veyl's MIT license, the font and Bouncy Castle notices and AndroidX's Apache 2.0 license.
 
 Bouncy Castle supplies only `org.bouncycastle.math.ec.rfc7748.X25519`; Veyl does not install its
 JCA provider. Other link cryptography uses the platform APIs. Its license is included in the

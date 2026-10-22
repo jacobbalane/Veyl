@@ -18,5 +18,6 @@ fun ListeningContent(state: CaptureSnapshot, onStop: () -> Unit) {
         Text(stringResource(R.string.not_speaker), color = MaterialTheme.colorScheme.error)
     if (state.micSilenced)
         Text(stringResource(R.string.mic_silenced), color = MaterialTheme.colorScheme.error)
+    if (state.source == "test_sound") Text(stringResource(R.string.test_pause_others))
     Button(onClick = onStop) { Text(stringResource(R.string.stop)) }
 }

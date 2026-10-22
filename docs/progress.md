@@ -289,13 +289,13 @@ and handles every state before any PC is involved.
       app-private WAVs. **Gate G1:** YouTube Music runs with both streams for five minutes without
       errors; reference energy exists above 8 kHz; the microphone hears the music. Apply §14 R1 and
       record a decision if it fails.
-- [ ] **M2.2** `ListeningService` and `CaptureRun` (§5.5): source selection, effects, timestamps,
+- [x] **M2.2** `ListeningService` and `CaptureRun` (§5.5): source selection, effects, timestamps,
       privacy filter, packer, routes and stop/error handling. A null link counts blocks until M3.
-- [ ] **M2.3** `BrightLoop`, test-sound playback, Veyl player, FFT, sound check and runner; Android
+- [x] **M2.3** `BrightLoop`, test-sound playback, Veyl player, FFT, sound check and runner; Android
       8–9 capability fallbacks. Test sound and the player require no projection consent.
-- [ ] **M2.4** Listening screen, keep-screen-on, dimming, picture-in-picture, notifications and alerts.
-- [ ] **M2.5** Welcome, permissions, Home without a PC, placement, Settings, About and Licenses.
-- [ ] **M2.6** Tests: privacy filter, block statistics, BrightLoop, FFT, sound check, route
+- [x] **M2.4** Listening screen, keep-screen-on, dimming, picture-in-picture, notifications and alerts.
+- [x] **M2.5** Welcome, permissions, Home without a PC, placement, Settings, About and Licenses.
+- [x] **M2.6** Tests: privacy filter, block statistics, BrightLoop, FFT, sound check, route
       classification and state reducers.
 - [ ] **M2.7 [device]** D5, D6, D7, D15, D16 and D17 when Android 8–9 hardware is available;
       30-minute YouTube Music run; test sound/player without projection consent. Record results.
@@ -314,20 +314,51 @@ debug APK and no recorder class/private recording path in the release APK. The p
 signer is unchanged. CI now builds a separate `debug-android` artifact even when signing exists;
 its name keeps it out of release assets. See [decision 0004](decisions/0004-capture-lab.md).
 
-**M2.2 underway.** Capture tries 48/44.1 kHz with the specified microphone source/channel order,
+**M2.2 implemented.** Capture tries 48/44.1 kHz with the specified microphone source/channel order,
 disables available effects, retains active microphone metadata, packs exact ten-millisecond blocks
 with extrapolated timestamps and raw statistics, then filters both streams before the null sink.
 Route/silenced warnings and user, screen-lock, projection, recorder, permission, no-PC and thermal
 stop paths are implemented. Locks renew while capture runs and cleanup closes recorders/effects.
-Stored sound-check choices and changes to the own-player/test-sound sources follow in M2.3; keep
-this checkbox open until those are integrated. Listening/PiP, dimming and notification groundwork
-is present; settings and the rest of the M2 screens remain unfinished.
+Saved sound-check choices take priority, including a fallback to 44.1 kHz before abandoning the
+chosen microphone. A source change starts a new run and retains a live projection; Stop releases
+it. A pure reducer rejects old or late callbacks. Source transitions are serialized, and the next
+start waits for the previous service to finish shutting down.
 
-**Local verification:** 23 core JVM tests and three app JVM tests pass. New tests cover filter
+**M2.3 implemented.** Kotlin BrightLoop generates the deterministic sixteen-second stereo loop;
+its sensing-band energy passes at both rates. AudioTrack feeds the identical PCM as the synthetic
+reference with presentation timestamps. Media3 plays persisted SAF document/folder URIs through
+stereo conversion, Sonic resampling and a tee. The tee never waits on the bounded reference ring;
+overflow and seeks become frame gaps. Play/Pause, Previous/Next and Shuffle are available. Neither
+own-player source requests projection consent, including on Android 8/9. The sound check compares
+every usable microphone configuration over 1.5-second samples using a band-limited lag search and
+Welch coherence, applies the prescribed tie breaks, and saves the result for the Android
+fingerprint. Production starts check first when needed; the debug spike can exercise the default
+fallback directly. Low coherence warns but permits trying the phone.
+
+**M2.4–M2.5 implemented.** Welcome and optional notification permission lead to Home. Listening
+keeps the screen on, restores brightness on touch and optionally dims after ten seconds. Square
+PiP uses auto-enter on Android 12+ and the older leave-hint path, with capability/permission checks
+and a fallback tip. Settings has phone name, deliberate lower-filter confirmation, dim/PiP toggles,
+the explicit system battery action, repeatable sound check and metadata diagnostics with twenty
+recent state changes. Placement, About and bundled Licenses are present. Home truthfully has no
+PC connection or meter until M3; audio always uses the filtered null sink. Identity/settings and
+playlist URIs use DataStore with app backup disabled. The release APK is about 2.1 MB and uses the
+existing permanent signer. The debug-only Lab remains absent from release.
+
+**M2.6 / local verification:** 31 core JVM tests and six app JVM tests pass. New tests cover filter
 response at both rates, stability/channel isolation/reset, pre-filter statistics and clipping,
 timestamp extrapolation, the production ten-minute no-PC deadline versus the explicit debug
-thirty-minute check, output routes and bounded little-endian WAVs. Debug/release builds and Android
-lint pass with no warnings. Formatting passes. These checks do not verify hardware capture.
+thirty-minute check, both route rules, source/rate preference, bounded little-endian WAVs,
+BrightLoop determinism and band energy, known FFTs and inverse scaling, positive/negative sound
+delays, coherence at a known SNR and its failure cases, best-mic ties, capture state transitions,
+ring overflow and a real producer/consumer stress run. A JVM test runs the actual Media3 stereo,
+Sonic and tee processors: a 44.1 kHz mono tone becomes 48 kHz stereo with unchanged pitch, duration
+and exact reference bytes. Debug/release builds and Android lint pass with no warnings; the
+permanent APK signature verifies. The required Rust DSP/simulator/lab release tests also pass.
+These checks do not verify hardware capture. The M2.1 capture-spike CI build passed at
+`a535c9da154196d2b67e9a4004498ae233f8d22b`
+([Build Veyl](https://github.com/jacobbalane/Veyl/actions/runs/39734647978)); the complete M2 CI result
+will be recorded after its push.
 
 ### Waiting on M2 device tests
 
@@ -347,6 +378,9 @@ No Android device is connected through ADB. Gate G1 and M2.7 remain pending. Fol
 
 Under §0.1.2, continue the remaining work that can be tested without hardware. The later thirty-minute,
 route, lock, PiP, player and sound-check checks remain open; unavailable devices are not passes.
+The maintainer asked to defer app review until implementation is finished and to proceed through
+the remaining milestones without stopping for intermediate device results. M2 acceptance therefore
+remains pending hardware; carry these checks forward while continuing M3 under the device exception.
 
 ## Dependency follow-up
 

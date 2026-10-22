@@ -25,6 +25,10 @@ them. Build the debug APK in CI even when release signing is available.
 The explicit debug Lab also bypasses the ten-minute no-PC stop so the M2.7 thirty-minute
 null-link device check can finish. It does not pretend a PC is connected. Production listening
 still stops after ten minutes without a PC; locking the screen and all other stop rules still apply.
+The Lab skips the automatic first-run sound check to exercise the recorder fallback directly;
+Settings can run it explicitly. Production listening always checks when no result is saved for
+the current Android fingerprint. Projection loss uses the lock alert only when the phone is
+actually locked or its screen is off; other projection loss uses the capture-failure alert.
 
 ## Consequences
 
