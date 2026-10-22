@@ -6,7 +6,8 @@ Section 0 followed: the full plan and the listed Glim references were read befor
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
 complete. The maintainer reports that both installed apps open: Windows shows the phone-search
 placeholder and Android shows the waiting-for-PC placeholder. M0's listed acceptance criteria pass;
-the additional device checks below remain unreported. M1 is in progress. Connecting the apps is M3.
+the additional device checks below remain unreported. M1 is complete. M2 is next; connecting the
+apps is M3. The published 0.0.1 preview still contains the M0 interface skeleton.
 
 The maintainer approved installing build tools and supplied the Git author identity. Rust,
 Visual Studio C++ Build Tools, Java 17 and the Android command-line SDK are now installed. Git
@@ -267,8 +268,16 @@ Protocol documentation now includes the complete spec, message examples, two Mer
 diagrams and caller responsibilities. Android uses only Bouncy Castle's low-level X25519, with
 its license bundled; other crypto uses the platform APIs. Kotlin sources are formatted with
 ktfmt 0.65's four-space style. Both roles can cancel before a code exists; the PC helper services
-that decision immediately and bounds the final abort write. Final cross-language CI acceptance is
-pending the final cancellation-fix build.
+that decision immediately and bounds the final abort write.
+
+**M1 acceptance passed.** [Build Veyl](https://github.com/jacobbalane/Veyl/actions/runs/39730717387)
+passed at source commit `865285f2f0ee7636ee9e292ab4d577437513f99b`: checks (including all 26 Rust
+tests and the exact CLI vector comparison), Android (all 17 core JVM tests, release lint and signed
+APK), Windows x64 (native clippy/tests and installer) and Windows ARM64 (cross-built installer).
+The tag-only draft-release job is not applicable to this main push.
+[Website](https://github.com/jacobbalane/Veyl/actions/runs/39730717483) also passed and deployed.
+Local formatting, debug/release Android lint, both APK builds and permanent-signer verification
+passed. M2 has not started; app discovery, pairing UI, protected stores and streaming remain M3.
 
 ## Dependency follow-up
 
