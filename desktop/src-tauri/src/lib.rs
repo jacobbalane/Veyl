@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod engine_host;
 pub mod events;
 pub mod pairings;
+pub mod recorder;
 mod settings;
 pub mod source;
 
@@ -22,6 +23,8 @@ use tauri::{
 struct Runtime {
     settings: Arc<Mutex<Settings>>,
     connection: connection::ConnectionManager,
+    recorder: recorder::Recorder,
+    recording_events_stop: tokio::sync::watch::Sender<bool>,
     exiting: AtomicBool,
     hidden: bool,
     _logging: tracing_appender::non_blocking::WorkerGuard,
@@ -95,6 +98,24 @@ pub fn run() {
                 &directory.join("settings.json"),
             )?));
             let handle = app.handle().clone();
+            let recorder = recorder::Recorder::new(
+                &directory.join("recordings"),
+                settings.lock().unwrap().keep_recordings_days,
+            )?;
+            let mut recordings = recorder.subscribe();
+            let recording_events = app.handle().clone();
+            let (recording_events_stop, mut stop_recording_events) = tokio::sync::watch::channel(false);
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    let changed = tokio::select! { _ = stop_recording_events.changed() => break, changed = recordings.changed() => changed };
+                    if changed.is_err() { break; }
+                    tokio::select! { _ = stop_recording_events.changed() => break, _ = interval.tick() => {} }
+                    let info = recordings.borrow_and_update().clone();
+                    let _ = recording_events.emit("veyl://recording", info);
+                }
+            });
             let connection = connection::ConnectionManager::start(
                 settings.clone(),
                 &directory,
@@ -112,10 +133,13 @@ pub fn run() {
                         let _ = handle.emit("veyl://capture", value);
                     }
                 }),
+                recorder.clone(),
             )?;
             app.manage(Runtime {
                 settings,
                 connection,
+                recorder,
+                recording_events_stop,
                 exiting: AtomicBool::new(false),
                 hidden: std::env::args().any(|arg| arg == "--hidden"),
                 _logging: guard,
@@ -178,7 +202,14 @@ pub fn run() {
             commands::forget_phone,
             commands::request_phone_start,
             commands::get_diagnostics,
-            commands::copy_diagnostics
+            commands::copy_diagnostics,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::mark_poke,
+            commands::get_recording,
+            commands::list_recordings,
+            commands::delete_recording,
+            commands::open_recordings_folder
         ])
         .build(tauri::generate_context!())
         .expect("Veyl could not start.")
@@ -187,10 +218,13 @@ pub fn run() {
                 if let Some(state) = app.try_state::<Runtime>() {
                     if !state.exiting.swap(true, Ordering::AcqRel) {
                         api.prevent_exit();
+                        let _ = state.recording_events_stop.send(true);
                         let connection = state.connection.clone();
+                        let recorder = state.recorder.clone();
                         let app = app.clone();
                         tauri::async_runtime::spawn(async move {
                             connection.shutdown().await;
+                            let _ = recorder.stop().await;
                             app.exit(code.unwrap_or(0));
                         });
                     }

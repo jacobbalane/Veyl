@@ -82,6 +82,15 @@ export interface AppState {
   actionsEnabled: boolean;
   link: LinkSnapshot;
 }
+export interface RecordingInfo {
+  id: string;
+  seconds: number;
+  markPokes: boolean;
+  state: string;
+  remainingSeconds: number;
+  blocks: number[];
+  error: string | null;
+}
 export type PhoneTarget = { nearbyId: string } | { address: string } | { phoneId: string };
 export type LinkUpdate =
   | { connection: ConnectionState }

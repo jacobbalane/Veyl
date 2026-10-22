@@ -4554,6 +4554,7 @@ version = "0.0.1"
 dependencies = [
  "base64 0.23.1",
  "getrandom 0.4.3",
+ "hound",
  "serde",
  "serde_json",
  "tauri",
@@ -4566,7 +4567,9 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "veyl-dsp",
+ "veyl-lab",
  "veyl-link",
+ "veyl-sim",
  "windows-sys 0.61.2",
  "zeroize",
 ]

@@ -62,10 +62,13 @@ pub struct EngineHost {
 }
 impl EngineHost {
     pub fn start() -> (Self, PhoneSource) {
+        Self::with_recorder(None)
+    }
+    pub fn with_recorder(recorder: Option<crate::recorder::Recorder>) -> (Self, PhoneSource) {
         let (sender, mut receiver) = mpsc::channel(400);
         let view = Arc::new(Mutex::new(LevelsView::default()));
         let dropped = Arc::new(AtomicU64::new(0));
-        let source = PhoneSource::new(sender, dropped.clone());
+        let source = PhoneSource::with_recorder(sender, dropped.clone(), recorder);
         let target = view.clone();
         std::thread::Builder::new()
             .name("Veyl-engine".into())

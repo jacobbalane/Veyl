@@ -13,6 +13,8 @@ import { emptyLink, type LinkSnapshot, type LinkUpdate } from './api/types';
 import { copy, connectionError, linkCopy } from './copy';
 import { Phones, PairingDialog, connectionLabel } from './ui/Connection';
 import { Diagnostics } from './ui/Diagnostics';
+import { RecordingStatus, RecordingDialogs, SavedRecordings, useRecordings } from './ui/Recordings';
+import { recordingCopy } from './copy';
 
 const tabs = [
   { name: 'Live', icon: Radio },
@@ -27,6 +29,11 @@ export function App() {
   const [app, setApp] = useState<AppState>();
   const [error, setError] = useState('');
   const link = app?.link ?? emptyLink;
+  const recordings = useRecordings();
+  const canRecord =
+    !browserPreview &&
+    link.connection.state === 'connected' &&
+    link.connection.capture?.state === 'running';
   const updateLink = (link: LinkSnapshot, update: LinkUpdate): LinkSnapshot =>
     'capture' in update
       ? { ...link, connection: { ...link.connection, capture: update.capture } }
@@ -121,6 +128,7 @@ export function App() {
           <span>v{app?.version ?? '0.0.1'}</span>
         </div>
         {error && <p role="alert">{error}</p>}
+        <RecordingStatus recording={recordings} />
         {link.connection.error && connectionError(link.connection.error) && (
           <p role="alert">{connectionError(link.connection.error)}</p>
         )}
@@ -176,7 +184,12 @@ export function App() {
               <p>{copy.pokesEmpty}</p>
               <div className="button-row">
                 <button disabled>Test pokes</button>
-                <button disabled>Record a test</button>
+                <button
+                  disabled={!canRecord || recordings.info?.state === 'recording'}
+                  onClick={() => recordings.setDialog(true)}
+                >
+                  {recordingCopy.title}
+                </button>
               </div>
             </section>
           </div>
@@ -238,10 +251,12 @@ export function App() {
             </a>
             <p>Free and open source (MIT)</p>
             <Diagnostics />
+            <SavedRecordings recording={recordings} canRecord={canRecord} />
           </section>
         )}
       </main>
       <PairingDialog key={link.pairing?.sessionId} pairing={link.pairing} onError={setError} />
+      <RecordingDialogs recording={recordings} />
       <footer>
         Touch the air. Your screen follows.<span>Sound stays home.</span>
       </footer>

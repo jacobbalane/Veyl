@@ -1,5 +1,5 @@
 //! Sources deliver the same filtered blocks and state to the engine's bounded queue.
-use crate::engine_host::EngineInput;
+use crate::{engine_host::EngineInput, recorder::Recorder};
 use std::{
     future::Future,
     io,
@@ -38,17 +38,37 @@ pub struct PhoneSource {
     sender: mpsc::Sender<EngineInput>,
     dropped: Arc<AtomicU64>,
     gaps: Arc<[AtomicBool; 2]>,
+    recorder: Option<Recorder>,
 }
 impl PhoneSource {
+    #[cfg(test)]
     pub(crate) fn new(sender: mpsc::Sender<EngineInput>, dropped: Arc<AtomicU64>) -> Self {
+        Self::with_recorder(sender, dropped, None)
+    }
+    pub(crate) fn with_recorder(
+        sender: mpsc::Sender<EngineInput>,
+        dropped: Arc<AtomicU64>,
+        recorder: Option<Recorder>,
+    ) -> Self {
         Self {
             sender,
             dropped,
             gaps: Arc::new([AtomicBool::new(false), AtomicBool::new(false)]),
+            recorder,
         }
     }
     pub async fn disconnected(&self, generation: u64) -> io::Result<()> {
+        if let Some(recorder) = &self.recorder {
+            recorder.disconnected(generation);
+        }
         self.control(EngineInput::Disconnected(generation)).await
+    }
+    pub(crate) fn phone_ready(&self, ready: &veyl_link::messages::Ready) {
+        if let (Some(recorder), veyl_link::messages::Ready::Phone { device, .. }) =
+            (&self.recorder, ready)
+        {
+            recorder.source_info(serde_json::json!(device), serde_json::json!({"desktop": env!("CARGO_PKG_VERSION"), "phone": device.app_version}));
+        }
     }
     async fn control(&self, message: EngineInput) -> io::Result<()> {
         timeout(Duration::from_secs(1), self.sender.send(message))
@@ -73,10 +93,20 @@ impl SoundSource for PhoneSource {
         self.gaps
             .iter()
             .for_each(|flag| flag.store(false, Ordering::Release));
-        self.control(EngineInput::Config(generation, format)).await
+        self.control(EngineInput::Config(generation, format.clone()))
+            .await?;
+        if let Some(recorder) = &self.recorder {
+            recorder.configure(generation, format);
+        }
+        Ok(())
     }
     async fn status(&self, generation: u64, status: Capture) -> io::Result<()> {
-        self.control(EngineInput::Status(generation, status)).await
+        self.control(EngineInput::Status(generation, status.clone()))
+            .await?;
+        if let Some(recorder) = &self.recorder {
+            recorder.status(generation, &status);
+        }
+        Ok(())
     }
     fn audio(
         &self,
@@ -84,6 +114,9 @@ impl SoundSource for PhoneSource {
         mut block: AudioBlock,
         arrival_ms: Option<f64>,
     ) -> io::Result<bool> {
+        if let Some(recorder) = &self.recorder {
+            recorder.audio(generation, &block);
+        }
         let gap = self
             .gaps
             .get(block.stream as usize)

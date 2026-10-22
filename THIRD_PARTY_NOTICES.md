@@ -69,6 +69,9 @@ These are direct external dependencies of the workspace crates, including build 
 | windows-sys                  | 0.61.2         | MIT OR Apache-2.0 |
 | zeroize                      | 1.9.1          | Apache-2.0 OR MIT |
 
+Hound is copyright © 2015 Ruud van Asseldonk. Its Apache 2.0 license is in
+`assets/licenses/hound-Apache-2.0.txt`; desktop installers ship it as `licenses/hound.txt`.
+
 ## Android dependencies
 
 | Component                                | Version        | License               |

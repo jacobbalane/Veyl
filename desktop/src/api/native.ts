@@ -12,6 +12,7 @@ import {
   type PairingEvent,
   type Capture,
   type PhoneTarget,
+  type RecordingInfo,
 } from './types';
 export type { AppState } from './types';
 
@@ -43,6 +44,22 @@ export const confirmPairing = (sessionId: string, matches: boolean) =>
 export const disconnect = () => command('disconnect');
 export const forgetPhone = (phoneId: string) => command('forget_phone', { phoneId });
 export const requestPhoneStart = () => command('request_phone_start');
+export const startRecording = (seconds: 30 | 60 | 120, markPokes: boolean) =>
+  invoke<RecordingInfo>('start_recording', { seconds, markPokes });
+export const stopRecording = () => invoke<RecordingInfo>('stop_recording');
+export const markPoke = () => command('mark_poke');
+export const deleteRecording = (id: string) => command('delete_recording', { id });
+export const openRecordingsFolder = () => command('open_recordings_folder');
+export const getRecording = async (): Promise<RecordingInfo | null> =>
+  browserPreview ? null : invoke('get_recording');
+export const listRecordings = async (): Promise<RecordingInfo[]> =>
+  browserPreview ? [] : invoke('list_recordings');
+export const watchRecording = async (
+  update: (info: RecordingInfo | null) => void,
+): Promise<UnlistenFn> =>
+  browserPreview
+    ? () => {}
+    : listen<RecordingInfo | null>('veyl://recording', ({ payload }) => update(payload));
 export async function getDiagnostics(): Promise<Diagnostics> {
   return browserPreview
     ? { link: structuredClone(emptyLink), levels: structuredClone(emptyLevels) }

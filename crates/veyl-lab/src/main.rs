@@ -5,7 +5,7 @@ use std::{
 };
 use veyl_lab::{fake_phone::FakePhone, recording::Input};
 
-const USAGE: &str = "Usage:\n  veyl-lab scenarios\n  veyl-lab fake-phone (--scenario poke_basic | --recording DIR) [--port 47820] [--realtime] [--seed N]";
+const USAGE: &str = "Usage:\n  veyl-lab scenarios\n  veyl-lab analyze DIR [--out DIR2]\n  veyl-lab fake-phone (--scenario poke_basic | --recording DIR) [--port 47820] [--realtime] [--seed N]";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -15,6 +15,18 @@ async fn main() {
     }
 }
 async fn run(arguments: Vec<String>) -> io::Result<()> {
+    if arguments.first().map(String::as_str) == Some("analyze") {
+        let directory = arguments.get(1).ok_or_else(usage)?;
+        let output = match arguments.len() {
+            2 => directory,
+            4 if arguments[2] == "--out" => &arguments[3],
+            _ => return Err(usage()),
+        };
+        let input = Input::read(Path::new(directory))?;
+        let summary = veyl_lab::analyze::write_summary(&input, Path::new(output))?;
+        println!("Stream statistics saved. Reference: {} blocks; microphone: {} blocks. Echo and gesture analysis arrive in M4.", summary.reference.blocks, summary.microphone.blocks);
+        return Ok(());
+    }
     if arguments.as_slice() == ["scenarios"] {
         for scenario in veyl_sim::SCENARIOS {
             println!(

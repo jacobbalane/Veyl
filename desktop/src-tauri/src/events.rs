@@ -119,6 +119,19 @@ mod fixtures {
                 serde_json::to_value(diagnostics).unwrap(),
             ),
             ("pairing.json", serde_json::to_value(pairing).unwrap()),
+            (
+                "recording.json",
+                serde_json::to_value(crate::recorder::RecordingInfo {
+                    id: "20261022-120000-00000000".into(),
+                    seconds: 30,
+                    mark_pokes: true,
+                    state: "recording".into(),
+                    remaining_seconds: 20,
+                    blocks: [1000, 1000],
+                    error: None,
+                })
+                .unwrap(),
+            ),
         ] {
             let expected = format!("{}\n", serde_json::to_string_pretty(&value).unwrap());
             let path = root.join(name);
@@ -126,12 +139,12 @@ mod fixtures {
                 std::fs::create_dir_all(&root).unwrap();
                 std::fs::write(&path, &expected).unwrap();
             }
-            assert_eq!(
-                std::fs::read_to_string(path)
+            let actual: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(path)
                     .expect("Regenerate interface fixtures after an intentional API change."),
-                expected,
-                "{name}"
-            );
+            )
+            .unwrap();
+            assert_eq!(actual, value, "{name}");
         }
     }
 }

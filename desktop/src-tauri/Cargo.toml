@@ -34,6 +34,11 @@ veyl-link = { path = "../../crates/veyl-link" }
 tokio = { version = "1", features = ["rt", "net", "sync", "time", "macros"] }
 zeroize = "1"
 time = { version = "0.3.55", features = ["formatting", "parsing"] }
+hound = "3.5.1"
+
+[dev-dependencies]
+veyl-lab = { path = "../../crates/veyl-lab" }
+veyl-sim = { path = "../../crates/veyl-sim" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_NetworkManagement_Dns", "Win32_Security_Cryptography"] }

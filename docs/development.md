@@ -70,7 +70,8 @@ Rust's desktop event test compares its payloads with `desktop/src/api/fixtures/*
 tests assign those fixtures to the corresponding API types. After an intentional API change,
 regenerate them with `VEYL_UPDATE_FIXTURES=1 cargo test -p veyl-desktop --lib
 events::fixtures::rust_payloads_match_committed_interface_fixtures` (set/remove that variable around
-the command in PowerShell). Normal tests never rewrite fixtures. Comparison codes in these
+the command in PowerShell), then format the JSON with `npx prettier --write desktop/src/api/fixtures`.
+Normal tests compare JSON values without rewriting fixtures. Comparison codes in these
 examples are fixed test data; copied runtime diagnostics always remove the live code.
 
 The Windows host uses system DNS-SD and connects out; manual host/IPv4 plus port entry works when
@@ -98,7 +99,26 @@ metadata and unknown timestamps, rebasing known capture times to the simulator's
 Reported battery, volume and CPU values are simulated constants. No input audio is played or saved.
 
 `cargo test --release -p veyl-lab` runs the portable end-to-end pairing/session/stream test as well
-as replay and pacing checks. All scenario rendering and full analysis commands follow in M4.
+as replay and pacing checks. The rest of the scenario catalogue and echo analysis follow in M4.
+
+On a connected, listening source, **Record a test** in Live or Help → Diagnostics asks for 30,
+60 or 120 seconds and optional Space marks. The banner remains visible until recording stops.
+Space marks require focus in Veyl and do not intercept typing, controls or repeated key events.
+Files stay in the app data directory's `recordings` folder. Help lists them with Open folder and
+confirmed Delete; startup removes dated Veyl folders older than `keep_recordings_days` (seven by
+default; zero disables retention). No audio is saved before consent. A separate bounded worker
+writes filtered PCM, marks and block metadata, stopping on write failure, overflow, a capture
+change or disconnection. WAV gaps are zero-filled and JSONL retains only blocks actually received.
+An extra `recording` field in `meta.json` holds status for listing and interrupted-recording
+feedback; the shared reader ignores it. M3's `events.jsonl` is empty until the engine emits events.
+
+```sh
+cargo run --release -p veyl-lab -- analyze PATH --out ANALYSIS_PATH
+```
+
+M3 analysis writes `summary.json` with stream counts, frame/sequence gaps, overlaps, pre-filter
+level means, filtered RMS and timestamp availability. It does not yet estimate lock, distance or
+pokes. It reads only the selected local recording and writes statistics, never another audio copy.
 
 Generate the shared brand assets with `node scripts/render-icons.mjs`. It uses the committed
 Manrope source font, creates an outlined ExtraBold wordmark, renders the icons, and copies font

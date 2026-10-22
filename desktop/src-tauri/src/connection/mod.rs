@@ -45,12 +45,13 @@ impl ConnectionManager {
         settings: Arc<Mutex<Settings>>,
         directory: &Path,
         observer: Observer,
+        recorder: crate::recorder::Recorder,
     ) -> io::Result<Self> {
         let pc_id = pairings::id_bytes(&settings.lock().unwrap().pc_id)?;
         let store = PairingStore::load(&directory.join("pairings.json"), pc_id)?;
         let (commands, receiver) = mpsc::channel(32);
         let view = Arc::new(Mutex::new(LinkSnapshot::default()));
-        let (engine, source) = EngineHost::start();
+        let (engine, source) = EngineHost::with_recorder(Some(recorder));
         let engine = Arc::new(engine);
         let actor = Actor {
             settings,

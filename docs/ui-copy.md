@@ -168,3 +168,14 @@ wording; change it only through a decision record.
 | Signal levels            | Sound copy · Microphone · Before filter · After filter · Arrival delay · Engine drops · Phone queue · Sample rate · Not available |
 | Diagnostics feedback     | Diagnostics copied. · Veyl could not copy diagnostics.                                                                            |
 | Signal counts            | {n} blocks · {n} gaps                                                                                                             |
+
+### C.8 Test recording feedback (M3)
+
+| Where               | Text                                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duration            | Duration · {s} seconds                                                                                                                                                                  |
+| Recording controls  | Stop recording · Cancel · Open folder · Delete · Test recordings · No test recordings yet.                                                                                              |
+| Recording result    | Saved. Recordings stay on this PC. · Recording didn't finish. You can open or delete the partial files.                                                                                 |
+| Start requirement   | Start listening before recording a test.                                                                                                                                                |
+| Recording error     | Veyl couldn't save this test. Try again. · Veyl couldn't load test recordings. Try again. · Veyl couldn't delete this recording. Try again. · Veyl couldn't open the recordings folder. |
+| Delete confirmation | Delete this recording? · This permanently deletes this test from this PC.                                                                                                               |

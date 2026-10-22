@@ -187,6 +187,7 @@ async fn run(
                 return Err(bad_message());
             };
             source.status(generation, capture.clone()).await?;
+            source.phone_ready(&authenticated.ready);
             let _ = events
                 .send(Event::Ready(generation, authenticated.ready, address))
                 .await;
@@ -551,6 +552,100 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+    }
+    #[tokio::test]
+    async fn real_phone_source_records_filtered_audio_and_device_metadata_after_consent() {
+        timeout(Duration::from_secs(15), async {
+            let input =
+                veyl_lab::recording::Input::generated(veyl_sim::poke_basic(3, 2.0).unwrap());
+            let (codes, mut phone_codes) = mpsc::channel(1);
+            let phone = veyl_lab::fake_phone::FakePhone::bind(
+                input,
+                0,
+                true,
+                std::sync::Arc::new(move |code| {
+                    assert!(codes.try_send(code.to_owned()).is_ok());
+                }),
+            )
+            .await
+            .unwrap();
+            let temporary = tempfile::tempdir().unwrap();
+            let recorder = crate::recorder::Recorder::new(temporary.path(), 7).unwrap();
+            let (engine, source) = EngineHost::with_recorder(Some(recorder.clone()));
+            let (events, mut receiver) = mpsc::channel(256);
+            let origin = Instant::now();
+            let pairing = Worker::start(
+                Plan {
+                    generation: 1,
+                    address: phone.address().to_string(),
+                    identity: identity(true),
+                    mode: Mode::Pair,
+                },
+                events.clone(),
+                source.clone(),
+                origin,
+            );
+            let paired = loop {
+                match receiver.recv().await.unwrap() {
+                    Event::Compare(_, _, code) => {
+                        assert!(code == phone_codes.recv().await.unwrap());
+                        pairing.confirmations.send(true).await.unwrap();
+                    }
+                    Event::Paired(_, peer, _) => break peer,
+                    Event::Ended(_, _) => panic!("Pairing ended unexpectedly."),
+                    _ => {}
+                }
+            };
+            pairing.stop("user_quit").await;
+            while phone.report().paired == 0 {
+                tokio::task::yield_now().await;
+            }
+            let session = Worker::start(
+                Plan {
+                    generation: 2,
+                    address: phone.address().to_string(),
+                    identity: identity(true),
+                    mode: Mode::Session(paired),
+                },
+                events,
+                source,
+                origin,
+            );
+            while !engine.levels().running || engine.levels().microphone.blocks == 0 {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 0);
+            let active = recorder
+                .start(30, true, serde_json::json!({}))
+                .await
+                .unwrap();
+            while recorder.snapshot().unwrap().state == "recording" {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            let saved = recorder.stop().await.unwrap();
+            assert_eq!(saved.state, "saved");
+            assert!(saved.blocks.iter().all(|&count| count > 0 && count <= 200));
+            let recording =
+                veyl_lab::recording::Input::read(&temporary.path().join(active.id)).unwrap();
+            assert_eq!(recording.meta.device["model"], "Simulator");
+            assert_eq!(
+                recording.meta.app_versions["phone"],
+                env!("CARGO_PKG_VERSION")
+            );
+            assert!(recording.blocks.iter().all(|block| block.flags & 4 != 0));
+            assert_eq!(
+                (
+                    engine.levels().reference.blocks,
+                    engine.levels().microphone.blocks
+                ),
+                (200, 200)
+            );
+            assert_eq!(engine.levels().engine_drops, 0);
+            session.stop("user_quit").await;
+            phone.shutdown().await;
+        })
+        .await
+        .unwrap();
     }
     #[tokio::test]
     async fn manual_address_probe_preserves_not_paired_for_the_pair_offer() {

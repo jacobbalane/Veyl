@@ -397,7 +397,7 @@ test recordings and a fake phone allow end-to-end testing before hardware review
 - [x] **M3.2** Desktop DNS-SD discovery, connection manager, pairing flow/dialog, Phones tab,
       add-by-address, DPAPI pairings, SoundSource/PhoneSource, level-meter engine stub and Help
       diagnostics: block rates, levels, drops, RTT, arrival latency and battery.
-- [ ] **M3.3** `veyl-lab fake-phone` and end-to-end test: pair, session, forty seconds of poke_basic,
+- [x] **M3.3** `veyl-lab fake-phone` and end-to-end test: pair, session, forty seconds of poke_basic,
       correct block counts and no decryption errors. Gesture checks begin in M6.
 - [ ] **M3.4** Desktop opt-in test recordings: dialog, Space marks, retention and `veyl-lab analyze`
       reading stream statistics.
@@ -485,7 +485,7 @@ Android tests/lint/APKs, native Windows x64 tests/installer and the ARM64 instal
 The website deployment passed too. M3.3 now builds the simulated phone and its required
 `poke_basic` acoustic input; the broader simulator and engine gates remain M4.
 
-**M3.3 implementation and local verification complete; CI pending.** The loopback-only simulator
+**M3.3 implementation and verification complete.** The loopback-only simulator
 uses Veyl Link's real phone pairing/session machines, compares codes through an interactive
 terminal, keeps confirmed pairings only in memory and accepts one PC at a time. It sends ready,
 configuration, capture state, statistics and both filtered audio streams, answers heartbeats,
@@ -502,6 +502,36 @@ stream, checks every PCM sample and header, and reports zero decryption errors. 
 cover pacing, busy rejection, a deliberately corrupted tag and listener shutdown. No gesture
 results or device acceptance are claimed. Codes and audio are absent from test output.
 
+M3.3 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39778554705) at
+`8d8c39e`: portable checks/end-to-end tests, Android lint/tests/APKs, Windows x64 tests/installer
+and the ARM64 installer cross-build. The test waits for all twenty heartbeat replies independently
+of the final capture-state message; those messages can arrive in either order. No tag or release
+was created.
+
+**M3.4 implementation and local verification complete; CI pending.** Record a test is available on
+Live and Help → Diagnostics while capture runs. Consent chooses 30, 60 or 120 seconds and optional
+Space marks. A visible banner counts down; Stop, capture ending, configuration changes and
+disconnect finalize the files. Audio is copied to the bounded disk queue directly from the sound
+source, before engine drops can affect it, and only during the current consent period. Overflow
+ends the recording as failed while capture continues. Old callbacks and generations cannot enter
+a new recording. Only privacy-filtered PCM is accepted. WAVs preserve absolute frame bases and
+zero-fill missing frames; JSONL preserves received blocks, levels, timestamps, flags and marks.
+Device details and app versions come from authenticated readiness. The M3 engine has no gesture
+events yet, so its events file is empty. See decision 0007 for additional feedback wording.
+
+Help lists local tests with Open folder and confirmed Delete. Startup removes managed folders
+older than seven days by default; traversal, links and unrelated folders are excluded. Interrupted
+or partial files are labelled incomplete. Nothing is uploaded. `veyl-lab analyze DIR [--out DIR2]`
+writes a stream-statistics summary with received frames, gaps, overlaps, raw/filtered levels and
+unknown-clock counts; it does not claim echo or gesture results. Nine Vitest tests and twenty-one
+desktop Rust tests pass. A real encrypted fake-phone → desktop source → recorder → lab-reader
+test verifies consent, filtered data, device metadata and engine counts. Additional tests cover
+retention, epoch isolation, marks and failure reporting. DSP/simulator/lab release tests and
+clippy pass. Headless Chrome checks consent, focus, duration/mark choices, the banner and light
+theme at minimum width. Native GUI/device verification remains deferred while the maintainer's
+installed preview runs. The new recording metadata fixture is checked semantically by Rust and
+typed in TypeScript; JSON formatting remains Prettier's responsibility.
+
 ### Waiting on M3 device tests
 
 The maintainer requested the final app review after implementation. Keep these checks pending:
@@ -517,8 +547,11 @@ The maintainer requested the final app review after implementation. Keep these c
 3. For D10, start a filtered stream, turn phone Wi-Fi off/on and measure reconnection after Wi-Fi
    returns (at most five seconds). The phone must show the connected PC and keep its listening
    indicator. Run thirty minutes; record block/drop counts and require under 0.1% dropped blocks.
-4. After M3.4 provides the consent flow, collect R1–R10 using the plan's instructions. Keep audio
-   local. Record versions, devices, pass/fail and failures here; none of these checks has run yet.
+4. Collect R1–R10 using the plan's instructions. In Live or Help → Diagnostics, choose Record a
+   test, select the required duration, leave Space marks on for poke tests and choose Start
+   recording. Keep Veyl focused and press Space after each real poke. After the saved message,
+   use Open folder to find the local test; run `veyl-lab analyze DIR` to check its stream counts.
+   Keep audio local. Record versions, devices, pass/fail and failures here; none has run yet.
 
 ## Dependency follow-up
 

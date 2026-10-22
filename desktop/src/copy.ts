@@ -16,6 +16,32 @@ export const copy = {
     'When actions are on, each poke clicks where your pointer is. Press Ctrl+Alt+V to switch them on or off.',
 } as const;
 
+export const recordingCopy = {
+  title: 'Record a test',
+  consent: (seconds: number) =>
+    `Veyl saves the next ${seconds} seconds of what it hears, so you can check how well it works. Recordings stay on this PC.`,
+  markPokes: 'Mark pokes with the Space key',
+  duration: 'Duration',
+  seconds: (seconds: number) => `${seconds} seconds`,
+  start: 'Start recording',
+  stop: 'Stop recording',
+  banner: (seconds: number) => `Recording · ${seconds} s left`,
+  spaceHint: 'Press Space each time you poke',
+  saved: 'Saved. Recordings stay on this PC.',
+  partial: "Recording didn't finish. You can open or delete the partial files.",
+  open: 'Open folder',
+  delete: 'Delete',
+  deleteTitle: 'Delete this recording?',
+  deleteMessage: 'This permanently deletes this test from this PC.',
+  recordings: 'Test recordings',
+  empty: 'No test recordings yet.',
+  notListening: 'Start listening before recording a test.',
+  saveFailed: "Veyl couldn't save this test. Try again.",
+  loadFailed: "Veyl couldn't load test recordings. Try again.",
+  deleteFailed: "Veyl couldn't delete this recording. Try again.",
+  openFailed: "Veyl couldn't open the recordings folder.",
+} as const;
+
 export const linkCopy = {
   yourPhones: 'Your phones',
   nearby: 'Nearby',
