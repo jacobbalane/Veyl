@@ -1,12 +1,22 @@
 # Release and maintainer setup
 
 M0 is in progress. These commands document maintainer setup and releases. GitHub CLI sign-in,
-the public repository, Pages from Actions and repository settings are configured. Android signing
-and the preview release are still pending. Wait for green CI before tagging a preview.
+the public repository, Pages from Actions, repository settings and Android signing secrets are
+configured. Independent signing backups and the preview release are still pending. Wait for green
+CI before tagging a preview.
 Create the signing key outside the repository; keep its password private and retain two backups.
 
-On this machine, one-time setup steps 1–3 and 5 are complete. Continue with step 4, then rerun
-Build Veyl so its Android job verifies the signed release APK. If PowerShell cannot find `gh`,
+On this machine, steps 1–5 are configured. At the maintainer's request, the agent generated the
+permanent RSA 4096-bit key and a random 256-bit password, then configured all four signing secrets.
+The key is `%USERPROFILE%\.veyl-signing\veyl-release.p12`; its password is encrypted with Windows
+DPAPI in the same directory. Access is restricted to this Windows user and SYSTEM. A signed local
+release APK verifies against the generated certificate. Reuse this key; do not generate another.
+
+Before releasing, follow `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt` to save the actual
+password in a password manager and make two independent backups of the key and password. The DPAPI
+file depends on the current Windows account and is not a portable password backup.
+
+The numbered commands below document the original setup. If PowerShell cannot find `gh`,
 close every Windows Terminal window and reopen it, or use `& "C:\Program Files\GitHub CLI\gh.exe"`
 in place of `gh`.
 
@@ -17,7 +27,7 @@ in place of `gh`.
    `gh repo create jacobbalane/Veyl --public --source . --remote origin --push --description "Touch the air. Your screen follows. Control your Windows PC with a poke in the air, using your Android phone as a sonar."`
 3. Turn on Pages from Actions: `gh api -X POST repos/jacobbalane/Veyl/pages -f build_type=workflow`
    (or Settings → Pages → Source: GitHub Actions).
-4. Create the Android signing key **once and keep it forever** (losing it means people must uninstall
+4. For a new setup, create the Android signing key **once and keep it forever** (losing it means people must uninstall
    Veyl to install an update):
 
    ```powershell

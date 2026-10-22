@@ -139,8 +139,8 @@ full debug/release lint ran and passed. Gradle also reports an upstream deprecat
 - Windows x64: `target/x86_64-pc-windows-msvc/release/bundle/nsis/Veyl_0.0.1_x64-setup.exe`.
 - Windows ARM64: `target/aarch64-pc-windows-msvc/release/bundle/nsis/Veyl_0.0.1_arm64-setup.exe`.
 - Android debug: `android/app/build/outputs/apk/debug/app-debug.apk` (debug application id).
-- Android release: `android/app/build/outputs/apk/release/app-release-unsigned.apk` (not installable
-  as a release until the maintainer supplies the permanent signing key).
+- Android signed release: `android/app/build/outputs/apk/release/app-release.apk` (permanent signer
+  verified locally; no release publication or phone installation is claimed).
 - Website: `site/dist/`.
 
 Build output and local checksums stay ignored. The x64 installer is about 2.18 MiB, ARM64 about
@@ -168,8 +168,22 @@ action inputs, and pass `actionlint`. This replaces the deprecated checkout, Nod
 Gradle, artifact, Pages and release action versions. The MSVC environment action's latest release
 still declares Node 20; GitHub runs it with Node 24, and the Windows builds above passed.
 
-Still required: create and back up the permanent Android signing key, then configure the four
-signing secrets using [release.md](release.md). No signing secrets, tags or releases exist yet.
+The maintainer explicitly asked the agent to create the signing key. The permanent RSA 4096-bit
+PKCS12 key is now outside the repository at `%USERPROFILE%\.veyl-signing\veyl-release.p12`. A random
+256-bit password is encrypted for this Windows account in `veyl-release.password.dpapi`; directory
+access is restricted to the current user and SYSTEM. All four GitHub signing secrets are
+configured. No private key or password was printed, put in command arguments, or committed.
+
+The local signed release APK builds and `apksigner verify` confirms the permanent certificate:
+`a04d54b735f80adbf8c2549afb74883b019781e3340c57c5755ded7a0ac697c3` (SHA-256). The refreshed
+[Build Veyl run](https://github.com/jacobbalane/Veyl/actions/runs/39705982601) also passed all checks,
+both installers and the debug Android build before signing secrets were configured. CI now selects
+the release APK when the configured secrets are available.
+
+Still required for M0.9: the maintainer must save the actual password in a password manager and
+make two independent backups of the key and password. Instructions are in
+`%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`; the DPAPI file alone is not a portable backup.
+No tags or releases exist yet.
 
 **M0.10:** Add the exact 0.0.1 preview changelog section, run the version script and checks, then
 create/push the tag. Inspect the draft release for x64 and ARM64 installers, the signed APK, all

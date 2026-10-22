@@ -70,7 +70,8 @@ retain unknown fields. Logging contains lifecycle messages only.
 
 Release signing on Android reads `VEYL_KEYSTORE_PATH`, `VEYL_KEYSTORE_PASSWORD`, `VEYL_KEY_ALIAS`
 and `VEYL_KEY_PASSWORD`. Without them, local release builds are unsigned. Debug APKs use the
-standard Android debug key. Only the maintainer creates the permanent release key.
+standard Android debug key. Permanent release-key setup requires the maintainer's explicit
+instruction. On this machine the key is configured; see [release.md](release.md) for backup steps.
 
 If the environment blocks Node's test worker processes with `spawn EPERM`, run
 `node --test --test-isolation=none "scripts/*.test.mjs"` to exercise the same tests in one process. This does
