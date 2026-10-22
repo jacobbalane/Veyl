@@ -3,8 +3,8 @@
 Last updated: 2026-10-22.
 
 Section 0 followed: the full plan and the listed Glim references were read before writing source.
-Work remains in milestone order. M0's local implementation is ready; the milestone is **not done**
-until its GitHub, publishing and device acceptance checks pass. M1 has not started.
+Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
+complete. The milestone is **not done** until its device acceptance checks pass. M1 has not started.
 
 The maintainer approved installing build tools and supplied the Git author identity. Rust,
 Visual Studio C++ Build Tools, Java 17 and the Android command-line SDK are now installed. Git
@@ -43,7 +43,7 @@ architecture.md`, and stub files for the rest of §9.9.
       release coming soon" until v0.1.0.
 - [x] **M0.8** CI: `build.yml` (Windows x64 and ARM64; the vectors step stays commented out until M1.3), `site.yml`,
       `dependabot.yml`, issue and pull request templates.
-- [ ] **M0.9 [maintainer]** §10.7 steps 1–5: GitHub CLI, create and push the repo, turn on Pages,
+- [x] **M0.9 [maintainer]** §10.7 steps 1–5: GitHub CLI, create and push the repo, turn on Pages,
       Android signing key and secrets, repository settings (homepage, topics, private vulnerability
       reporting, security alerts, labels).
 - [ ] **M0.10 [maintainer] [device]** Pipeline dry run: add `## 0.0.1 (YYYY-MM-DD)` with "Preview
@@ -94,8 +94,8 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
   reduced motion and desktop navigation without page errors. Sample illustrations are labelled.
 - **M0.8:** Added the Linux checks, Windows x64/ARM64, Android, tag-only draft-release and Pages
   workflow definitions, plus Dependabot and issue/PR templates. `actionlint` validates the workflows.
-  The protocol-vector step remains commented until M1.3. Remote CI, attestations and deployment
-  are not claimed before maintainer setup.
+  The protocol-vector step remains commented until M1.3. Remote builds, deployment and the
+  tag-only release job now pass; their evidence is recorded below.
 
 ## Verification
 
@@ -127,7 +127,8 @@ cd android; .\gradlew :core:test :app:assembleDebug   # with the toolchain, or i
 | Live website browser checks                             | All three pages passed on desktop and mobile              |
 | Downloaded CI artifacts                                 | Installer checksums and permanent APK signer verified     |
 | Android release signing                                 | Passed locally and in GitHub CI                           |
-| Release attestations                                    | Pending the maintainer's M0.10 tag                        |
+| Release attestations                                    | All three verified against the workflow, tag and commit   |
+| Published website downloads                             | x64, ARM64 and Android downloaded; three checksums match  |
 
 The Android app has no separate JVM unit-test sources yet: `:app:testDebugUnitTest` reports
 `NO-SOURCE`. Its foundation logic is covered by `:core:test`, and its Compose screens require the
@@ -141,82 +142,71 @@ full debug/release lint ran and passed. Gradle also reports an upstream deprecat
 - Windows ARM64: `target/aarch64-pc-windows-msvc/release/bundle/nsis/Veyl_0.0.1_arm64-setup.exe`.
 - Android debug: `android/app/build/outputs/apk/debug/app-debug.apk` (debug application id).
 - Android signed release: `android/app/build/outputs/apk/release/app-release.apk` (permanent signer
-  verified locally; no release publication or phone installation is claimed).
+  verified locally; phone installation remains pending).
 - Website: `site/dist/`.
 
 Build output and local checksums stay ignored. The x64 installer is about 2.18 MiB, ARM64 about
 1.94 MiB, and the signed release APK below 1 MiB. These local artifacts have no GitHub provenance
 attestation yet.
 
-## Waiting on maintainer setup
+## GitHub and signing setup
 
-**M0.9:** GitHub CLI is installed and authenticated as `jacobbalane`. After the maintainer continued
-setup, the agent created and pushed [the public repository](https://github.com/jacobbalane/Veyl),
-enabled Pages from Actions, and configured its homepage, topics, private vulnerability reporting,
-Dependabot security alerts/fixes and the `device-report` label. The Website workflow built and
-deployed successfully. Browser checks of the live home, docs and changelog pages passed at desktop
-and mobile widths, including assets/fonts, download fallback and no page errors or overflow.
+**M0.9 is complete.** GitHub CLI is installed and authenticated as `jacobbalane`.
+[The public repository](https://github.com/jacobbalane/Veyl) has Pages from Actions, its homepage and
+topics, private vulnerability reporting, Dependabot security alerts/fixes and the `device-report`
+label configured. The live home, docs and changelog pages passed browser checks on desktop and
+mobile. [Main CI](https://github.com/jacobbalane/Veyl/actions/runs/39708987846) passed its checks,
+both Windows installers and the signed Android release; the Website workflow passed as well.
 
-The first Build Veyl run exposed a Node 24 test-runner incompatibility with a directory argument.
-CI and the documented command now use the explicit `scripts/*.test.mjs` glob. The corrected
-[Build Veyl run](https://github.com/jacobbalane/Veyl/actions/runs/39704676134) passed Linux checks,
-Windows x64 and ARM64 packaging, and Android tests/lint/debug packaging. Both downloaded Windows
-installers match their checksums; the downloaded debug APK's signature verifies. These artifacts
-remain in ignored `.cache/github/`, and have not been published as release downloads.
+The permanent RSA 4096-bit PKCS12 key was created at the maintainer's request, outside the
+repository at `%USERPROFILE%\.veyl-signing\veyl-release.p12`. Its random 256-bit password is
+encrypted for this Windows account in `veyl-release.password.dpapi`; directory access is restricted
+to the current user and SYSTEM. All four GitHub signing secrets work. Local and downloaded CI APKs
+verify against the permanent certificate:
+`a04d54b735f80adbf8c2549afb74883b019781e3340c57c5755ded7a0ac697c3` (SHA-256).
 
-Workflow actions now use current stable release tags, checked against their upstream releases and
-action inputs, and pass `actionlint`. This replaces the deprecated checkout, Node/Java setup,
-Gradle, artifact, Pages and release action versions. The MSVC environment action's latest release
-still declares Node 20; GitHub runs it with Node 24, and the Windows builds above passed.
+The maintainer confirmed that the keystore and actual password are saved in 1Password. Protected
+local signing files remain the other safe copy required by plan section 10.7. Backup instructions
+are in `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`; the DPAPI file alone is not a portable
+password backup. The requested plaintext export, `../VEYL_SIGNING_SECRETS.txt`, is deleted and was
+never committed. Do not recreate it without the maintainer asking.
 
-The maintainer explicitly asked the agent to create the signing key. The permanent RSA 4096-bit
-PKCS12 key is now outside the repository at `%USERPROFILE%\.veyl-signing\veyl-release.p12`. A random
-256-bit password is encrypted for this Windows account in `veyl-release.password.dpapi`; directory
-access is restricted to the current user and SYSTEM. All four GitHub signing secrets are
-configured. No private key or password was printed, put in command arguments, or committed.
+CI uses the explicit `scripts/*.test.mjs` glob accepted by Node 24. Signed Android builds run the
+available debug app unit-test task plus core tests, release lint and signed packaging; AGP does
+not create a release app unit-test task here. Workflow action tags were checked against their
+current upstream releases and pass `actionlint`. The latest MSVC environment action still declares
+Node 20; GitHub runs it with Node 24, and Windows builds pass.
 
-The local signed release APK builds and `apksigner verify` confirms the permanent certificate:
-`a04d54b735f80adbf8c2549afb74883b019781e3340c57c5755ded7a0ac697c3` (SHA-256). The refreshed
-[Build Veyl run](https://github.com/jacobbalane/Veyl/actions/runs/39705982601) also passed all checks,
-both installers and the debug Android build before signing secrets were configured. CI now selects
-the release APK when the configured secrets are available.
+## Published preview
 
-The first signed CI run found that AGP does not create `:app:testReleaseUnitTest` for this app's
-current configuration. The release path now runs the existing debug app unit-test task and JVM
-core tests, then release lint and signed packaging. The app task still has no test sources; the
-two core tests supply the current Android logic coverage. The corrected
-[signed Build Veyl run](https://github.com/jacobbalane/Veyl/actions/runs/39707563027) passed every
-build job. Its downloaded release APK matches its checksum and the permanent signing certificate.
+**M0.10 publication is complete; device checks remain pending.** With the maintainer's explicit
+approval to create the tag and publish, `v0.0.1` points to
+`f59be9e5ec5b8c0ef4a9e02e72cb8502f5697b00`. Its
+[tag build](https://github.com/jacobbalane/Veyl/actions/runs/39711334196) passed all five jobs,
+including attestations and the draft release. The changelog and release body contain the exact
+preview notice. Version checks, lockfile refresh, fourteen Node tests and formatting passed.
 
-At the maintainer's request, all four signing values were exported to
-`../VEYL_SIGNING_SECRETS.txt`, outside the Git repository, for saving in 1Password. This temporary
-export was plaintext, restricted to the current user and SYSTEM, and was never committed. The file
-is now absent; confirmation that its contents were saved in 1Password is still pending. Do not
-recreate the deleted plaintext export without the maintainer asking.
+[0.0.1 — preview build (no features yet)](https://github.com/jacobbalane/Veyl/releases/tag/v0.0.1)
+was published on 2026-10-22. Before publication, all six files were downloaded from the draft:
+both Windows installers, the signed APK and their three SHA-256 files. Checksums, installer/APK
+versions, Android application ID and permanent signing certificate passed. Each binary's GitHub
+attestation verified against this repository, `.github/workflows/build.yml`, `refs/tags/v0.0.1`
+and the exact source commit, with self-hosted runners denied.
 
-Still required for M0.9: confirm that the keystore backup and its actual password are saved in
-1Password. The protected local signing files remain the other safe copy, as required by plan
-section 10.7. Instructions are in `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`; the DPAPI
-file alone is not a portable password backup. No tags or releases exist yet.
-
-**M0.10 preparation:** Added the exact 0.0.1 preview changelog section dated 2026-10-22; later feature
-notes remain under Unreleased. The existing version sources stay at 0.0.1. Version refresh,
-both lockfile refreshes, tag-context version validation, release-note extraction, fourteen Node
-tests, formatting and the production site build passed. CI rebuilds both installers and the signed
-APK from the release preparation commit. Tag-only provenance and draft release checks still need
-the maintainer's tag. No tag or release has been created.
-
-After preparation passes, create/push the tag, inspect the draft's x64 and ARM64 installers, signed
-APK, three checksums and attestations, then publish the preview. Plan section 0.1.7 and AGENTS.md
-reserve tag creation and publication for the maintainer unless explicitly overridden. Keep M0
-incomplete until the site downloads work and the device results below are recorded.
+After publication, the unauthenticated latest-release API returned this release and all six
+assets. Chrome clicked the live site's real download menu links for Windows x64, Windows ARM64
+and Android. All three public downloads succeeded and matched both the draft's verified hashes
+and their public checksum files. All three site pages passed at desktop and 360 px widths, with
+no page errors, missing first-party assets or horizontal overflow. Evidence and downloaded files
+remain ignored under `.cache/release/v0.0.1-tag/`, `.cache/release/v0.0.1-public/` and `.cache/qa/`.
 
 ## Waiting on device tests
 
-After successful CI and maintainer publication:
+The preview is published and its public downloads are verified. The maintainer still needs to:
 
-1. Download the Windows installer and Android APK from the website. Confirm the appropriate x64
-   or ARM64 download, compare SHA-256 checksums and verify GitHub attestations.
+1. Download the appropriate Windows installer and Android APK from
+   [the website](https://jacobbalane.github.io/Veyl/). Public download integrity and attestations
+   were verified above; install the files on the actual devices.
 2. On Windows, install and open Veyl. Confirm the title, tabs and version; actions stay unavailable.
    Close the window, reopen it from **Open Veyl** in the tray, launch a second instance, then use
    **Quit Veyl**. Report any failure.

@@ -1,11 +1,12 @@
 # Release and maintainer setup
 
-M0 is in progress. These commands document maintainer setup and releases. GitHub CLI sign-in,
-the public repository, Pages from Actions, repository settings and Android signing secrets are
-configured. Independent signing backups and the preview release are still pending. Wait for green
-CI before tagging a preview.
-Create the signing key outside the repository; keep its password private and keep it in a password
-manager and one other safe place.
+[The 0.0.1 preview](https://github.com/jacobbalane/Veyl/releases/tag/v0.0.1) is published and its
+Windows x64, Windows ARM64 and Android downloads work from the live website. Checksums, the
+permanent Android signer and all three build attestations passed verification. M0 still needs the
+maintainer's installation and launch results; see [progress.md](progress.md#waiting-on-device-tests).
+
+GitHub CLI sign-in, the public repository, Pages from Actions, repository settings and Android
+signing secrets are configured. The maintainer confirmed the signing backup in 1Password.
 
 On this machine, steps 1–5 are configured. At the maintainer's request, the agent generated the
 permanent RSA 4096-bit key and a random 256-bit password, then configured all four signing secrets.
@@ -13,10 +14,10 @@ The key is `%USERPROFILE%\.veyl-signing\veyl-release.p12`; its password is encry
 DPAPI in the same directory. Access is restricted to this Windows user and SYSTEM. A signed local
 release APK verifies against the generated certificate. Reuse this key; do not generate another.
 
-Before releasing, follow `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt` to save the actual
-password and the keystore backup in 1Password. The protected local signing files remain the other
-safe copy. The DPAPI file depends on the current Windows account and is not a portable password
-backup. The temporary text export has been removed; confirmation of the 1Password backup is pending.
+The actual password and the keystore backup are saved in 1Password, as confirmed by the maintainer.
+Backup instructions remain in `%USERPROFILE%\.veyl-signing\BACKUP-INSTRUCTIONS.txt`. The protected
+local signing files remain the other safe copy. The DPAPI file depends on the current Windows account and is not a portable password
+backup. The temporary text export has been removed.
 
 The numbered commands below document the original setup. If PowerShell cannot find `gh`,
 close every Windows Terminal window and reopen it, or use `& "C:\Program Files\GitHub CLI\gh.exe"`
@@ -75,7 +76,7 @@ the website's buttons download those files.
 
 ## The 0.0.1 pipeline check
 
-The preview changelog section is prepared in CHANGELOG.md:
+The published preview's changelog section in CHANGELOG.md is:
 
 ```markdown
 ## 0.0.1 (2026-10-22)
@@ -83,25 +84,21 @@ The preview changelog section is prepared in CHANGELOG.md:
 Preview build. Nothing works yet; this release tests downloads.
 ```
 
-If publication happens on another date, update this date before tagging. Later feature notes stay
-under Unreleased. Preparation runs
-`node scripts/bump-version.mjs 0.0.1`, `npm run format:check`, `node --test "scripts/*.test.mjs"` and
-`node scripts/check-version.mjs`, then commit `chore(release): 0.0.1` and push main. After its checks
-pass and the signing backup is confirmed, the maintainer creates and pushes `v0.0.1`:
+Later feature notes stay under Unreleased. Preparation passed version/lockfile refresh, formatting,
+fourteen Node tests and tag-context version checks. The maintainer explicitly authorized the agent
+to create `v0.0.1` and publish this preview after confirming the 1Password backup, overriding the
+tag/release restriction for this release. The tag points to release preparation commit
+`f59be9e5ec5b8c0ef4a9e02e72cb8502f5697b00`.
 
-```powershell
-Set-Location 'C:\Users\balan\OneDrive\Documents\projects\Veyl'
-git tag v0.0.1
-git push origin v0.0.1
-```
+[The tag workflow](https://github.com/jacobbalane/Veyl/actions/runs/39711334196) built both installers
+and the signed APK, attested them and created the draft with six files. All draft checks passed
+before publication as **0.0.1 — preview build (no features yet)** on 2026-10-22. It is a regular
+GitHub release so the website's latest-release lookup can find it; its title and body identify the
+preview. The public menu links were then used to download all three binaries and verify their
+checksums. Do not recreate the tag or publish a second 0.0.1.
 
-The agent does not run these tag commands or publish the release without an explicit override of
-the rule in AGENTS.md and plan section 0.1.7. The draft-producing workflow runs only after the tag
-is pushed; a green main build alone does not publish downloads.
-
-Check the draft's six download files and attestations. Publish it as
-**0.0.1 — preview build (no features yet)**, then perform the installation-only checks in
-[progress.md](progress.md). Sensing, pairing and gesture checks apply to v0.1, not this foundation.
+Perform the installation-only checks in [progress.md](progress.md#waiting-on-device-tests).
+Sensing, pairing and gesture checks apply to v0.1, not this foundation.
 
 ## Releasing v0.1 and later
 
