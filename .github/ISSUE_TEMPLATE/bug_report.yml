@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Veyl did not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please include diagnostics, without recordings, pairing codes or keys.
+  - type: input
+    id: desktop-version
+    attributes:
+      label: Desktop app version
+    validations:
+      required: true
+  - type: input
+    id: phone-version
+    attributes:
+      label: Phone app version (if used)
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and processor (x64 or ARM64)
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone model and Android version (if used)
+  - type: input
+    id: source
+    attributes:
+      label: Sound source and playing app
+      description: PC or phone mode, then YouTube, YouTube Music, Veyl player, test sound or another app.
+  - type: input
+    id: meter
+    attributes:
+      label: Meter score and tip
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Copy diagnostics output
+      render: text

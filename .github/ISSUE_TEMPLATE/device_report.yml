@@ -1,0 +1,41 @@
+name: Device report
+description: Tell us how Veyl works with your phone or PC.
+labels: [device-report]
+body:
+  - type: markdown
+    attributes:
+      value: Share measurements and diagnostics only. Do not attach audio or secrets.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [Phone mode, PC mode]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Veyl versions (desktop and phone)
+    validations:
+      required: true
+  - type: textarea
+    id: phone
+    attributes:
+      label: Phone details (phone mode)
+      description: Model, Android version, sound-check microphone choice and score, sample rate, stereo or mono, and apps that share sound.
+  - type: textarea
+    id: pc
+    attributes:
+      label: PC details
+      description: Model or type, Windows version and processor, speakers and microphone, raw mode, and PC sound-check result.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Poke test results
+      description: Give the result with the test sound, and then with a song. Include the meter score and volume.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes and diagnostics
