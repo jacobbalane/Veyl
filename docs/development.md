@@ -78,6 +78,12 @@ The Windows host uses system DNS-SD and connects out; manual host/IPv4 plus port
 discovery is blocked. Pairings use current-user DPAPI and are bound to both identities. The engine
 worker currently measures levels through a bounded queue; it does not yet detect a hand or poke.
 
+`cargo run -p veyl-desktop --example audio_devices` reads Windows endpoint metadata and the mode
+recommendation without starting capture or changing the Windows defaults. M3P's monitor runs COM
+on its own thread and coalesces endpoint/default notifications. IDs stay opaque and case-sensitive;
+unknown bus or capability properties use conservative fallbacks. PC capture and its settings are
+the next M3P tasks.
+
 `cargo run -p veyl-lab -- scenarios` distinguishes available scenarios from M4's planned scenes.
 The M3 fake phone renders forty seconds of `poke_basic` with real delayed acoustic paths, filtered
 16-bit PCM, ten truth pokes and two streams of 4,000 ten-millisecond blocks. It does not yet run the

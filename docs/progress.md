@@ -399,7 +399,7 @@ test recordings and a fake phone allow end-to-end testing before hardware review
       diagnostics: block rates, levels, drops, RTT, arrival latency and battery.
 - [x] **M3.3** `veyl-lab fake-phone` and end-to-end test: pair, session, forty seconds of poke_basic,
       correct block counts and no decryption errors. Gesture checks begin in M6.
-- [ ] **M3.4** Desktop opt-in test recordings: dialog, Space marks, retention and `veyl-lab analyze`
+- [x] **M3.4** Desktop opt-in test recordings: dialog, Space marks, retention and `veyl-lab analyze`
       reading stream statistics.
 - [ ] **M3.5 [device]** D2/D10, thirty-minute stream with less than 0.1% drops and maintainer
       recordings R1–R10. Defer results to the final app review as requested.
@@ -508,7 +508,7 @@ and the ARM64 installer cross-build. The test waits for all twenty heartbeat rep
 of the final capture-state message; those messages can arrive in either order. No tag or release
 was created.
 
-**M3.4 implementation and local verification complete; CI pending.** Record a test is available on
+**M3.4 implementation and verification complete.** Record a test is available on
 Live and Help → Diagnostics while capture runs. Consent chooses 30, 60 or 120 seconds and optional
 Space marks. A visible banner counts down; Stop, capture ending, configuration changes and
 disconnect finalize the files. Audio is copied to the bounded disk queue directly from the sound
@@ -532,6 +532,11 @@ theme at minimum width. Native GUI/device verification remains deferred while th
 installed preview runs. The new recording metadata fixture is checked semantically by Rust and
 typed in TypeScript; JSON formatting remains Prettier's responsibility.
 
+M3.4 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39781727617) at
+`3d83910`: portable checks/end-to-end tests, Android tests/lint/APKs, native Windows x64
+tests/installer and the ARM64 installer cross-build. Website deployment passed. No release or tag
+was created; the published 0.0.1 preview is unchanged.
+
 ### Waiting on M3 device tests
 
 The maintainer requested the final app review after implementation. Keep these checks pending:
@@ -552,6 +557,37 @@ The maintainer requested the final app review after implementation. Keep these c
    recording. Keep Veyl focused and press Space after each real poke. After the saved message,
    use Open folder to find the local test; run `veyl-lab analyze DIR` to check its stream counts.
    Keep audio local. Record versions, devices, pass/fail and failures here; none has run yet.
+
+## M3P — PC mode
+
+**Goal:** use the PC's speakers and microphone through the same filtered source interface, without
+a phone. This milestone is marked parallel-ok in the plan; work begins while M3.4's builds run.
+
+- [ ] **M3P.1** Enumerate render/capture endpoints, form factors, raw support and Bluetooth;
+      default-device notifications and a hardware-based mode recommendation.
+- [ ] **M3P.2** WASAPI loopback/microphone threads, raw fallback, format conversion/resampling,
+      privacy filtering and timed ten-millisecond blocks behind a fake-able capture interface.
+- [ ] **M3P.3** Source switching, device settings/pickers, onboarding path, PC tips and diagnostics.
+- [ ] **M3P.4** Test-sound playback and Check this PC's sound.
+- [ ] **M3P.5** PC test recordings read by the lab analyzer.
+- [ ] **M3P.6 [device]** P1/P4/P5, optional ARM64 P7, and recordings R11–R13.
+
+**Acceptance:** CI unit tests pass, P1/P4/P5 pass and R11–R13 exist. Device checks remain pending
+for the maintainer's final review; this PC needs speakers for the acoustic checks.
+
+**Verify:** `cargo test -p veyl-desktop`; chosen devices produce both streams at 100 blocks/s.
+
+**M3P.1 foundation implemented; full CI pending.** A dedicated COM thread lists active render and
+capture endpoints, names, opaque case-sensitive IDs, form factors, raw support, bus-based Bluetooth
+and built-in hints, the default multimedia endpoints and battery availability. Notifications only
+wake the owner through a bounded channel; unregistering and releasing COM objects stay on that
+thread. Missing properties use conservative defaults, and a missing saved endpoint is never
+silently substituted. PC mode is recommended only with suitable speakers and a microphone plus a
+battery or two built-in devices. Three new tests and clippy pass. The read-only
+`cargo run -p veyl-desktop --example audio_devices` check found three render endpoints and two
+microphones here, reported no enumeration error, and recommended phone mode. It neither initialized
+nor captured audio. Real default-device changes, Bluetooth identification and acoustic checks stay
+pending. Production capture and the source/device interface follow in M3P.2/M3P.3.
 
 ## Dependency follow-up
 

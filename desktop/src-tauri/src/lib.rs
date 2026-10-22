@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod engine_host;
 pub mod events;
 pub mod pairings;
+pub mod pc_devices;
 pub mod recorder;
 mod settings;
 pub mod source;

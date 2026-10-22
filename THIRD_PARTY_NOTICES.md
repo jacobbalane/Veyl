@@ -67,6 +67,8 @@ These are direct external dependencies of the workspace crates, including build 
 | tracing-subscriber           | 0.3.23         | MIT               |
 | x25519-dalek                 | 3.0.0          | BSD-3-Clause      |
 | windows-sys                  | 0.61.2         | MIT OR Apache-2.0 |
+| windows                      | 0.62.2         | MIT OR Apache-2.0 |
+| windows-core                 | 0.62.2         | MIT OR Apache-2.0 |
 | zeroize                      | 1.9.1          | Apache-2.0 OR MIT |
 
 Hound is copyright © 2015 Ruud van Asseldonk. Its Apache 2.0 license is in
