@@ -63,11 +63,22 @@ impl PhoneSource {
         }
         self.control(EngineInput::Disconnected(generation)).await
     }
+    pub(crate) fn disconnect_now(&self, generation: u64) {
+        if let Some(recorder) = &self.recorder {
+            recorder.disconnected(generation);
+        }
+        let _ = self.sender.try_send(EngineInput::Disconnected(generation));
+    }
     pub(crate) fn phone_ready(&self, ready: &veyl_link::messages::Ready) {
         if let (Some(recorder), veyl_link::messages::Ready::Phone { device, .. }) =
             (&self.recorder, ready)
         {
             recorder.source_info(serde_json::json!(device), serde_json::json!({"desktop": env!("CARGO_PKG_VERSION"), "phone": device.app_version}));
+        }
+    }
+    pub(crate) fn source_info(&self, device: serde_json::Value, versions: serde_json::Value) {
+        if let Some(recorder) = &self.recorder {
+            recorder.source_info(device, versions);
         }
     }
     async fn control(&self, message: EngineInput) -> io::Result<()> {

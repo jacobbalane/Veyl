@@ -84,6 +84,14 @@ on its own thread and coalesces endpoint/default notifications. IDs stay opaque 
 unknown bus or capability properties use conservative fallbacks. PC capture and its settings are
 the next M3P tasks.
 
+M3P's capture backend now owns WASAPI on two capture threads, normalizes PCM/float formats,
+downmixes channels, uses Rubato sinc resampling when needed, and filters at 8 kHz before any
+consumer sees audio. Raw buffers are never saved: the conversion queue holds about twenty
+milliseconds, and the shared queue holds up to two seconds of filtered ten-millisecond PCM blocks.
+QPC timestamps use the API's 100 ns units; invalid timestamps stay unknown. Discontinuities reset
+history and retain frame gaps. Unit tests use a fake backend and do not open real capture devices.
+Production source selection and device pickers follow in M3P.3; native acoustic tests remain pending.
+
 `cargo run -p veyl-lab -- scenarios` distinguishes available scenarios from M4's planned scenes.
 The M3 fake phone renders forty seconds of `poke_basic` with real delayed acoustic paths, filtered
 16-bit PCM, ten truth pokes and two streams of 4,000 ten-millisecond blocks. It does not yet run the

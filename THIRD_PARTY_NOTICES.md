@@ -45,12 +45,14 @@ These are direct external dependencies of the workspace crates, including build 
 | Crate                        | Locked version | License           |
 | ---------------------------- | -------------- | ----------------- |
 | aes-gcm                      | 0.11.1         | Apache-2.0 OR MIT |
+| audioadapter-buffers         | 5.2.0          | MIT OR Apache-2.0 |
 | base64                       | 0.23.1         | MIT OR Apache-2.0 |
 | getrandom                    | 0.4.3          | MIT OR Apache-2.0 |
 | hkdf                         | 0.13.0         | MIT OR Apache-2.0 |
 | hmac                         | 0.13.0         | MIT OR Apache-2.0 |
 | hound                        | 3.5.1          | Apache-2.0        |
 | proptest                     | 1.12.0         | MIT OR Apache-2.0 |
+| rubato                       | 5.0.1          | MIT OR Apache-2.0 |
 | rustfft                      | 6.4.1          | MIT OR Apache-2.0 |
 | serde                        | 1.0.229        | MIT OR Apache-2.0 |
 | serde_json                   | 1.0.154        | MIT OR Apache-2.0 |
@@ -73,6 +75,10 @@ These are direct external dependencies of the workspace crates, including build 
 
 Hound is copyright © 2015 Ruud van Asseldonk. Its Apache 2.0 license is in
 `assets/licenses/hound-Apache-2.0.txt`; desktop installers ship it as `licenses/hound.txt`.
+
+Rubato and audioadapter-buffers are by Henrik Enquist. Copies of their MIT licenses are in
+`assets/licenses/rubato-MIT.txt` and `assets/licenses/audioadapter-buffers-MIT.txt` and ship in the
+desktop installer's `licenses` folder.
 
 ## Android dependencies
 

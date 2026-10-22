@@ -563,7 +563,7 @@ The maintainer requested the final app review after implementation. Keep these c
 **Goal:** use the PC's speakers and microphone through the same filtered source interface, without
 a phone. This milestone is marked parallel-ok in the plan; work begins while M3.4's builds run.
 
-- [ ] **M3P.1** Enumerate render/capture endpoints, form factors, raw support and Bluetooth;
+- [x] **M3P.1** Enumerate render/capture endpoints, form factors, raw support and Bluetooth;
       default-device notifications and a hardware-based mode recommendation.
 - [ ] **M3P.2** WASAPI loopback/microphone threads, raw fallback, format conversion/resampling,
       privacy filtering and timed ten-millisecond blocks behind a fake-able capture interface.
@@ -577,7 +577,7 @@ for the maintainer's final review; this PC needs speakers for the acoustic check
 
 **Verify:** `cargo test -p veyl-desktop`; chosen devices produce both streams at 100 blocks/s.
 
-**M3P.1 foundation implemented; full CI pending.** A dedicated COM thread lists active render and
+**M3P.1 foundation implemented and verified.** A dedicated COM thread lists active render and
 capture endpoints, names, opaque case-sensitive IDs, form factors, raw support, bus-based Bluetooth
 and built-in hints, the default multimedia endpoints and battery availability. Notifications only
 wake the owner through a bounded channel; unregistering and releasing COM objects stay on that
@@ -588,6 +588,31 @@ battery or two built-in devices. Three new tests and clippy pass. The read-only
 microphones here, reported no enumeration error, and recommended phone mode. It neither initialized
 nor captured audio. Real default-device changes, Bluetooth identification and acoustic checks stay
 pending. Production capture and the source/device interface follow in M3P.2/M3P.3.
+
+M3P.1 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39784617168) at `697ad75`,
+including both Windows installers, x64 native tests, Android and portable checks. No tag or release
+was created.
+
+**M3P.2 implemented locally; CI pending.** Separate capture owners initialize WASAPI loopback and
+microphone streams, try raw mode and event callbacks with the documented shared/polling fallbacks,
+and request MMCSS Pro Audio scheduling. COM objects, events, QPC positions and acquired buffers
+stay on those threads; each buffer is released even when processing fails. Neither stream starts
+until both initialize and the shared source is configured. Failed startup closes its peer; stop
+or a dropped owner cannot restart an old stream. See decision 0008 for capability fallbacks.
+
+Conversion supports signed 16/24/32-bit PCM, 24 valid bits in a 32-bit container, float32, padding,
+and downmixing to at most two channels. Rubato sinc resampling produces 48 kHz before the privacy
+filter and ten-millisecond block cutter. Blocks carry raw levels, QPC capture times, gap/clipping
+flags and continuous frame positions. Timestamp errors stay unknown. Discontinuities clear
+partial data, filter/resampler history and preserve lost frame spans. No raw buffer reaches the
+engine, recording worker, network or logs. PC transport arrival delay is unavailable.
+
+All 31 desktop tests and clippy pass; seven new tests cover formats, stereo isolation/downmixing,
+voice suppression and high-band pitch at four input rates, timestamps, gaps, failed preparation
+and two fake capture threads feeding the engine plus a consented PC recording read by the lab.
+The required DSP/simulator/lab release tests pass. No real PC audio was captured or played. The
+source/device settings and production startup wiring are M3P.3; real capture and acoustics remain
+for the final P1/P4/P5 checks.
 
 ## Dependency follow-up
 
