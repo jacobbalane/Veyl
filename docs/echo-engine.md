@@ -16,6 +16,12 @@ mode. Without timestamps it searches one second either side of the initial frame
 difference. It requires two good GCC-PHAT estimates a second apart and rechecks every five seconds.
 Window origins are included when converting correlation results to absolute lag.
 
+The lag search tolerates zero-filled holes covering at most 2% of each input, with no gap
+longer than 10 ms. These limits are `align_max_missing_fraction` and `align_max_gap_ms`; zero
+disables tolerance. The span must stay inside received, retained audio. Processing windows
+still require every frame, and gaps still clear gestures and suspend confirmation for 300 ms.
+See [decision 0018](decisions/0018-align-through-bounded-short-gaps.md).
+
 `Aligner::begin_hop` predicts clock drift and folds whole frames into the lag. Its returned fraction
 delays the reference spectra with a phase ramp. After echo estimation, `observe_fast` updates the
 two-state delay/rate filter from the direct path; the caller skips feedback on invalid or impulse
@@ -28,6 +34,11 @@ interpolation support. Missing support invalidates the hop; future reference del
 without advancing alignment. Integer frame origins stay integer, and sampling positions are
 relative. The estimator then applies no additional phase ramp. See
 [decision 0016](decisions/0016-within-window-reference-clock-compensation.md).
+
+The sampler combines eight independent tap sums for contiguous, fully supported input. Partial
+support and callbacks retain scalar sampling. The kernel is unchanged; addition order changes
+rounding within the tested numerical bound. See
+[decision 0019](decisions/0019-parallel-fractional-sampler-sums.md).
 
 `EchoEstimator` receives channel-major windows: N samples for reference channel 0, then channel 1;
 the microphone uses the same layout. Defaults are a periodic 2048-frame Hann window and a

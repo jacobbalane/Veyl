@@ -1,6 +1,6 @@
 # Implementation progress
 
-Last updated: 2026-10-23.
+Last updated: 2026-10-24.
 
 Section 0 followed: the full plan and the listed Glim references were read before writing source.
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
@@ -916,6 +916,27 @@ clippy pass. Full volume-step counts are unchanged at 8/10, 9/10 and 8/10 matche
 the control semantics but does not close the remaining acoustic recall gate. The turn guard and
 broader measurement probe [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39926861980)
 at `3668c36`, including both Windows installers and signed Android.
+
+**M4.5 short-gap alignment.** GCC-PHAT can use zero-filled holes within received, retained
+audio, limited to 2% missing input and a longest gap of 10 ms. Both limits are configurable;
+zero disables tolerance. Processing-window validity, pending-history clearing and the 300 ms
+post-gap suspension remain unchanged. Tests cover both sample rates, signed lags, unrelated
+input, long gaps and strict mode. Full dropout seeds now lock at 2.33 seconds, including seed 2
+which previously took 5.85 seconds. Matches remain 8/10, 5/10 and 4/10; all three have no extra
+pokes. [Decision 0018](decisions/0018-align-through-bounded-short-gaps.md) records this startup
+correction. It does not close dropout recall or M4.5.
+
+**M4.8 resampling cost and engine properties.** The contiguous fractional sampler now uses
+eight independent sums while retaining 64 taps, its phase table and scalar edge behavior.
+Numerical regressions cover even tap remainders and independent high-band reconstruction at
+both rates. An isolated desktop comparison reduces the candidate's median processing cost
+from 45.81 to 29.32 ms per second of audio; some repetitions still exceed 30 ms. Target laptop
+performance remains unverified. [Decision 0019](decisions/0019-parallel-fractional-sampler-sums.md)
+records the rounding and measurement limits. A new integration test checks zero warmed
+allocation operations and exact replay of every exposed event and snapshot field for defaults
+and candidate, including scheduled alignment rechecks. The counter itself is calibrated, and
+new output fields require explicit test coverage. Full scenario replays preserve the basic,
+clock and negative-case results; the remaining gesture gates still fail. M4.8 remains open.
 
 ## Dependency follow-up
 

@@ -56,6 +56,44 @@ impl<const TAPS: usize> FractionalSinc<TAPS> {
     }
     #[inline]
     pub fn read(&self, input: &[f32], at: f64) -> f32 {
+        if at.is_finite()
+            && at >= 0.0
+            && at < input.len() as f64
+            && input.len() <= isize::MAX as usize / 4
+        {
+            let base = at.floor() as usize;
+            let left = TAPS / 2 - 1;
+            if let Some(first) = base.checked_sub(left) {
+                if let Some(samples) = input.get(first..first + TAPS) {
+                    let phase = (at - base as f64) * 1024.0;
+                    let lower = (phase.floor() as usize).min(1023);
+                    let mix = (phase - lower as f64) as f32;
+                    let low = &self.weights[lower];
+                    let high = &self.weights[lower + 1];
+                    // Independent sums let the compiler process several taps together.
+                    const LANES: usize = 8;
+                    let mut sums = [0.0_f32; LANES];
+                    for ((samples, low), high) in samples
+                        .as_chunks::<LANES>()
+                        .0
+                        .iter()
+                        .zip(low.as_chunks::<LANES>().0)
+                        .zip(high.as_chunks::<LANES>().0)
+                    {
+                        for lane in 0..LANES {
+                            let weight = low[lane] + mix * (high[lane] - low[lane]);
+                            sums[lane] += samples[lane] * weight;
+                        }
+                    }
+                    let mut value = sums.iter().sum::<f32>();
+                    for i in (TAPS / LANES * LANES)..TAPS {
+                        let weight = low[i] + mix * (high[i] - low[i]);
+                        value += samples[i] * weight;
+                    }
+                    return value;
+                }
+            }
+        }
         self.read_with(at, input.len(), |i| input[i])
     }
     /// The callback reads one channel at a valid frame index. Edges are extended with zeros.
@@ -85,6 +123,79 @@ impl<const TAPS: usize> FractionalSinc<TAPS> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn compare_scalar<const TAPS: usize>() {
+        let sampler = FractionalSinc::<TAPS>::new().unwrap();
+        let mut state = 47_u64;
+        let mut random = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 40) as f64 / 16777216.0
+        };
+        let input: Vec<_> = (0..512).map(|_| (random() * 2.0 - 1.0) as f32).collect();
+        for at in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, 512.0]
+            .into_iter()
+            .chain((0..4096).map(|_| random() * 512.0))
+        {
+            let actual = sampler.read(&input, at);
+            let expected = sampler.read_with(at, input.len(), |i| input[i]);
+            assert!((actual - expected).abs() <= 2e-6);
+            if !at.is_finite()
+                || at < (TAPS / 2 - 1) as f64
+                || at.floor() + (TAPS / 2) as f64 >= input.len() as f64
+            {
+                assert!(actual.to_bits() == expected.to_bits());
+            }
+        }
+        for length in [0, 1, TAPS - 1] {
+            let input = &input[..length];
+            for at in [0.0, 0.5, length as f64 - 0.25] {
+                assert!(
+                    sampler.read(input, at).to_bits()
+                        == sampler.read_with(at, input.len(), |i| input[i]).to_bits()
+                );
+            }
+        }
+    }
+    #[test]
+    fn parallel_tap_sums_preserve_scalar_edges_and_even_tap_remainders() {
+        compare_scalar::<8>();
+        compare_scalar::<10>();
+        compare_scalar::<32>();
+        compare_scalar::<34>();
+        compare_scalar::<64>();
+        compare_scalar::<66>();
+        compare_scalar::<126>();
+        compare_scalar::<128>();
+    }
+    #[test]
+    fn sixty_four_taps_preserve_high_band_reconstruction_at_both_supported_rates() {
+        let sampler = FractionalSinc::<64>::new().unwrap();
+        for rate in [44100.0, 48000.0] {
+            let signal = |at: f64| {
+                [8100.0, 12431.0, 16853.0, 19991.0]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, hz)| {
+                        (std::f64::consts::TAU * hz * at / rate + i as f64 * 0.37).sin() * 0.1
+                    })
+                    .sum::<f64>()
+            };
+            let input: Vec<_> = (0..8192).map(|i| signal(i as f64) as f32).collect();
+            for drift in [-0.0002, 0.0, 0.0002] {
+                let mut error = 0.0;
+                let mut power = 0.0;
+                for i in 64..8128 {
+                    let at = i as f64 * (1.0 + drift) + 0.37123;
+                    let expected = signal(at);
+                    error += (sampler.read(&input, at) as f64 - expected).powi(2);
+                    power += expected * expected;
+                }
+                let relative = (error / power).sqrt();
+                assert!(relative < 0.0001, "High-band relative error {relative}.");
+            }
+        }
+    }
     #[test]
     fn fractional_sampling_preserves_integer_frames_dc_and_high_band_phase_through_clock_warp() {
         let sampler = FractionalSinc::<32>::new().unwrap();

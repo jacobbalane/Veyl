@@ -52,6 +52,12 @@ The candidate remains opt-in. A seed-2 sweep of five relative-floor values from 
 does not improve the seven varied matches and increases false detections. Nine window/time
 combinations (512/1024/2048 frames and 5/10/20 ms) also remain below the varied recall gate.
 
+A separate comparison applies the existing High preset uniformly across selected cases, with
+the same signal-processing candidate. Varied matches improve to 19/30, 17/30 and 18/30, while
+hover produces 9, 8 and 4 false pokes. Typing with pokes reaches 6/10 for each seed; stereo and
+PC still match none. High therefore does not close the accuracy gates and is not the default.
+The lab probe's `--sensitivity=high` option records the preset in every measurement.
+
 Stronger ridge, frequency smoothing, full covariance whitening and an overlap-save adaptive
 canceller did not meet the gates. Their prototypes were removed. A per-pair normalization
 experiment improved a controlled gain test but did not improve hover or PC detection; it was
@@ -103,3 +109,33 @@ default-gesture development probe. [Full lab exports and sweeps](lab.md) now sup
 tuning pass. The seed-1 forty-second candidate report measures median truth-to-detect delay
 57.98 ms, p95 98.25 ms and median confirmation 18.67 ms. Its motion heatmap was inspected.
 Performance and allocation checks remain M4.8 work.
+
+## Startup and processing cost
+
+Bounded sparse alignment ([decision 0018](decisions/0018-align-through-bounded-short-gaps.md))
+reduces dropout seed 2's first lock from 5.85 to 2.33 seconds. All three dropout seeds now lock
+at 2.33 seconds. Recall stays 8/10, 5/10 and 4/10, with zero extra pokes. Other full candidate
+counts above are unchanged in the latest 54-case replay. Hop validity and the 300 ms post-gap
+suspension still apply; faster startup alone does not establish reliable gestures.
+
+An isolated release comparison on a Ryzen 5 7600X uses identical synthetic 2-reference,
+2-microphone input at 48 kHz, ten seconds of warm-up and ten seconds measured. Both configurations
+select Mono; five-second alignment rechecks remain enabled. Six clean timings per configuration
+measure the complete push/process calls:
+
+| Sampler accumulation   | Median ms per second of audio |       Range |
+| ---------------------- | ----------------------------: | ----------: |
+| One serial sum         |                         45.81 | 45.03-46.24 |
+| Eight independent sums |                         29.32 | 28.82-30.09 |
+
+Both keep the 64-tap kernel and phase table, allocate nothing in warmed push/process calls,
+and replay every exposed event and snapshot field exactly within the same build. Reordered
+sums differ from the scalar sampler by less than 1e-6 for normalized test input. Independent
+64-tap high-band reconstruction stays below 1e-4 relative RMS at 44.1 and 48 kHz. These are
+development-desktop measurements, not the specified older laptop. Some repetitions exceed
+30 ms, so M4.8's hardware budget remains unverified. See
+[decision 0019](decisions/0019-parallel-fractional-sampler-sums.md).
+
+`crates/veyl-sim/tests/engine_properties.rs` checks warmed allocation operations and bitwise
+replay for both defaults and the opt-in candidate. It deliberately avoids a wall-clock limit in
+shared CI; target-hardware timing remains a separate measurement.
