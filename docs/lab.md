@@ -72,3 +72,7 @@ Repeat with seeds 2 and 3. To select cases, append names after the seed. The pro
 specified durations, prints one JSON measurement per case and exits unsuccessfully on failed
 gesture checks. It is a development probe; the complete CI gates, including meter checks and
 stereo-mode selection, remain separate. The current candidate fails several cases.
+
+Use `--sensitivity=low`, `--sensitivity=normal` or `--sensitivity=high` after the seed to compare
+an existing preset. One preset applies to every case in that run and is included in each JSON
+measurement. The default remains Normal. No preset is selected from truth labels.
