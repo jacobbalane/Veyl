@@ -31,6 +31,11 @@ Eight-tap fractional delays follow trajectories every sixteen samples. Microphon
 ambient typing, fan or speech precede clipping and filtering. Lost blocks retain absolute frame
 positions and flag the next received block. Microphone timestamps follow the simulated clock.
 
+For nonzero clock drift, the completed acoustic mixture is sampled on the microphone clock with
+a 64-tap phase-interpolated sinc. This avoids numerical amplitude changes in stationary returns
+as the clock phase advances. See [decision 0015](decisions/0015-microphone-clock-conversion.md).
+Regenerate older drifting/PC fixtures before comparing engine profiles with this renderer.
+
 Bright, Dull, Compressed16k and Gappy variants share the generated test sound. Gappy has one
 second of silence every four seconds, as specified. PC scenes place two speakers forty
 centimetres apart, use separate clocks at 150 ppm and put the hand twenty-five centimetres from

@@ -10,6 +10,55 @@ fn power(signal: &[f32]) -> f64 {
         .sum::<f64>()
         / signal.len().max(1) as f64
 }
+
+#[test]
+fn microphone_clock_conversion_does_not_modulate_a_stationary_high_band_return() {
+    for ppm in [-200.0, 200.0] {
+        let mut scene = Scene::phone(1, 1.0);
+        scene.clock_drift_ppm = ppm;
+        scene.volume = 0.05;
+        scene.mic_noise_dbfs = -160.0;
+        scene.mics.truncate(1);
+        scene.statics.clear();
+        scene.music = Music::Samples(
+            (0..48000)
+                .map(|i| {
+                    let value =
+                        (std::f64::consts::TAU * 20000.0 * i as f64 / 48000.0).sin() as f32 * 0.4;
+                    [value; 2]
+                })
+                .collect(),
+        );
+        let rendered = scene::render(&scene).unwrap();
+        let frequency = std::f64::consts::TAU * 20000.0 * (1.0 + ppm * 1e-6) / 48000.0;
+        let mut minimum = f64::INFINITY;
+        let mut maximum = 0.0_f64;
+        for start in (12000..45000).step_by(240) {
+            let (mut cc, mut ss, mut cs, mut xc, mut xs) = (0.0, 0.0, 0.0, 0.0, 0.0);
+            for i in start..start + 240 {
+                let (sin, cos) = (frequency * i as f64).sin_cos();
+                let value = rendered.mic[i] as f64;
+                cc += cos * cos;
+                ss += sin * sin;
+                cs += cos * sin;
+                xc += value * cos;
+                xs += value * sin;
+            }
+            let determinant = cc * ss - cs * cs;
+            let amplitude =
+                ((xc * ss - xs * cs) / determinant).hypot((xs * cc - xc * cs) / determinant);
+            minimum = minimum.min(amplitude);
+            maximum = maximum.max(amplitude);
+        }
+        let ripple = 20.0 * (maximum / minimum).log10();
+        eprintln!("clock {ppm} ppm: stationary 20 kHz amplitude ripple {ripple:.6} dB");
+        assert!(
+            ripple < 0.02,
+            "Clock conversion changed a stationary return's amplitude."
+        );
+        assert!(rendered.labels.is_empty());
+    }
+}
 #[test]
 fn acoustic_delay_and_clock_scenarios_lock_from_pcm_and_capture_timestamps_within_three_seconds() {
     use veyl_dsp::{

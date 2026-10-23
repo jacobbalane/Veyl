@@ -872,6 +872,15 @@ inspected. A four-combination sweep reproduces the successful candidate and fail
 These are synthetic measurements. No R1–R10 recordings exist here, and full gesture acceptance
 remains pending. M4.8's performance/allocation checks and the remaining M4.5 tuning follow.
 
+**M4.5 clock-fixture correction.** Nonzero-clock scenes now render the acoustic mixture before
+converting it to the microphone clock. This removes fractional-kernel amplitude modulation of
+stationary paths without changing geometry, echo strengths, trajectories or accuracy thresholds.
+The independent 20 kHz regression measures 0.0026–0.0031 dB ripple for ±200 ppm, below 0.02 dB.
+[Decision 0015](decisions/0015-microphone-clock-conversion.md) records the change. The required
+DSP/simulator/lab release suite and whole-workspace clippy pass, including existing drift,
+meter and phone-candidate regressions. Older drifting/PC fixtures need regeneration. M4.5's
+gesture gates remain open; within-window clock compensation is the next experiment.
+
 ## Dependency follow-up
 
 [Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the

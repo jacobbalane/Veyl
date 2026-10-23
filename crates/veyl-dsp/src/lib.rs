@@ -9,6 +9,7 @@ pub mod filters;
 pub mod meter;
 pub mod motion;
 pub mod poke;
+pub mod resample;
 pub mod ring;
 pub mod sound_check;
 pub mod testsound;

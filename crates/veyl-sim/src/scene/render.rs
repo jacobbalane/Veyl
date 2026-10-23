@@ -6,6 +6,7 @@ use crate::{
 };
 use veyl_dsp::{
     filters::{Biquad, PrivacyFilter},
+    resample::FractionalSinc,
     testsound::BrightLoop,
 };
 const SPEED: f64 = 343.42;
@@ -148,8 +149,13 @@ pub fn render(scene: &Scene) -> io::Result<Rendered> {
     let frames = blocks_count * (scene.fs / 100) as usize;
     let mut reference = music(scene, frames)?;
     let channels = scene.mics.len();
-    let mut mic = vec![0.0; frames * channels];
     let scale = 1.0 + scene.clock_drift_ppm * 1e-6;
+    let nominal_frames = if scene.clock_drift_ppm == 0.0 {
+        frames
+    } else {
+        frames.max((frames as f64 * scale).ceil() as usize + 32)
+    };
+    let mut mic = vec![0.0; nominal_frames * channels];
     let sinc = Lanczos::new();
     for (speaker_index, transducer) in scene.speakers.iter().enumerate() {
         let mut hi = Biquad::high_pass(
@@ -198,10 +204,10 @@ pub fn render(scene: &Scene) -> io::Result<Rendered> {
             }
             let diffuse = convolve(&speaker, &impulse);
             let mut paths = vec![(0.0_f64, 0.0_f32, 0.0_f64, 0.0_f32); scene.movers.len()];
-            for start in (0..frames).step_by(16) {
+            for start in (0..nominal_frames).step_by(16) {
                 for (index, mover) in scene.movers.iter().enumerate() {
                     let path = |frame: usize| {
-                        let point = mover.position(frame as f64 * scale / scene.fs as f64);
+                        let point = mover.position(frame as f64 / scene.fs as f64);
                         let a = distance(transducer.position, point).max(0.005);
                         let b = distance(point, microphone.position).max(0.005);
                         (
@@ -213,9 +219,9 @@ pub fn render(scene: &Scene) -> io::Result<Rendered> {
                     let far = path(start + 16);
                     paths[index] = (near.0, near.1, far.0, far.1);
                 }
-                for offset in 0..16.min(frames - start) {
+                for offset in 0..16.min(nominal_frames - start) {
                     let frame = start + offset;
-                    let at = frame as f64 * scale;
+                    let at = frame as f64;
                     let fraction = offset as f64 / 16.0;
                     let mut value =
                         sinc.read(&speaker, at - delay) + sinc.read(&diffuse, at - delay);
@@ -240,11 +246,30 @@ pub fn render(scene: &Scene) -> io::Result<Rendered> {
         }
     }
     for channel in 0..channels {
-        let room = room_noise(scene, frames, channel);
-        let mut noise = Noise::new(scene.seed ^ 0xabcd_5678_1234_9012 ^ channel as u64);
+        let room = room_noise(scene, nominal_frames, channel);
         for (frame, room) in room.into_iter().enumerate() {
+            mic[frame * channels + channel] += room;
+        }
+    }
+    if scene.clock_drift_ppm != 0.0 {
+        // Clock conversion samples the completed acoustic signal, not every path independently.
+        let clock = FractionalSinc::<64>::new().map_err(io::Error::other)?;
+        let mut converted = vec![0.0; frames * channels];
+        for frame in 0..frames {
+            for channel in 0..channels {
+                converted[frame * channels + channel] =
+                    clock.read_with(frame as f64 * scale, nominal_frames, |index| {
+                        mic[index * channels + channel]
+                    });
+            }
+        }
+        mic = converted;
+    }
+    for channel in 0..channels {
+        let mut noise = Noise::new(scene.seed ^ 0xabcd_5678_1234_9012 ^ channel as u64);
+        for frame in 0..frames {
             let value = &mut mic[frame * channels + channel];
-            *value = (*value + room + noise.sample() * db(scene.mic_noise_dbfs) * 3.0_f32.sqrt())
+            *value = (*value + noise.sample() * db(scene.mic_noise_dbfs) * 3.0_f32.sqrt())
                 .clamp(-1.0, 1.0);
         }
     }
