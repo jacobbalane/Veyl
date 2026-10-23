@@ -1,4 +1,44 @@
 //! Source-independent, borrowed input. The engine does not own a socket or capture device.
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Sensitivity {
+    Low,
+    #[default]
+    Normal,
+    High,
+}
+impl Sensitivity {
+    pub fn z_on(self) -> f32 {
+        match self {
+            Self::Low => 12.0,
+            Self::Normal => 8.0,
+            Self::High => 5.0,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RangePreset {
+    Near,
+    #[default]
+    Normal,
+    Far,
+}
+impl RangePreset {
+    pub fn limits_cm(self) -> (f32, f32) {
+        (
+            4.0,
+            match self {
+                Self::Near => 25.0,
+                Self::Normal => 40.0,
+                Self::Far => 55.0,
+            },
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct StreamFormat {
     pub sample_rate: u32,

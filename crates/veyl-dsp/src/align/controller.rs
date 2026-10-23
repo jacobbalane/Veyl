@@ -171,7 +171,23 @@ impl Aligner {
         self.residual = None;
         Some(change)
     }
-    /// Call once per valid hop, before choosing the reference window and applying its phase ramp.
+    /// Previewing lets the caller wait for the matching reference without advancing the filter.
+    pub fn preview_hop(&self, microphone_frame: u64) -> Option<(i64, f64)> {
+        if !self.locked() {
+            return None;
+        }
+        let elapsed = self
+            .hop_frame
+            .map_or(Some(self.config.hop as u64), |previous| {
+                microphone_frame
+                    .checked_sub(previous)
+                    .filter(|elapsed| *elapsed > 0)
+            })?;
+        let phase = self.drift.fraction() + self.drift.ppm() * 1e-6 * elapsed as f64;
+        let whole = (phase + 0.5).floor() as i64;
+        Some((self.lag.checked_add(whole)?, phase - whole as f64))
+    }
+    /// Call once per available hop, before applying its phase ramp; skip feedback on invalid hops.
     pub fn begin_hop(&mut self, microphone_frame: u64) -> Option<(i64, f64)> {
         if !self.locked() {
             return None;

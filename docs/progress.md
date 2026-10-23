@@ -709,7 +709,7 @@ starts while M3P's final Windows/Android packaging runs. Local M3P checks and po
       `veyl-lab sim`.
 - [x] **M4.2** GCC-PHAT alignment, locking/rechecking and clock-drift tracking.
 - [x] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
-- [ ] **M4.4** Normalization, background gating, motion floor/features and Hand events.
+- [x] **M4.4** Normalization, background gating, motion floor/features and Hand events.
 - [ ] **M4.5** Poke detection and presets; poke scenario gates.
 - [ ] **M4.6** Meter factors, score and tip priority; meter scenario gates.
 - [ ] **M4.7** Full lab analysis outputs, motion plot and sweep; analyze R1–R10 if supplied.
@@ -776,6 +776,33 @@ All 35 portable release tests pass, including the fifteen acoustic feedback runs
 0.3-tap limits after five seconds. The longest measured positive-clock PC residual was 0.2915
 taps. Whole-workspace clippy, Rust formatting and repository formatting pass. M4.2 and M4.3's
 offline components are complete; complete-engine scenario recall/precision gates remain open.
+
+M4.2/M4.3 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39891194215) at
+`aec1681`: portable checks, native Windows tests and both installers, plus Android tests/lint/APKs.
+
+**M4.4 implemented and verified.** Direct-path complex gain normalization removes supported volume
+and phase changes. Out-of-range gain/phase jumps preserve the background and request a fast-model
+reset with a 300 ms suspension. Background learning slows during the first three seconds of hand
+presence, then returns to its normal rate. Settling measures changes before copying the current
+model so the floor can learn actual noise. The motion stage computes weighted energy, a gated
+floor, tap smoothing, range/peakiness features, presence hysteresis, filtered distance and the
+60-value motion row. Presets share the plan's thresholds and ranges.
+
+The portable Engine now joins buffering/alignment, fast maps, background and motion. It emits
+state/alignment/warning/Hand events and per-hop feature records; snapshot consumes the accumulated
+motion maximum. Capture/transport, files and actions stay outside it. Valid windows after a gap
+resume learning during the detection suspension. Initial stereo selection preserves the longer
+startup settling period. A measured startup bug that froze learning and shortened settling was
+fixed before acoustic verification.
+
+All 42 portable release tests pass: 24 DSP tests, simulator catalogue/feedback/engine tests and
+the lab/Link tests. Whole-workspace clippy and formatting pass. Tests cover normalization/jumps,
+temporary background hold, floor gating, range/channel weights, three/six-hop presence timing,
+distance outliers, signed lag/reference availability, silence and gaps. Four eight-second acoustic
+runs produce finite features and no model jumps; the basic phone run emits Hand events during
+the poke. Its first-poke peak is 10.04 at Normal; PC's is only 3.22, and the drifting run currently
+favours a near static return. These are recorded tuning concerns for M4.5's full gesture gates,
+not passing recall/precision results. The installed preview still uses the level-only host until M5.
 
 ## Dependency follow-up
 

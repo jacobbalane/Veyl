@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct EngineConfig {
+    pub pc_mode: bool,
     pub window: usize,
     pub hop: usize,
     pub pre_taps: usize,
@@ -18,6 +19,27 @@ pub struct EngineConfig {
     pub stereo_to_mono: f32,
     pub impulse_ratio: f32,
     pub impulse_hold_hops: usize,
+    pub settle_seconds: f32,
+    pub reset_settle_seconds: f32,
+    pub direct_before: usize,
+    pub direct_after: usize,
+    pub min_gain: f32,
+    pub max_gain: f32,
+    pub max_phase_step_degrees: f32,
+    pub jump_suspend_ms: f32,
+    pub background_seconds: f32,
+    pub background_hold_seconds: f32,
+    pub presence_hold_seconds: f32,
+    pub floor_seconds: f32,
+    pub floor_relative: f32,
+    pub z_on: f32,
+    pub peakiness: f32,
+    pub presence_on_hops: usize,
+    pub presence_off_hops: usize,
+    pub distance_smooth_seconds: f32,
+    pub range_min_cm: f32,
+    pub range_max_cm: f32,
+    pub temperature_c: f32,
     pub ring_seconds: usize,
     pub align_seconds: f32,
     pub align_ramp_ms: f32,
@@ -34,6 +56,7 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
+            pc_mode: false,
             window: 2048,
             hop: 256,
             pre_taps: 32,
@@ -49,6 +72,27 @@ impl Default for EngineConfig {
             stereo_to_mono: 0.98,
             impulse_ratio: 6.0,
             impulse_hold_hops: 2,
+            settle_seconds: 1.5,
+            reset_settle_seconds: 0.5,
+            direct_before: 8,
+            direct_after: 6,
+            min_gain: 0.25,
+            max_gain: 4.0,
+            max_phase_step_degrees: 90.0,
+            jump_suspend_ms: 300.0,
+            background_seconds: 2.0,
+            background_hold_seconds: 20.0,
+            presence_hold_seconds: 3.0,
+            floor_seconds: 3.0,
+            floor_relative: 1e-6,
+            z_on: 8.0,
+            peakiness: 3.0,
+            presence_on_hops: 3,
+            presence_off_hops: 6,
+            distance_smooth_seconds: 0.015,
+            range_min_cm: 4.0,
+            range_max_cm: 40.0,
+            temperature_c: 20.0,
             ring_seconds: 4,
             align_seconds: 1.0,
             align_ramp_ms: 10.0,
@@ -82,6 +126,22 @@ impl EngineConfig {
             self.regularization,
             self.activity_db,
             self.impulse_ratio,
+            self.settle_seconds,
+            self.reset_settle_seconds,
+            self.min_gain,
+            self.max_gain,
+            self.max_phase_step_degrees,
+            self.jump_suspend_ms,
+            self.background_seconds,
+            self.background_hold_seconds,
+            self.presence_hold_seconds,
+            self.floor_seconds,
+            self.floor_relative,
+            self.z_on,
+            self.peakiness,
+            self.distance_smooth_seconds,
+            self.range_min_cm,
+            self.range_max_cm,
             self.align_seconds,
             self.align_ramp_ms,
             self.align_min_psr,
@@ -121,6 +181,29 @@ impl EngineConfig {
             || self.stereo_to_mono == self.mono_to_stereo
             || self.impulse_ratio <= 1.0
             || self.impulse_hold_hops > 32
+            || self.settle_seconds > 30.0
+            || self.reset_settle_seconds > 30.0
+            || self.direct_before > self.pre_taps
+            || self.direct_after > self.taps
+            || self.min_gain >= self.max_gain
+            || self.max_gain > 100.0
+            || self.max_phase_step_degrees > 180.0
+            || self.jump_suspend_ms > 10000.0
+            || self.background_seconds > 300.0
+            || self.background_hold_seconds < self.background_seconds
+            || self.background_hold_seconds > 600.0
+            || self.presence_hold_seconds > 60.0
+            || self.floor_seconds > 300.0
+            || self.floor_relative > 1.0
+            || self.z_on > 1000.0
+            || self.peakiness > 1000.0
+            || !(1..=1000).contains(&self.presence_on_hops)
+            || !(1..=1000).contains(&self.presence_off_hops)
+            || self.distance_smooth_seconds > 1.0
+            || self.range_min_cm >= self.range_max_cm
+            || self.range_max_cm > 60.0
+            || !self.temperature_c.is_finite()
+            || !(-40.0..=60.0).contains(&self.temperature_c)
             || self.align_seconds > 1.0
             || self.align_seconds < 0.1
             || self.align_ramp_ms >= self.align_seconds * 500.0

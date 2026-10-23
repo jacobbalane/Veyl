@@ -2,7 +2,8 @@
 
 M4 builds the portable engine in stages. Alignment and echo estimation operate on actual filtered
 PCM; the application still uses the streaming/level host until M5 connects the complete engine.
-These stages do not yet detect hands or pokes.
+The offline pipeline reports hand presence and distance. Poke detection and the meter are the next
+stages; no live gesture behavior is connected yet.
 
 `SampleRing` stores four seconds per channel by absolute frame number. Missing frames and flagged
 boundaries invalidate any window that touches them. Overlap cannot replace previously accepted
@@ -40,8 +41,14 @@ later meter. Enable this gate only after one second of Running.
 
 Construction plans FFTs and allocates working buffers. Processing reuses them, including the
 median scratch. `EngineConfig::from_toml` supplies defaults, rejects unknown fields and validates
-dimensions and finite values. Background learning, motion features, detection, the meter and lab
-reports are the next stages.
+dimensions and finite values. Background learning and motion features now run in the portable
+Engine. The caller supplies a reusable event buffer; per-hop feature events support later CSV
+analysis. `snapshot` consumes the maximum motion row since the previous snapshot, without altering
+processing events. Gap windows hold features, and valid windows resume learning while detection
+stays suspended. Background normalization rejects large gain/phase jumps. Presence slows learning
+for three seconds, then stationary objects fade normally. A gated noise floor, peakiness and
+three/six-hop hysteresis produce Hand changes; distance uses a three-value median and 15 ms
+smoothing. Detection, the meter and full lab reports remain next.
 
 Run the required portable suite with:
 
