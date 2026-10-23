@@ -172,11 +172,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     for poke in pokes {
         println!(
-            "turn {:.3}, detect {:.3}, depth {:.2}, distance {:.2}",
+            "turn {:.3}, detect {:.3}, depth {:.2}, distance {:.2}, confidence {:.3}",
             poke.turn_frame as f64 / scene.fs as f64,
             poke.detect_frame as f64 / scene.fs as f64,
             poke.depth_cm,
-            poke.distance_cm
+            poke.distance_cm,
+            poke.confidence
         );
     }
     Ok(())

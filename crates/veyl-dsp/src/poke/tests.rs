@@ -71,6 +71,27 @@ fn slow_shallow_invalid_and_suspended_motion_cannot_fire_and_presets_reset_histo
 }
 
 #[test]
+fn presence_hysteresis_cannot_confirm_a_turn_whose_motion_is_below_the_on_threshold() {
+    for (preset, threshold) in [
+        (Sensitivity::Low, 12.0),
+        (Sensitivity::Normal, 8.0),
+        (Sensitivity::High, 5.0),
+    ] {
+        let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
+        detector.set_sensitivity(preset);
+        for frame in (0..48000).step_by(256) {
+            let seconds = frame as f32 / 48000.0;
+            let mut sample = feature(frame, distance(seconds), true);
+            // Presence can remain true for six hops at the lower hysteresis threshold.
+            if (0.24..0.30).contains(&seconds) {
+                sample.z_max = threshold * 0.75;
+            }
+            assert!(detector.process(sample, true).is_none());
+        }
+    }
+}
+
+#[test]
 fn a_jump_between_echoes_breaks_the_trajectory_and_a_later_real_poke_recovers() {
     let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
     let mut pokes = vec![];

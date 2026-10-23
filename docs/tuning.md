@@ -9,18 +9,20 @@ The original defaults retain a 40 ms complex average and input-coherence mode se
 last explicit default development probe matched 0/10 pokes for basic, 200 ppm and PC input across
 seeds 1–3. Those forty-second measurements preceded the clock-renderer correction below.
 
-The single-speaker candidate uses `fast_seconds = 0.005` and `infer_single_path = true`. Other
+The single-speaker candidate uses `fast_seconds = 0.005`, `infer_single_path = true` and
+`resample_reference = true`. Other
 thresholds retain their defaults, including the unchanged motion threshold and relative floor.
 Its physical mode comes from measured transfer paths, never scene labels. After meter integration,
 the candidate matches 30/30 basic phone pokes across seeds 1–3, with no extras and median
 confirmation below 80 ms. The candidate is not the application default.
 
-The full negative runs below used that candidate before meter integration:
+Full-duration lab replays with source control metadata and the turn-strength guard
+([decision 0017](decisions/0017-require-motion-at-the-poke-turn.md)) measure:
 
 | Scenario | Seconds per seed | Seed 1 false pokes | Seed 2 | Seed 3 | Required  |
 | -------- | ---------------: | -----------------: | -----: | -----: | --------- |
 | Still    |               60 |                  0 |      0 |      0 | 0         |
-| Hover    |              300 |                  0 |      8 |      1 | At most 1 |
+| Hover    |              300 |                  0 |      2 |      0 | At most 1 |
 | Wave     |              120 |                  0 |      0 |      0 | At most 1 |
 | Typing   |              300 |                  0 |      0 |      0 | At most 1 |
 | Walking  |              300 |                  0 |      0 |      0 | 0         |
@@ -28,6 +30,27 @@ The full negative runs below used that candidate before meter integration:
 Stereo and PC gesture recall are not sufficient. Shorter floor calibration improved one
 stereo seed to 9/10; it did not solve PC input. No gesture acceptance threshold has been relaxed.
 The full scenario matrix and live actions must not be accepted from the basic phone result alone.
+
+| Scenario       | Seconds per seed | Seed 1 matches / truth | Seed 2 | Seed 3 | False pokes, seeds 1 / 2 / 3 |
+| -------------- | ---------------: | ---------------------: | -----: | -----: | ---------------------------: |
+| Basic          |               40 |                  10/10 |  10/10 |  10/10 |                    0 / 0 / 0 |
+| Varied         |              100 |                   9/30 |   7/30 |   8/30 |                    2 / 0 / 0 |
+| Typing + pokes |               40 |                   2/10 |   3/10 |   5/10 |                    0 / 0 / 0 |
+| Volume steps   |               40 |                   8/10 |   9/10 |   8/10 |                    0 / 0 / 1 |
+| 50 ppm         |              120 |                  10/10 |  10/10 |  10/10 |                    0 / 0 / 0 |
+| 200 ppm        |              120 |                  10/10 |  10/10 |  10/10 |                    0 / 0 / 0 |
+| Dropouts       |               40 |                   8/10 |   5/10 |   4/10 |                    0 / 1 / 0 |
+| Compressed16k  |               40 |                   7/10 |   7/10 |   7/10 |                    0 / 0 / 0 |
+| Stereo         |               40 |                   0/10 |   0/10 |   0/10 |                    0 / 0 / 0 |
+| PC             |              120 |                   0/10 |   0/10 |   0/10 |                    0 / 0 / 0 |
+| PC Bluetooth   |              120 |                   0/10 |   0/10 |   0/10 |                    0 / 0 / 0 |
+
+Basic median truth-to-detect delays are 57.98, 53.98 and 60.65 ms. Gappy confirms 0, 1 and 0
+pokes, with none during its silence intervals; it has no recall gate. Blocked confirms none.
+These measurements expose failed gates instead of treating component-test success as acceptance.
+The candidate remains opt-in. A seed-2 sweep of five relative-floor values from 1e−6 to 1e−8
+does not improve the seven varied matches and increases false detections. Nine window/time
+combinations (512/1024/2048 frames and 5/10/20 ms) also remain below the varied recall gate.
 
 Stronger ridge, frequency smoothing, full covariance whitening and an overlap-save adaptive
 canceller did not meet the gates. Their prototypes were removed. A per-pair normalization
@@ -54,7 +77,7 @@ detects 10/10 pokes with this option and 0/10 without it. The full candidate reg
 
 All seven runs retain their lock, emit no drift warning and meet an 80 ms median
 truth-to-detect limit. [Decision 0016](decisions/0016-within-window-reference-clock-compensation.md)
-records the implementation. Hover seed 2 still produces eight false pokes in 300 seconds;
+records the implementation. With the turn-strength guard, hover seed 2 produces two false pokes in 300 seconds;
 PC and stereo recall remain insufficient. These options remain opt-in until the full matrix passes.
 
 ## Meter measurements

@@ -893,6 +893,21 @@ and the version check pass. Defaults remain unchanged. Hover seed 2 still has ei
 pokes; stereo and PC recall remain insufficient. A raw-peak jump guard also removed real phone
 pokes and was discarded. M4.5 and overall M4 acceptance remain open.
 
+The clock-fixture correction [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39923408939)
+at `5b2008a`, and within-window compensation [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39924491706)
+at `fa88daa`, including Windows installers and signed Android builds.
+
+**M4.5 turn-strength guard and broader measurements.** A poke's turn must meet the selected
+motion on threshold; presence hysteresis alone cannot confirm a weak turn. Unit tests cover all
+sensitivities. The new `candidate_gestures` lab example replays 18 full-duration scenarios per
+seed with control metadata, prints derived measurements and exits unsuccessfully on gesture
+gate failures. It does not claim complete CI acceptance. Full seeds 1–3 retain 30/30 basic and
+60/60 positive-clock matches, while hover yields 0, 2 and 0 false pokes. Varied, typing-poke,
+dropout, compressed, stereo, PC and two volume-step seeds fail their gates. The complete counts
+are in [tuning](tuning.md); [decision 0017](decisions/0017-require-motion-at-the-poke-turn.md)
+records the guard. Five floor values and nine window/time profiles did not solve varied recall.
+All 67 portable release tests, whole-workspace clippy and formatting pass. M4.5 remains open.
+
 ## Dependency follow-up
 
 [Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the

@@ -61,3 +61,14 @@ Sweeps support up to 16 distinct parameters, 32 values per parameter and 4,096 c
 The phone candidate's basic and clock-drift results are regression checks, not full acceptance.
 Hover, stereo and PC gesture gates remain unresolved in [tuning](tuning.md). No R1–R10 device
 recordings have been supplied yet.
+
+Run the current candidate's gesture checks without writing audio or analysis files:
+
+```powershell
+cargo run --release -p veyl-lab --example candidate_gestures -- 1
+```
+
+Repeat with seeds 2 and 3. To select cases, append names after the seed. The probe runs the full
+specified durations, prints one JSON measurement per case and exits unsuccessfully on failed
+gesture checks. It is a development probe; the complete CI gates, including meter checks and
+stereo-mode selection, remain separate. The current candidate fails several cases.

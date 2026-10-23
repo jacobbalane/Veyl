@@ -145,6 +145,7 @@ impl PokeDetector {
         let out_frames = frame - turn.frame;
         if depth < self.thresholds.0
             || rise < self.thresholds.1
+            || turn.z < self.z_on
             || !(self.minimum..=self.maximum).contains(&duration)
             || in_frames == 0
             || out_frames == 0
