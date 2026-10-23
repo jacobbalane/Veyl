@@ -5,7 +5,7 @@ use std::{
     io,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     time::Duration,
 };
@@ -40,6 +40,28 @@ pub struct PhoneSource {
     gaps: Arc<[AtomicBool; 2]>,
     recorder: Option<Recorder>,
     generation: Arc<AtomicU64>,
+    tap: Arc<Mutex<Option<TapSink>>>,
+}
+struct TapSink {
+    generation: u64,
+    sender: mpsc::Sender<AudioBlock>,
+    overflow: Arc<AtomicBool>,
+}
+pub(crate) struct AudioTap {
+    pub receiver: mpsc::Receiver<AudioBlock>,
+    pub overflow: Arc<AtomicBool>,
+    owner: Arc<Mutex<Option<TapSink>>>,
+}
+impl Drop for AudioTap {
+    fn drop(&mut self) {
+        let mut slot = self.owner.lock().unwrap();
+        if slot
+            .as_ref()
+            .is_some_and(|sink| Arc::ptr_eq(&sink.overflow, &self.overflow))
+        {
+            slot.take();
+        }
+    }
 }
 impl PhoneSource {
     #[cfg(test)]
@@ -57,10 +79,35 @@ impl PhoneSource {
             gaps: Arc::new([AtomicBool::new(false), AtomicBool::new(false)]),
             recorder,
             generation: Arc::new(AtomicU64::new(0)),
+            tap: Arc::new(Mutex::new(None)),
         }
     }
     pub(crate) fn next_generation(&self) -> u64 {
         self.generation.fetch_add(1, Ordering::AcqRel) + 1
+    }
+    pub(crate) fn tap(&self, generation: u64) -> io::Result<AudioTap> {
+        if generation != self.generation.load(Ordering::Acquire) {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "Sound source was replaced.",
+            ));
+        }
+        let (sender, receiver) = mpsc::channel(600);
+        let overflow = Arc::new(AtomicBool::new(false));
+        let mut slot = self.tap.lock().unwrap();
+        if slot.is_some() {
+            return Err(io::Error::other("Sound check is already running."));
+        }
+        *slot = Some(TapSink {
+            generation,
+            sender,
+            overflow: overflow.clone(),
+        });
+        Ok(AudioTap {
+            receiver,
+            overflow,
+            owner: self.tap.clone(),
+        })
     }
     pub async fn disconnected(&self, generation: u64) -> io::Result<()> {
         if let Some(recorder) = &self.recorder {
@@ -155,6 +202,11 @@ impl SoundSource for PhoneSource {
         }
         if let Some(recorder) = &self.recorder {
             recorder.audio(generation, &block);
+        }
+        if let Some(tap) = self.tap.lock().unwrap().as_ref() {
+            if tap.generation == generation && tap.sender.try_send(block.clone()).is_err() {
+                tap.overflow.store(true, Ordering::Release);
+            }
         }
         let gap = self
             .gaps

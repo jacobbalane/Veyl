@@ -134,6 +134,17 @@ export function Diagnostics() {
               <dl className="diagnostic-values">
                 <dt>{pcCopy.drift}</dt>
                 <dd>{linkCopy.unavailable}</dd>
+                <dt>{pcCopy.coherence}</dt>
+                <dd>
+                  {number(
+                    value.source.check.result
+                      ? value.source.check.result.meanCoherence * 100
+                      : null,
+                    '%',
+                  )}
+                </dd>
+                <dt>{pcCopy.bandwidth}</dt>
+                <dd>{number(value.source.check.result?.bandwidthHz, 'Hz', 0)}</dd>
               </dl>
             </>
           )}

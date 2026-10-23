@@ -3,6 +3,7 @@ use crate::{
     connection::ConnectionManager,
     pc_devices::{AudioDevice, AudioDevices, DeviceMonitor},
     pc_source::{CaptureDetails, CaptureFactory, CaptureGroup},
+    pc_testsound::{Check, CheckView},
     settings::Settings,
     source::PhoneSource,
 };
@@ -33,6 +34,7 @@ pub struct SourceView {
     pub tip: Option<String>,
     pub error: Option<String>,
     pub revision: u64,
+    pub check: CheckView,
 }
 impl Default for SourceView {
     fn default() -> Self {
@@ -50,6 +52,7 @@ impl Default for SourceView {
             tip: None,
             error: None,
             revision: 0,
+            check: CheckView::default(),
         }
     }
 }
@@ -60,6 +63,8 @@ enum Change {
 enum Command {
     Change(Change, oneshot::Sender<Result<(), String>>),
     Shutdown(oneshot::Sender<()>),
+    Check(oneshot::Sender<Result<(), String>>),
+    CancelCheck(oneshot::Sender<()>),
 }
 type Opening = Pin<Box<dyn Future<Output = io::Result<CaptureGroup>> + Send>>;
 type Observer = Arc<dyn Fn(SourceView) + Send + Sync>;
@@ -101,6 +106,7 @@ impl Sources {
             generation: 0,
             retry: None,
             factory: None,
+            check: None,
         };
         let devices = monitor.subscribe();
         tauri::async_runtime::spawn(actor.run(receiver, devices));
@@ -137,6 +143,20 @@ impl Sources {
         }
         self.monitor.shutdown().await;
     }
+    pub async fn check_sound(&self) -> Result<(), String> {
+        let (done, wait) = oneshot::channel();
+        self.commands
+            .try_send(Command::Check(done))
+            .map_err(|_| "source_busy")?;
+        wait.await.map_err(|_| "source_stopped")?
+    }
+    pub async fn cancel_check(&self) -> Result<(), String> {
+        let (done, wait) = oneshot::channel();
+        self.commands
+            .try_send(Command::CancelCheck(done))
+            .map_err(|_| "source_busy")?;
+        wait.await.map_err(|_| "source_stopped".into())
+    }
 }
 struct Actor {
     settings: Arc<Mutex<Settings>>,
@@ -150,6 +170,7 @@ struct Actor {
     generation: u64,
     retry: Option<Instant>,
     factory: Option<CaptureFactory>,
+    check: Option<Check>,
 }
 impl Actor {
     fn snapshot(&self) -> SourceView {
@@ -164,6 +185,7 @@ impl Actor {
         (self.observer)(next);
     }
     async fn stop_pc(&mut self) {
+        self.cancel_check().await;
         self.retry = None;
         self.opening.take();
         // Fence callbacks from a cancelled preparation before another source can configure the engine.
@@ -179,6 +201,29 @@ impl Actor {
         view.state = "idle".into();
         view.reference = None;
         view.capture = None;
+    }
+    async fn cancel_check(&mut self) {
+        if let Some(check) = self.check.take() {
+            check.shutdown().await;
+        }
+        self.view.lock().unwrap().check = CheckView::default();
+    }
+    fn start_check(&mut self) -> Result<(), String> {
+        let view = self.snapshot();
+        if view.mode != "pc" || view.state != "running" || self.check.is_some() {
+            return Err("check_unavailable".into());
+        }
+        let speaker = view.speaker.ok_or("check_unavailable")?;
+        self.check = Some(
+            Check::start(speaker, self.source.clone(), self.generation)
+                .map_err(|_| "check_unavailable")?,
+        );
+        self.view.lock().unwrap().check = CheckView {
+            state: "checking".into(),
+            ..Default::default()
+        };
+        self.publish();
+        Ok(())
     }
     fn save(&mut self, change: Change) -> Result<(), String> {
         let mut saved = self.settings.lock().unwrap();
@@ -313,6 +358,8 @@ impl Actor {
                 command = commands.recv() => match command {
                     Some(Command::Change(change, done)) => { let result = self.save(change); let result = match result { Ok(()) => self.reconcile().await, Err(error) => Err(error) }; let _ = done.send(result); }
                     Some(Command::Shutdown(ack)) => { done = Some(ack); break; }, None => break,
+                    Some(Command::Check(done)) => { let result = self.start_check(); let _ = done.send(result); }
+                    Some(Command::CancelCheck(done)) => { self.cancel_check().await; self.publish(); let _ = done.send(()); }
                 },
                 result = async { match self.opening.as_mut() { Some(opening) => opening.await, None => std::future::pending().await } } => {
                     self.opening.take();
@@ -322,6 +369,14 @@ impl Actor {
                     }
                 },
                 code = async { match self.current.as_mut() { Some(group) => group.next_failure().await, None => std::future::pending().await } } => { self.failed(code).await; },
+                result = async { match self.check.as_mut() { Some(check) => (&mut check.result).await, None => std::future::pending().await } } => {
+                    if let Some(check) = self.check.take() { check.shutdown().await; }
+                    self.view.lock().unwrap().check = match result {
+                        Ok(Ok(result)) => CheckView { state: if result.good { "good" } else { "poor" }.into(), result: Some(result), error: None },
+                        _ => CheckView { state: "error".into(), result: None, error: Some("check_failed".into()) },
+                    };
+                    self.publish();
+                },
                 changed = devices.changed() => {
                     if changed.is_err() { break; }
                     let next = devices.borrow_and_update().clone();

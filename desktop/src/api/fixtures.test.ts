@@ -3,13 +3,17 @@ import appJson from './fixtures/app-state.json';
 import diagnosticsJson from './fixtures/diagnostics.json';
 import pairingJson from './fixtures/pairing.json';
 import recordingJson from './fixtures/recording.json';
-import type { AppState, Diagnostics, PairingEvent, RecordingInfo } from './types';
+import checkJson from './fixtures/pc-check.json';
+import type { AppState, Diagnostics, PairingEvent, RecordingInfo, CheckResult } from './types';
 
 test('Rust fixtures fit the typed desktop API and contain metadata only', () => {
   const app: AppState = appJson;
   const diagnostics: Diagnostics = diagnosticsJson;
   const pairing: PairingEvent = pairingJson;
   const recording: RecordingInfo = recordingJson;
+  const check: CheckResult = checkJson;
+  expect(check.bandwidthHz).toBe(10000);
+  expect(check.meanCoherence).toBe(0.75);
   expect(app.actionsEnabled).toBe(false);
   expect(app.link.connection.state).toBe('browsing');
   expect(diagnostics.levels.reference.preDbfs).toBe(-120);

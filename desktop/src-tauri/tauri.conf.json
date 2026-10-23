@@ -36,7 +36,8 @@
       "../src/assets/fonts/Manrope-LICENSE.txt": "licenses/manrope.txt",
       "../../assets/licenses/hound-Apache-2.0.txt": "licenses/hound.txt",
       "../../assets/licenses/rubato-MIT.txt": "licenses/rubato.txt",
-      "../../assets/licenses/audioadapter-buffers-MIT.txt": "licenses/audioadapter-buffers.txt"
+      "../../assets/licenses/audioadapter-buffers-MIT.txt": "licenses/audioadapter-buffers.txt",
+      "../../assets/licenses/rustfft-MIT.txt": "licenses/rustfft.txt"
     },
     "shortDescription": "Control your PC with a poke in the air",
     "longDescription": "Veyl uses echoes of the sound already playing to sense a poke in the air. This preview build contains the interface foundation; sensing is coming in v0.1.",

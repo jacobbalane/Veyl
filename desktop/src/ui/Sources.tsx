@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { browserPreview, setSource, setPcDevices, watchSource } from '../api/native';
+import {
+  browserPreview,
+  setSource,
+  setPcDevices,
+  watchSource,
+  checkPcSound,
+  cancelPcSoundCheck,
+} from '../api/native';
 import { emptySource, type SourceView, type AudioDevice } from '../api/types';
 import { pcCopy, pcTip } from '../copy';
 
@@ -30,13 +37,13 @@ export function useSources(initial?: SourceView) {
       stop?.();
     };
   }, []);
-  async function change(action: () => Promise<void>) {
+  async function change(action: () => Promise<void>, failure: string = pcCopy.saveFailed) {
     setBusy(true);
     setError('');
     try {
       await action();
     } catch {
-      setError(pcCopy.saveFailed);
+      setError(failure);
     } finally {
       setBusy(false);
     }
@@ -48,6 +55,8 @@ export function useSources(initial?: SourceView) {
     mode: (mode: string) => change(() => setSource(mode)),
     devices: (speaker: string | null, mic: string | null) =>
       change(() => setPcDevices(speaker, mic)),
+    check: () => change(checkPcSound, pcCopy.checkFailed),
+    cancelCheck: () => change(cancelPcSoundCheck, pcCopy.checkFailed),
   };
 }
 type Controls = ReturnType<typeof useSources>;
@@ -140,6 +149,36 @@ export function SourceSettings({ controls }: { controls: Controls }) {
           />
           <p role="status">{pcTip(source.tip)}</p>
           <p>{pcCopy.placement}</p>
+          <p>{pcCopy.checkNotice}</p>
+          <div className="button-row">
+            <button
+              disabled={
+                browserPreview ||
+                busy ||
+                source.state !== 'running' ||
+                source.check.state === 'checking'
+              }
+              onClick={() => void controls.check()}
+            >
+              {pcCopy.check}
+            </button>
+            {source.check.state === 'checking' && (
+              <button disabled={busy} onClick={() => void controls.cancelCheck()}>
+                {pcCopy.cancel}
+              </button>
+            )}
+          </div>
+          {source.check.state !== 'idle' && (
+            <p role="status">
+              {source.check.state === 'checking'
+                ? pcCopy.checking
+                : source.check.state === 'good'
+                  ? pcCopy.checkGood
+                  : source.check.state === 'poor'
+                    ? pcCopy.checkPoor
+                    : pcCopy.checkFailed}
+            </p>
+          )}
         </>
       )}
       {error && <p role="alert">{error}</p>}

@@ -20,9 +20,9 @@ use windows::{
     },
 };
 
-struct Apartment;
+pub(crate) struct Apartment;
 impl Apartment {
-    fn enter() -> io::Result<Self> {
+    pub(crate) fn enter() -> io::Result<Self> {
         unsafe {
             CoInitializeEx(None, COINIT_MULTITHREADED)
                 .ok()
@@ -46,7 +46,7 @@ impl Drop for Event {
         }
     }
 }
-struct Priority(HANDLE);
+pub(crate) struct Priority(pub HANDLE);
 impl Drop for Priority {
     fn drop(&mut self) {
         unsafe {
@@ -330,7 +330,7 @@ impl std::fmt::Display for Failure {
     }
 }
 impl std::error::Error for Failure {}
-fn error(error: windows::core::Error) -> io::Error {
+pub(crate) fn error(error: windows::core::Error) -> io::Error {
     let code = match error.code() {
         AUDCLNT_E_DEVICE_INVALIDATED | AUDCLNT_E_RESOURCES_INVALIDATED => "device_invalidated",
         AUDCLNT_E_DEVICE_IN_USE => "mic_silenced",

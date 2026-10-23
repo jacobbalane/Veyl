@@ -73,6 +73,8 @@ export async function getDiagnostics(): Promise<Diagnostics> {
     : invoke<Diagnostics>('get_diagnostics');
 }
 export const setSource = (source: string) => command('set_source', { source });
+export const checkPcSound = () => command('check_pc_sound');
+export const cancelPcSoundCheck = () => command('cancel_pc_sound_check');
 export const setPcDevices = (speakerId: string | null, microphoneId: string | null) =>
   command('set_pc_devices', { speakerId, microphoneId });
 export const watchSource = async (update: (source: SourceView) => void): Promise<UnlistenFn> =>

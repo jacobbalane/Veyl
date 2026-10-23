@@ -80,6 +80,10 @@ Rubato and audioadapter-buffers are by Henrik Enquist. Copies of their MIT licen
 `assets/licenses/rubato-MIT.txt` and `assets/licenses/audioadapter-buffers-MIT.txt` and ship in the
 desktop installer's `licenses` folder.
 
+RustFFT's MIT license is in `assets/licenses/rustfft-MIT.txt` and ships as `licenses/rustfft.txt`.
+The portable sound-check analyzer uses it in production; it was already used by the simulator and
+DSP tests.
+
 ## Android dependencies
 
 | Component                                | Version        | License               |

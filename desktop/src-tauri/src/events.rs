@@ -116,6 +116,17 @@ mod fixtures {
             error: None,
         };
         for (name, value) in [
+            (
+                "pc-check.json",
+                serde_json::to_value(crate::pc_testsound::CheckResult {
+                    good: true,
+                    mean_coherence: 0.75,
+                    coverage: 0.5,
+                    bandwidth_hz: 10000.0,
+                    lag_ms: 12.0,
+                })
+                .unwrap(),
+            ),
             ("app-state.json", serde_json::to_value(app).unwrap()),
             (
                 "diagnostics.json",

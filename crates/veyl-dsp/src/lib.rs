@@ -1,6 +1,7 @@
 //! The portable echo engine. M0 supplies source filtering and generated test sound.
 
 pub mod filters;
+pub mod sound_check;
 pub mod testsound;
 pub mod types;
 pub use types::{BlockFlags, BlockIn, Stream};

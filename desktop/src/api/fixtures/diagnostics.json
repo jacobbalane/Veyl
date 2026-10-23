@@ -52,6 +52,11 @@
   },
   "source": {
     "capture": null,
+    "check": {
+      "error": null,
+      "result": null,
+      "state": "idle"
+    },
     "choiceDone": false,
     "devices": {
       "defaultMicrophoneId": null,

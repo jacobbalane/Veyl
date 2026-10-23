@@ -358,6 +358,17 @@ mod tests {
             assert_eq!((input.meta.ref_channels, input.meta.mic_channels), (2, 1));
             assert_eq!(input.meta.sample_rate, 48000);
             assert_eq!(input.labels.len(), 1);
+            let summary = veyl_lab::analyze::statistics(&input).unwrap();
+            assert_eq!(summary.source, "pc");
+            assert_eq!(summary.labels, 1);
+            assert!(summary.reference.blocks >= 10 && summary.microphone.blocks >= 10);
+            let analyzed = temporary.path().join("analysis");
+            veyl_lab::analyze::write_summary(&input, &analyzed).unwrap();
+            let report: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(analyzed.join("summary.json")).unwrap())
+                    .unwrap();
+            assert_eq!(report["source"], "pc");
+            assert_eq!(report["analysis"], "stream_statistics");
             assert!(input.blocks.iter().all(|block| block.flags & 4 != 0));
             assert!(host.levels().arrival_ms.is_none());
             assert_eq!(host.levels().engine_drops, 0);

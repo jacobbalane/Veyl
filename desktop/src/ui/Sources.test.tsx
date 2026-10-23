@@ -2,13 +2,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, test, vi } from 'vitest';
 import { emptySource, type SourceView } from '../api/types';
 import { SourceChoice, SourceSettings, useSources } from './Sources';
-import { setSource, setPcDevices } from '../api/native';
+import { setSource, setPcDevices, checkPcSound, cancelPcSoundCheck } from '../api/native';
 
 const events = vi.hoisted(() => new Set<(source: SourceView) => void>());
 vi.mock('../api/native', () => ({
   browserPreview: false,
   setSource: vi.fn(async () => {}),
   setPcDevices: vi.fn(async () => {}),
+  checkPcSound: vi.fn(async () => {}),
+  cancelPcSoundCheck: vi.fn(async () => {}),
   watchSource: async (callback: (source: SourceView) => void) => {
     events.add(callback);
     return () => {
@@ -20,6 +22,25 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   events.clear();
+});
+test('the PC sound check starts only on a click, exposes cancellation and shows the measured result', async () => {
+  render(<Controls initial={pc(1)} />);
+  await waitFor(() => expect(events.size).toBe(1));
+  expect(checkPcSound).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: "Check this PC's sound" }));
+  await waitFor(() => expect(checkPcSound).toHaveBeenCalledOnce());
+  const checking = pc(2);
+  checking.check.state = 'checking';
+  act(() => events.forEach((event) => event(checking)));
+  expect(
+    screen.getByRole('button', { name: "Check this PC's sound" }).hasAttribute('disabled'),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(cancelPcSoundCheck).toHaveBeenCalledOnce());
+  const good = pc(3);
+  good.check.state = 'good';
+  act(() => events.forEach((event) => event(good)));
+  expect(screen.getByText('This PC hears its own sound well.')).toBeDefined();
 });
 function Controls({ initial = emptySource }: { initial?: SourceView }) {
   const controls = useSources(initial);

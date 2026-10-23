@@ -569,7 +569,7 @@ a phone. This milestone is marked parallel-ok in the plan; work begins while M3.
       default-device notifications and a hardware-based mode recommendation.
 - [x] **M3P.2** WASAPI loopback/microphone threads, raw fallback, format conversion/resampling,
       privacy filtering and timed ten-millisecond blocks behind a fake-able capture interface.
-- [ ] **M3P.3** Source switching, device settings/pickers, onboarding path, PC tips and diagnostics.
+- [x] **M3P.3** Source switching, device settings/pickers, onboarding path, PC tips and diagnostics.
 - [ ] **M3P.4** Test-sound playback and Check this PC's sound.
 - [ ] **M3P.5** PC test recordings read by the lab analyzer.
 - [ ] **M3P.6 [device]** P1/P4/P5, optional ARM64 P7, and recordings R11–R13.
@@ -617,7 +617,7 @@ source/device settings and production startup wiring follow in M3P.3; real captu
 remain for the final P1/P4/P5 checks. M3P.2 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39790045174)
 at `de3ef95`, including Windows x64 tests/installer, ARM64 cross-build, Android and portable checks.
 
-**M3P.3 implemented locally; CI pending.** A source owner persists deliberate mode and endpoint
+**M3P.3 implemented and verified.** A source owner persists deliberate mode and endpoint
 choices, closes phone discovery/connections in PC mode, and stops PC capture before resuming phone
 mode. Startup is cancellable. A shared generation rejects old configurations and callbacks before
 they can affect the new engine stream. Device notifications restart changed defaults; missing
@@ -638,6 +638,54 @@ switching, default changes, missing explicit devices, failed durable saves and c
 preparation. Metadata events cannot be overwritten by a delayed initial UI snapshot. Browser checks
 cover the source cards, device controls, placement, both themes and 760-pixel layout. No native
 microphone or speaker was opened for these tests; installed preview and hardware gates stay pending.
+
+M3P.3 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39822971575) at `0389e43`:
+portable checks, native Windows x64 tests/installer, ARM64 installer cross-build and Android
+tests/lint/APKs. Website deployment passed. GitHub work remains confined to Veyl.
+
+**M3P.4 implemented locally; CI pending.** Settings offers an optional five-second BrightLoop
+sound check through the selected speaker at the current Windows volume. It never starts on mode
+selection. A shared WASAPI render owner converts stereo float to the device's mix format; buffers,
+COM and Pro Audio scheduling stay on that thread. Cancel, source/device changes and Quit stop it.
+An independent bounded tap reads only the existing filtered blocks and retains at most seven
+seconds per channel in RAM. It writes no recording or log. Gaps, overflow, format changes or
+playback failure report an interrupted check. Aligned high-band Welch coherence and active
+bandwidth supply the result; diagnostics expose the numbers. Decision 0010 records the provisional
+acoustic thresholds and separation from M4's gesture engine.
+
+Thirty-five native tests and twelve UI tests pass, plus strict TypeScript, the production UI build
+and clippy. The portable analyzer tests signed delay, noise, silence and narrow-band sound at both
+rates. A fake renderer feeds the actual filtered source tap, verifies its measured two-millisecond
+echo and checks cancellation/tap cleanup; a separate test rejects discontinuities and configuration
+changes. UI tests require the user's click, expose Cancel and display the result. The seven DSP
+tests and required simulator/lab release checks pass. Real sound was neither captured nor played
+for these automated checks. The normal PC capture continues while the optional check runs.
+
+**M3P.5 implemented locally; CI pending.** PC capture uses the shared consent recorder. The
+fake two-thread pipeline records source `pc`, 48 kHz filtered reference/microphone audio, real
+source metadata, timing/flags and Space marks; the lab reader accepts it. The test now also runs
+the same analyzer used by `veyl-lab analyze` and verifies its written PC summary. No physical
+recordings exist yet.
+
+### Waiting on M3P device tests
+
+Keep these for the maintainer's final review. Use a laptop or connect real speakers to this PC.
+
+1. P1: choose With this PC, confirm the recommendation, then play music. In Settings, verify
+   Default device selects the intended speakers and microphone; in Help → Diagnostics require
+   both streams near 100 blocks/s and correct formats. After M5, the live meter must appear within
+   three seconds. Run Check this PC's sound and try Cancel; record the result and diagnostics.
+2. P4: with Default device selected, plug headphones in, verify the headphones tip, then unplug.
+   Listening must resume within one second. P5: change Windows' default output and verify the
+   new endpoint takes over within one second without crashing. Explicitly selected devices must
+   stay selected when unavailable. Record timing and failures; no such timing has been measured.
+3. If an ARM64 Windows PC is available, install the ARM64 build and run P1–P3 for P7 after M6.
+   Cross-compilation alone does not verify native ARM64 capture.
+4. Record R11: a bright song on a laptop, ten marked pokes with the hand about 25 cm in front.
+   R12: music playing with two minutes of typing and no pokes. R13, if available: desktop speakers
+   and a USB microphone, ten marked pokes. Use Record a test, keep Veyl focused for Space marks,
+   and run `veyl-lab analyze DIR` on each folder. Keep recordings local and note hardware, versions
+   and outcomes here. Echo/gesture measurements are added in M4/M5.
 
 ## Dependency follow-up
 

@@ -67,6 +67,14 @@ pub async fn set_pc_devices(
 pub fn list_audio_devices(state: tauri::State<'_, Runtime>) -> crate::pc_devices::AudioDevices {
     state.sources.snapshot().devices
 }
+#[tauri::command]
+pub async fn check_pc_sound(state: tauri::State<'_, Runtime>) -> Result<(), String> {
+    state.sources.check_sound().await
+}
+#[tauri::command]
+pub async fn cancel_pc_sound_check(state: tauri::State<'_, Runtime>) -> Result<(), String> {
+    state.sources.cancel_check().await
+}
 
 #[tauri::command]
 pub async fn start_recording(

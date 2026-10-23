@@ -134,6 +134,7 @@ fn setup(
             generation: 0,
             retry: None,
             factory: Some(factory),
+            check: None,
         },
         network,
     )

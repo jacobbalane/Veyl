@@ -7,7 +7,7 @@ use veyl_dsp::filters::PrivacyFilter;
 use veyl_link::audio::AudioBlock;
 
 #[cfg(windows)]
-mod native;
+pub(crate) mod native;
 mod workers;
 pub use workers::CaptureGroup;
 

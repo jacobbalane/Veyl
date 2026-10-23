@@ -46,6 +46,16 @@ export const pcCopy = {
   drift: 'Clock drift',
   on: 'On',
   off: 'Off',
+  check: "Check this PC's sound",
+  checking: "Checking this PC's sound…",
+  checkNotice: 'Veyl plays a test sound for five seconds at your current volume.',
+  checkGood: 'This PC hears its own sound well.',
+  checkPoor:
+    'This PC hears its sound poorly. Move the microphone closer to where you poke, or turn the volume up.',
+  checkFailed: "The sound check didn't finish. Check your devices and try again.",
+  cancel: 'Cancel',
+  coherence: 'High-band coherence',
+  bandwidth: 'High-band width',
 } as const;
 export function pcTip(code: string | null | undefined): string {
   switch (code) {

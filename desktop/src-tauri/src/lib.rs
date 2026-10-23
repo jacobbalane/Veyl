@@ -7,6 +7,7 @@ pub mod events;
 pub mod pairings;
 pub mod pc_devices;
 pub mod pc_source;
+pub mod pc_testsound;
 pub mod recorder;
 mod settings;
 pub mod source;
@@ -222,6 +223,8 @@ pub fn run() {
             ,commands::set_source,
             commands::set_pc_devices,
             commands::list_audio_devices
+            ,commands::check_pc_sound,
+            commands::cancel_pc_sound_check
         ])
         .build(tauri::generate_context!())
         .expect("Veyl could not start.")

@@ -120,6 +120,7 @@ export interface SourceView {
   reference: CaptureDetails | null;
   capture: CaptureDetails | null;
   devices: AudioDevices;
+  check: { state: string; result: CheckResult | null; error: string | null };
   tip: string | null;
   error: string | null;
   revision: number;
@@ -137,6 +138,7 @@ export const emptySource: SourceView = {
   tip: null,
   error: null,
   revision: 0,
+  check: { state: 'idle', result: null, error: null },
   devices: {
     speakers: [],
     microphones: [],
@@ -148,6 +150,13 @@ export const emptySource: SourceView = {
     error: 'loading',
   },
 };
+export interface CheckResult {
+  good: boolean;
+  meanCoherence: number;
+  coverage: number;
+  bandwidthHz: number;
+  lagMs: number;
+}
 export interface RecordingInfo {
   id: string;
   seconds: number;
