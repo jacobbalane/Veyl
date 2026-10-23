@@ -707,8 +707,8 @@ starts while M3P's final Windows/Android packaging runs. Local M3P checks and po
 
 - [x] **M4.1** Scene model, BrightLoop variants, all scenarios including PC/Bluetooth, and
       `veyl-lab sim`.
-- [ ] **M4.2** GCC-PHAT alignment, locking/rechecking and clock-drift tracking.
-- [ ] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
+- [x] **M4.2** GCC-PHAT alignment, locking/rechecking and clock-drift tracking.
+- [x] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
 - [ ] **M4.4** Normalization, background gating, motion floor/features and Hand events.
 - [ ] **M4.5** Poke detection and presets; poke scenario gates.
 - [ ] **M4.6** Meter factors, score and tip priority; meter scenario gates.
@@ -748,8 +748,34 @@ rank; [decision 0011](decisions/0011-clock-aware-alignment.md) records the measu
 PCM tests with seeds 1–3 lock the 200 ms, 50/200 ppm and Bluetooth scenes within three seconds.
 Unit tests cover both sample rates, negative lags, unrelated audio, route jumps and continuous
 integer folding for both drift signs. All required DSP/simulator/lab release tests, portable and
-desktop clippy, 36 desktop tests and repository formatting pass. M4.2 stays open until M4.3 supplies actual fast-map feedback
-and the full acoustic residual gate can run; the current Kalman test uses known measurements.
+desktop clippy, 36 desktop tests and repository formatting pass. The initial Kalman unit tests use
+known measurements; the integration below supplies actual fast-map feedback.
+
+The alignment foundation [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39886917168)
+at `63d9fcb`, including portable checks, native Windows tests, x64/ARM64 installers and Android.
+The earlier recording correction also passed [full CI](https://github.com/jacobbalane/Veyl/actions/runs/39886691856)
+at `6ef9f58`.
+
+**M4.2/M4.3 integration.** The shared alignment controller now selects its windows directly from
+the absolute-frame rings and feeds the measured fast direct path into continuous compensation.
+Tests cover different absolute origins, both sample rates and absent timestamps. Keeping the
+same strong local path fixes measured 12.27-tap jumps between microphones. Rechecks account for
+the time between the GCC window centre and the first feedback hop; otherwise the 200 ppm case
+unnecessarily re-locked after twelve seconds. The extended seed-1 runs now retain their lock
+through two rechecks. Seeds 1–3 cover 50/200 ppm, PC, Bluetooth and a negative 200 ppm clock. No
+movement labels enter alignment or feedback. The full 120-second gesture scenarios remain pending.
+
+The estimator implements periodic Hann windows, coherence mode hysteresis, scalar/regularized
+stereo transfer estimates, band/activity masks and window-corrected complex analytic maps. A
+bounded residual median holds updates for an impulse and the next two hops. Tests recover known
+mono/stereo paths at both rates, verify analytic phase/signed delays and fractional compensation,
+check narrow-band/silent input, switch back to mono and hold/recover from impulses. The new
+[echo processing notes](echo-engine.md) document buffer layouts and caller responsibilities.
+
+All 35 portable release tests pass, including the fifteen acoustic feedback runs, with unchanged
+0.3-tap limits after five seconds. The longest measured positive-clock PC residual was 0.2915
+taps. Whole-workspace clippy, Rust formatting and repository formatting pass. M4.2 and M4.3's
+offline components are complete; complete-engine scenario recall/precision gates remain open.
 
 ## Dependency follow-up
 

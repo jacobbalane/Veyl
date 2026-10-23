@@ -115,3 +115,57 @@ fn kalman_feedback_tracks_both_clock_signs_and_keeps_delay_continuous_through_in
         assert!((tracker.ppm() - ppm).abs() < 1.0);
     }
 }
+
+#[test]
+fn controller_handles_different_absolute_origins_with_and_without_capture_timestamps() {
+    use crate::{ring::SampleRing, StreamFormat};
+    for rate in [44100, 48000] {
+        let pcm: Vec<_> = noise(rate as usize * 5, 43)
+            .iter()
+            .map(|value| (value * 16000.0) as i16)
+            .collect();
+        for timestamps in [false, true] {
+            let config = EngineConfig::default();
+            let format = StreamFormat {
+                sample_rate: rate,
+                ref_channels: 1,
+                mic_channels: 1,
+            };
+            let mut aligner = Aligner::new(config, format, false).unwrap();
+            let mut reference = SampleRing::new(rate, 1, 4).unwrap();
+            let mut microphone = SampleRing::new(rate, 1, 4).unwrap();
+            let block = rate as usize / 100;
+            let mut locked_at = None;
+            for first in (block..pcm.len() - block).step_by(block) {
+                let time = timestamps.then_some(first as i64 * 1_000_000_000 / rate as i64);
+                reference
+                    .push(
+                        10_000_000 + first as u64,
+                        &pcm[first..first + block],
+                        time,
+                        false,
+                    )
+                    .unwrap();
+                microphone
+                    .push(
+                        7_000_000 + first as u64,
+                        &pcm[first - 112..first + block - 112],
+                        time,
+                        false,
+                    )
+                    .unwrap();
+                if aligner.try_align(&reference, &microphone).is_some() {
+                    locked_at = Some(first);
+                    break;
+                }
+            }
+            assert!(locked_at
+                .is_some_and(|frame| frame < rate as usize * if timestamps { 3 } else { 5 }));
+            assert!((aligner.lag() + 3_000_000 - 112).abs() <= 1);
+            assert!(aligner.begin_hop(8_000_000).is_some());
+            assert!(aligner.begin_hop(8_000_000).is_none());
+            aligner.reset();
+            assert!(!aligner.locked());
+        }
+    }
+}

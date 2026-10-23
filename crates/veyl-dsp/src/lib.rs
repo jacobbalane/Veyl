@@ -2,6 +2,7 @@
 
 pub mod align;
 pub mod config;
+pub mod echo;
 pub mod filters;
 pub mod ring;
 pub mod sound_check;

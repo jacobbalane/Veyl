@@ -2,6 +2,8 @@
 use crate::config::EngineConfig;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{ops::RangeInclusive, sync::Arc};
+mod controller;
+pub use controller::Aligner;
 
 #[derive(Clone, Copy, Debug)]
 pub struct LagEstimate {
@@ -245,6 +247,9 @@ impl AlignmentLock {
         self.locked = false;
         self.pending = None;
         self.last_check = None;
+    }
+    fn reject(&mut self) {
+        self.pending = None;
     }
     pub fn observe(
         &mut self,

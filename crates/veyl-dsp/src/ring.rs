@@ -12,6 +12,7 @@ pub struct SampleRing {
     samples: Vec<f32>,
     tags: Vec<u64>,
     end: Option<u64>,
+    first: Option<u64>,
     anchors: VecDeque<Anchor>,
 }
 #[derive(Clone, Copy, Debug, Default)]
@@ -36,11 +37,15 @@ impl SampleRing {
             samples: vec![0.0; capacity * channels as usize],
             tags: vec![u64::MAX; capacity],
             end: None,
+            first: None,
             anchors: VecDeque::with_capacity(seconds * 128),
         })
     }
     pub fn end(&self) -> Option<u64> {
         self.end
+    }
+    pub fn first(&self) -> Option<u64> {
+        self.first
     }
     pub fn oldest(&self) -> u64 {
         self.end.unwrap_or(0).saturating_sub(self.capacity as u64)
@@ -48,6 +53,7 @@ impl SampleRing {
     pub fn clear(&mut self) {
         self.tags.fill(u64::MAX);
         self.end = None;
+        self.first = None;
         self.anchors.clear();
     }
     pub fn push(
@@ -67,6 +73,7 @@ impl SampleRing {
         if frames == 0 {
             return Ok(PushResult::default());
         }
+        self.first.get_or_insert(first);
         let overlap = self
             .end
             .unwrap_or(first)

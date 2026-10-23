@@ -10,6 +10,14 @@ pub struct EngineConfig {
     pub f_lo: f32,
     pub f_hi: f32,
     pub edge_hz: f32,
+    pub fast_seconds: f32,
+    pub regularization: f32,
+    pub activity_db: f32,
+    pub activity_bins: usize,
+    pub mono_to_stereo: f32,
+    pub stereo_to_mono: f32,
+    pub impulse_ratio: f32,
+    pub impulse_hold_hops: usize,
     pub ring_seconds: usize,
     pub align_seconds: f32,
     pub align_ramp_ms: f32,
@@ -33,6 +41,14 @@ impl Default for EngineConfig {
             f_lo: 8000.0,
             f_hi: 20000.0,
             edge_hz: 500.0,
+            fast_seconds: 0.04,
+            regularization: 1e-3,
+            activity_db: 30.0,
+            activity_bins: 9,
+            mono_to_stereo: 0.95,
+            stereo_to_mono: 0.98,
+            impulse_ratio: 6.0,
+            impulse_hold_hops: 2,
             ring_seconds: 4,
             align_seconds: 1.0,
             align_ramp_ms: 10.0,
@@ -62,6 +78,10 @@ impl EngineConfig {
             self.f_lo,
             self.f_hi,
             self.edge_hz,
+            self.fast_seconds,
+            self.regularization,
+            self.activity_db,
+            self.impulse_ratio,
             self.align_seconds,
             self.align_ramp_ms,
             self.align_min_psr,
@@ -88,6 +108,19 @@ impl EngineConfig {
             || self.f_hi > 21000.0
             || self.f_lo >= self.f_hi
             || self.edge_hz > self.f_hi - self.f_lo
+            || self.fast_seconds > 2.0
+            || self.regularization > 1.0
+            || self.activity_db > 120.0
+            || self.activity_bins == 0
+            || self.activity_bins.is_multiple_of(2)
+            || self.activity_bins > 65
+            || !self.mono_to_stereo.is_finite()
+            || !self.stereo_to_mono.is_finite()
+            || !(0.0..1.0).contains(&self.mono_to_stereo)
+            || !(self.mono_to_stereo..=1.0).contains(&self.stereo_to_mono)
+            || self.stereo_to_mono == self.mono_to_stereo
+            || self.impulse_ratio <= 1.0
+            || self.impulse_hold_hops > 32
             || self.align_seconds > 1.0
             || self.align_seconds < 0.1
             || self.align_ramp_ms >= self.align_seconds * 500.0
