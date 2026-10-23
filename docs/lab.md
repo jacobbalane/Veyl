@@ -17,6 +17,7 @@ single-speaker phone candidate, save this profile as an ignored `params.toml`:
 ```toml
 fast_seconds = 0.005
 infer_single_path = true
+resample_reference = true
 ```
 
 Then pass `--config params.toml`. A profile uses the engine's defaults for omitted fields. Without
@@ -57,6 +58,6 @@ across the inputs. The terminal lists the best F1 results with at most 0.2 false
 Unlabelled real inputs cannot establish that rate and are not ranked. The output path must be new.
 Sweeps support up to 16 distinct parameters, 32 values per parameter and 4,096 combinations.
 
-The phone candidate's basic result is a regression check, not full acceptance. Hover, stereo,
-PC and clock-drift gesture gates remain unresolved in [tuning](tuning.md). No R1–R10 device
+The phone candidate's basic and clock-drift results are regression checks, not full acceptance.
+Hover, stereo and PC gesture gates remain unresolved in [tuning](tuning.md). No R1–R10 device
 recordings have been supplied yet.

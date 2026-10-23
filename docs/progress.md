@@ -879,7 +879,19 @@ The independent 20 kHz regression measures 0.0026–0.0031 dB ripple for ±200 p
 [Decision 0015](decisions/0015-microphone-clock-conversion.md) records the change. The required
 DSP/simulator/lab release suite and whole-workspace clippy pass, including existing drift,
 meter and phone-candidate regressions. Older drifting/PC fixtures need regeneration. M4.5's
-gesture gates remain open; within-window clock compensation is the next experiment.
+gesture gates remain open.
+
+**M4.5 within-window clock compensation verified.** The opt-in phone candidate resamples the
+reference with the aligner's estimated phase and rate before windowing. It validates padded
+support and waits for future reference without advancing alignment. All seven full 120-second
+clock regressions pass: 50/200 ppm for seeds 1–3, plus reversed 200 ppm for seed 1. They match
+70/70 truth pokes with no extras, no re-locks or drift warnings, median truth-to-detect delay
+within 80 ms, and maximum direct residual after five seconds of 0.02085 taps. Signed-lag/gap
+tests cover both paths at both sample rates. [Decision 0016](decisions/0016-within-window-reference-clock-compensation.md)
+records the opt-in setting. All 66 portable release tests, whole-workspace clippy, formatting
+and the version check pass. Defaults remain unchanged. Hover seed 2 still has eight false
+pokes; stereo and PC recall remain insufficient. A raw-peak jump guard also removed real phone
+pokes and was discarded. M4.5 and overall M4 acceptance remain open.
 
 ## Dependency follow-up
 

@@ -6,8 +6,8 @@ recordings have been supplied, and the installed preview still uses the earlier 
 ## Gesture measurements
 
 The original defaults retain a 40 ms complex average and input-coherence mode selection. The
-explicit development probe currently matches 0/10 pokes for basic, 200 ppm and PC input across
-seeds 1–3. These runs are forty seconds; the complete 120-second drift/PC gates remain pending.
+last explicit default development probe matched 0/10 pokes for basic, 200 ppm and PC input across
+seeds 1–3. Those forty-second measurements preceded the clock-renderer correction below.
 
 The single-speaker candidate uses `fast_seconds = 0.005` and `infer_single_path = true`. Other
 thresholds retain their defaults, including the unchanged motion threshold and relative floor.
@@ -25,14 +25,37 @@ The full negative runs below used that candidate before meter integration:
 | Typing   |              300 |                  0 |      0 |      0 | At most 1 |
 | Walking  |              300 |                  0 |      0 |      0 | 0         |
 
-Stereo, PC and drifting gesture recall are not sufficient. Shorter floor calibration improved one
+Stereo and PC gesture recall are not sufficient. Shorter floor calibration improved one
 stereo seed to 9/10; it did not solve PC input. No gesture acceptance threshold has been relaxed.
 The full scenario matrix and live actions must not be accepted from the basic phone result alone.
 
 Stronger ridge, frequency smoothing, full covariance whitening and an overlap-save adaptive
-canceller did not meet the gates. Their prototypes were removed. Eight-tap Lanczos interpolation
-has measurable high-band phase/gain error, but a counterfactual PC run with zero clock drift also
-missed its poke. The renderer remains unchanged; interpolation error does not explain every failure.
+canceller did not meet the gates. Their prototypes were removed. A per-pair normalization
+experiment improved a controlled gain test but did not improve hover or PC detection; it was
+also removed. A counterfactual PC run with zero clock drift missed its poke, so clock correction
+does not explain every failure.
+
+## Clock compensation
+
+[Decision 0015](decisions/0015-microphone-clock-conversion.md) corrects the renderer's numerical
+amplitude modulation of stationary paths under clock drift. The 20 kHz regression measures
+0.0026–0.0031 dB ripple at ±200 ppm. Geometry, reflection strengths and labels keep their values.
+Regenerate drifting/PC fixtures made with the older renderer.
+
+The phone candidate additionally sets `resample_reference = true`, compensating the estimated
+clock rate inside each window. With the corrected renderer, a forty-second 200 ppm comparison
+detects 10/10 pokes with this option and 0/10 without it. The full candidate regression measures:
+
+| Clock    | Seeds | Seconds per run | Matches | Extras | Maximum direct residual after 5 s |
+| -------- | ----- | --------------: | ------: | -----: | --------------------------------: |
+| 50 ppm   | 1–3   |             120 |   30/30 |      0 |                      0.02085 taps |
+| 200 ppm  | 1–3   |             120 |   30/30 |      0 |                      0.01671 taps |
+| −200 ppm | 1     |             120 |   10/10 |      0 |                      0.01719 taps |
+
+All seven runs retain their lock, emit no drift warning and meet an 80 ms median
+truth-to-detect limit. [Decision 0016](decisions/0016-within-window-reference-clock-compensation.md)
+records the implementation. Hover seed 2 still produces eight false pokes in 300 seconds;
+PC and stereo recall remain insufficient. These options remain opt-in until the full matrix passes.
 
 ## Meter measurements
 
@@ -57,9 +80,3 @@ default-gesture development probe. [Full lab exports and sweeps](lab.md) now sup
 tuning pass. The seed-1 forty-second candidate report measures median truth-to-detect delay
 57.98 ms, p95 98.25 ms and median confirmation 18.67 ms. Its motion heatmap was inspected.
 Performance and allocation checks remain M4.8 work.
-
-One remaining investigation is direct-path normalization. The default phone's two microphone
-direct paths are about 15.4 samples apart, wider than the shared −8/+6-tap normalization window.
-One pair can therefore be normalized using sidelobes rather than its own direct peak. The lab's
-feature/heatmap output now makes that hypothesis testable; it has not yet been established as the
-cause of the remaining failures.

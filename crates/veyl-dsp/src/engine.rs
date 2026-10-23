@@ -6,6 +6,7 @@ use crate::{
     meter::{Meter, MeterReading, SourceStatus},
     motion::{MotionFeatures, MotionInput, MotionTracker},
     poke::{PokeDetector, PokeEvent},
+    resample::FractionalSinc,
     ring::SampleRing,
     BlockFlags, BlockIn, RangePreset, Sensitivity, Stream, StreamFormat,
 };
@@ -81,6 +82,8 @@ pub struct Engine {
     detector: PokeDetector,
     meter: Meter,
     reference_window: Vec<f32>,
+    reference_scratch: Vec<f32>,
+    reference_sampler: FractionalSinc<64>,
     microphone_window: Vec<f32>,
     state: EngineState,
     next_hop: Option<u64>,
@@ -125,6 +128,8 @@ impl Engine {
                 config.temperature_c,
             ),
             reference_window: vec![0.0; config.window * format.ref_channels as usize],
+            reference_scratch: vec![0.0; config.window * 2 + 128],
+            reference_sampler: FractionalSinc::new()?,
             microphone_window: vec![0.0; config.window * format.mic_channels as usize],
             state: EngineState::NoAudio,
             next_hop: None,
@@ -353,8 +358,22 @@ impl Engine {
             let Ok(ref_first) = u64::try_from(mic_first as i128 - lag as i128) else {
                 break;
             };
+            let rate = self.aligner.drift_ppm() * 1e-6;
+            let required_padding = if self.config.resample_reference {
+                33.0 + (rate.abs() * self.config.window as f64).ceil()
+            } else {
+                0.0
+            };
+            let supported = required_padding.is_finite()
+                && required_padding <= (self.config.window / 2 + 64) as f64;
+            let padding = if supported {
+                required_padding as usize
+            } else {
+                0
+            };
             if ref_first
                 .checked_add(self.config.window as u64)
+                .and_then(|end| end.checked_add(padding as u64))
                 .is_none_or(|end| end > self.reference.end().unwrap())
             {
                 break;
@@ -363,14 +382,28 @@ impl Engine {
                 .aligner
                 .begin_hop(frame)
                 .ok_or("Non-increasing engine hop.")?;
-            let mut valid = true;
+            let mut valid = supported;
             for channel in 0..self.format.ref_channels as usize {
-                valid &= self.reference.copy(
-                    ref_first,
-                    Some(channel),
-                    &mut self.reference_window
-                        [channel * self.config.window..(channel + 1) * self.config.window],
-                );
+                let output = &mut self.reference_window
+                    [channel * self.config.window..(channel + 1) * self.config.window];
+                if self.config.resample_reference && supported {
+                    let scratch = &mut self.reference_scratch[..self.config.window + 2 * padding];
+                    if let Some(first) = ref_first.checked_sub(padding as u64) {
+                        valid &= self.reference.copy(first, Some(channel), scratch);
+                        for (index, sample) in output.iter_mut().enumerate() {
+                            // The tracker predicts delay at this hop's last microphone frame.
+                            let at = padding as f64 + index as f64
+                                - fraction
+                                - rate * (index as f64 - (self.config.window - 1) as f64);
+                            *sample = self.reference_sampler.read(scratch, at);
+                        }
+                    } else {
+                        valid = false;
+                        output.fill(0.0);
+                    }
+                } else {
+                    valid &= self.reference.copy(ref_first, Some(channel), output);
+                }
             }
             for channel in 0..self.format.mic_channels as usize {
                 valid &= self.microphone.copy(
@@ -406,7 +439,11 @@ impl Engine {
             let fast = self.echo.process(
                 &self.reference_window,
                 &self.microphone_window,
-                fraction,
+                if self.config.resample_reference {
+                    0.0
+                } else {
+                    fraction
+                },
                 self.background
                     .settled()
                     .then(|| self.background.transfer()),

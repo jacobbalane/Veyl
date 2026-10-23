@@ -41,6 +41,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .transpose()?
             .unwrap_or(20000.0),
         infer_single_path: args.iter().any(|arg| arg == "infer"),
+        resample_reference: args.iter().any(|arg| arg == "clock-warp"),
         regularization: args
             .iter()
             .find_map(|arg| arg.strip_prefix("reg="))

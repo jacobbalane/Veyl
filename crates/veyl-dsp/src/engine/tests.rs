@@ -13,8 +13,11 @@ fn signed_lags_wait_for_matching_reference_and_gaps_hold_instead_of_inventing_mo
                 ((state >> 40) as f32 / 16777216.0 * 10000.0 - 5000.0) as i16
             })
             .collect();
-        for lag in [-128, 112] {
-            let config = EngineConfig::default();
+        for (lag, resample_reference) in [(-128, false), (112, false), (-128, true), (112, true)] {
+            let config = EngineConfig {
+                resample_reference,
+                ..EngineConfig::default()
+            };
             let mut engine = Engine::new(
                 config,
                 StreamFormat {

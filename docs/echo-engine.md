@@ -22,6 +22,13 @@ two-state delay/rate filter from the direct path; the caller skips feedback on i
 hops. [Decision 0011](decisions/0011-clock-aware-alignment.md) explains path continuity and how
 rechecks compare estimates made at different frames. Drift itself does not reset the echo model.
 
+The opt-in `resample_reference` path applies the predicted phase and rate within the reference
+window before the FFT, using a 64-tap phase-interpolated sinc. It copies and validates the full
+interpolation support. Missing support invalidates the hop; future reference delays processing
+without advancing alignment. Integer frame origins stay integer, and sampling positions are
+relative. The estimator then applies no additional phase ramp. See
+[decision 0016](decisions/0016-within-window-reference-clock-compensation.md).
+
 `EchoEstimator` receives channel-major windows: N samples for reference channel 0, then channel 1;
 the microphone uses the same layout. Defaults are a periodic 2048-frame Hann window and a
 256-frame hop. Fast spectral averages use a 40 ms time constant. Correlated stereo uses a mono
