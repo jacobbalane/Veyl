@@ -4630,6 +4630,8 @@ name = "veyl-dsp"
 version = "0.0.1"
 dependencies = [
  "rustfft",
+ "serde",
+ "toml 1.1.8+spec-1.1.0",
 ]
 
 [[package]]

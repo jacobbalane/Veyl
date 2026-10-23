@@ -42,36 +42,37 @@ assets/licenses/manrope.txt; the website serves licenses/manrope.txt.
 
 These are direct external dependencies of the workspace crates, including build and test tools.
 
-| Crate                        | Locked version | License           |
-| ---------------------------- | -------------- | ----------------- |
-| aes-gcm                      | 0.11.1         | Apache-2.0 OR MIT |
-| audioadapter-buffers         | 5.2.0          | MIT OR Apache-2.0 |
-| base64                       | 0.23.1         | MIT OR Apache-2.0 |
-| getrandom                    | 0.4.3          | MIT OR Apache-2.0 |
-| hkdf                         | 0.13.0         | MIT OR Apache-2.0 |
-| hmac                         | 0.13.0         | MIT OR Apache-2.0 |
-| hound                        | 3.5.1          | Apache-2.0        |
-| proptest                     | 1.12.0         | MIT OR Apache-2.0 |
-| rubato                       | 5.0.1          | MIT OR Apache-2.0 |
-| rustfft                      | 6.4.1          | MIT OR Apache-2.0 |
-| serde                        | 1.0.229        | MIT OR Apache-2.0 |
-| serde_json                   | 1.0.154        | MIT OR Apache-2.0 |
-| sha2                         | 0.11.1         | MIT OR Apache-2.0 |
-| subtle                       | 2.6.1          | BSD-3-Clause      |
-| tauri                        | 2.12.5         | Apache-2.0 OR MIT |
-| tauri-build                  | 2.7.4          | Apache-2.0 OR MIT |
-| tauri-plugin-single-instance | 2.5.4          | Apache-2.0 OR MIT |
-| tempfile                     | 3.27.0         | MIT OR Apache-2.0 |
-| time                         | 0.3.55         | MIT OR Apache-2.0 |
-| tokio                        | 1.54.1         | MIT               |
-| tracing                      | 0.1.44         | MIT               |
-| tracing-appender             | 0.2.5          | MIT               |
-| tracing-subscriber           | 0.3.23         | MIT               |
-| x25519-dalek                 | 3.0.0          | BSD-3-Clause      |
-| windows-sys                  | 0.61.2         | MIT OR Apache-2.0 |
-| windows                      | 0.62.2         | MIT OR Apache-2.0 |
-| windows-core                 | 0.62.2         | MIT OR Apache-2.0 |
-| zeroize                      | 1.9.1          | Apache-2.0 OR MIT |
+| Crate                        | Locked version   | License           |
+| ---------------------------- | ---------------- | ----------------- |
+| aes-gcm                      | 0.11.1           | Apache-2.0 OR MIT |
+| audioadapter-buffers         | 5.2.0            | MIT OR Apache-2.0 |
+| base64                       | 0.23.1           | MIT OR Apache-2.0 |
+| getrandom                    | 0.4.3            | MIT OR Apache-2.0 |
+| hkdf                         | 0.13.0           | MIT OR Apache-2.0 |
+| hmac                         | 0.13.0           | MIT OR Apache-2.0 |
+| hound                        | 3.5.1            | Apache-2.0        |
+| proptest                     | 1.12.0           | MIT OR Apache-2.0 |
+| rubato                       | 5.0.1            | MIT OR Apache-2.0 |
+| rustfft                      | 6.4.1            | MIT OR Apache-2.0 |
+| serde                        | 1.0.229          | MIT OR Apache-2.0 |
+| serde_json                   | 1.0.154          | MIT OR Apache-2.0 |
+| sha2                         | 0.11.1           | MIT OR Apache-2.0 |
+| subtle                       | 2.6.1            | BSD-3-Clause      |
+| tauri                        | 2.12.5           | Apache-2.0 OR MIT |
+| tauri-build                  | 2.7.4            | Apache-2.0 OR MIT |
+| tauri-plugin-single-instance | 2.5.4            | Apache-2.0 OR MIT |
+| tempfile                     | 3.27.0           | MIT OR Apache-2.0 |
+| time                         | 0.3.55           | MIT OR Apache-2.0 |
+| tokio                        | 1.54.1           | MIT               |
+| toml                         | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 |
+| tracing                      | 0.1.44           | MIT               |
+| tracing-appender             | 0.2.5            | MIT               |
+| tracing-subscriber           | 0.3.23           | MIT               |
+| x25519-dalek                 | 3.0.0            | BSD-3-Clause      |
+| windows-sys                  | 0.61.2           | MIT OR Apache-2.0 |
+| windows                      | 0.62.2           | MIT OR Apache-2.0 |
+| windows-core                 | 0.62.2           | MIT OR Apache-2.0 |
+| zeroize                      | 1.9.1            | Apache-2.0 OR MIT |
 
 Hound is copyright © 2015 Ruud van Asseldonk. Its Apache 2.0 license is in
 `assets/licenses/hound-Apache-2.0.txt`; desktop installers ship it as `licenses/hound.txt`.
@@ -83,6 +84,9 @@ desktop installer's `licenses` folder.
 RustFFT's MIT license is in `assets/licenses/rustfft-MIT.txt` and ships as `licenses/rustfft.txt`.
 The portable sound-check analyzer uses it in production; it was already used by the simulator and
 DSP tests.
+
+The engine's parameter loader uses the TOML crate. Its MIT license is in
+`assets/licenses/toml-MIT.txt` and ships as `licenses/toml.txt`.
 
 ## Android dependencies
 

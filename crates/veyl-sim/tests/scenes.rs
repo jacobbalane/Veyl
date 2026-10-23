@@ -11,6 +11,58 @@ fn power(signal: &[f32]) -> f64 {
         / signal.len().max(1) as f64
 }
 #[test]
+fn acoustic_delay_and_clock_scenarios_lock_from_pcm_and_capture_timestamps_within_three_seconds() {
+    use veyl_dsp::{
+        align::{AlignmentLock, GccPhat},
+        config::EngineConfig,
+    };
+    for seed in 1..=3 {
+        for name in [
+            "latency_200ms",
+            "drift_50ppm",
+            "drift_200ppm",
+            "pc_bluetooth",
+        ] {
+            let scene = scenarios::scene(name, seed, Some(3.0)).unwrap();
+            let rendered = scene::render(&scene).unwrap();
+            let mono = |samples: &[f32], channels| {
+                samples
+                    .chunks_exact(channels)
+                    .map(|frame| frame.iter().sum::<f32>() / channels as f32)
+                    .collect::<Vec<_>>()
+            };
+            let reference = mono(&rendered.reference, 2);
+            let mic = mono(&rendered.mic, scene.mics.len());
+            let config = EngineConfig::default();
+            let mut gcc = GccPhat::new(48000, &config, 24000).unwrap();
+            let mut lock = AlignmentLock::new(48000, config).unwrap();
+            for first in [0, 48000] {
+                let at = first as u64 + 24000;
+                let ns = at * 1_000_000_000 / 48000;
+                let anchor = rendered
+                    .blocks
+                    .iter()
+                    .filter(|block| block.stream == 1)
+                    .min_by_key(|block| block.capture_ns.abs_diff(ns as i64))
+                    .unwrap();
+                let timestamp_offset = anchor.first_frame as f64
+                    + (ns as i64 - anchor.capture_ns) as f64 * 48000.0 / 1e9
+                    - at as f64;
+                let estimate = gcc
+                    .estimate_near(
+                        &reference[first..first + 48000],
+                        &mic[first..first + 72000],
+                        -1440..=24000,
+                        lock.expected_lag(timestamp_offset, None),
+                    )
+                    .unwrap();
+                lock.observe((first + 72000) as u64, estimate, timestamp_offset, None);
+            }
+            assert!(lock.locked(), "PCM alignment did not lock for {name}");
+        }
+    }
+}
+#[test]
 fn every_catalogue_scene_has_finite_filtered_pcm_real_metadata_and_valid_seeded_parameters() {
     for seed in 1..=3 {
         for name in SCENARIOS {

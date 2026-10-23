@@ -740,6 +740,17 @@ report; echo features, detection gates and the motion plot remain M4.2–M4.8 wo
 M4.1 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39881310754) at `1d31be1`,
 including the release tests, both Windows installers and Android. Website deployment passed.
 
+**M4.2 foundation implemented.** Absolute-frame rings reject gaps/overlaps and retain capture-time
+anchors. Validated TOML parameters control a preplanned GCC-PHAT search, two-estimate locking,
+five-second rechecks and a two-state fractional-delay/rate tracker. Startup compares timestamp-
+corrected delays and keeps a strong, consistent acoustic path when two microphones exchange peak
+rank; [decision 0011](decisions/0011-clock-aware-alignment.md) records the measured failure and fix.
+PCM tests with seeds 1–3 lock the 200 ms, 50/200 ppm and Bluetooth scenes within three seconds.
+Unit tests cover both sample rates, negative lags, unrelated audio, route jumps and continuous
+integer folding for both drift signs. All required DSP/simulator/lab release tests, portable and
+desktop clippy, 36 desktop tests and repository formatting pass. M4.2 stays open until M4.3 supplies actual fast-map feedback
+and the full acoustic residual gate can run; the current Kalman test uses known measurements.
+
 ## Dependency follow-up
 
 [Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the
