@@ -908,6 +908,15 @@ are in [tuning](tuning.md); [decision 0017](decisions/0017-require-motion-at-the
 records the guard. Five floor values and nine window/time profiles did not solve varied recall.
 All 67 portable release tests, whole-workspace clippy and formatting pass. M4.5 remains open.
 
+**M4.5 volume-control correction.** Changing only the reported media volume now preserves pending
+gesture history, as intended by direct-path normalization. Source, route, capture and microphone
+changes still clear it. A control-path regression confirms that an in-progress poke survives a
+volume update and is discarded on a source change. All 68 portable release tests and whole-workspace
+clippy pass. Full volume-step counts are unchanged at 8/10, 9/10 and 8/10 matches: this fixes
+the control semantics but does not close the remaining acoustic recall gate. The turn guard and
+broader measurement probe [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39926861980)
+at `3668c36`, including both Windows installers and signed Android.
+
 ## Dependency follow-up
 
 [Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the

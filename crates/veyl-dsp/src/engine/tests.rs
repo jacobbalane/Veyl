@@ -1,6 +1,70 @@
 use super::*;
 
 #[test]
+fn source_control_changes_clear_pending_pokes_but_media_volume_updates_preserve_them() {
+    for change_source in [false, true] {
+        let mut engine = Engine::new(
+            EngineConfig::default(),
+            StreamFormat {
+                sample_rate: 48000,
+                ref_channels: 1,
+                mic_channels: 1,
+            },
+        )
+        .unwrap();
+        let mut status = SourceStatus {
+            capture_running: true,
+            source: crate::SoundSource::TestSound,
+            media_volume: Some(0.4),
+            ..SourceStatus::default()
+        };
+        engine.set_source_status(status).unwrap();
+        let mut updated = false;
+        let mut pokes = 0;
+        for frame in (0..48000).step_by(256) {
+            let t = frame as f32 / 48000.0;
+            let distance = if t < 0.1 {
+                20.0
+            } else if t < 0.25 {
+                20.0 - 5.0 * (t - 0.1) / 0.15
+            } else if t < 0.28 {
+                15.0
+            } else if t < 0.48 {
+                15.0 + 5.0 * (t - 0.28) / 0.2
+            } else {
+                20.0
+            };
+            if !updated && t >= 0.2 {
+                if change_source {
+                    status.source = crate::SoundSource::Player;
+                } else {
+                    status.media_volume = Some(0.8);
+                }
+                engine.set_source_status(status).unwrap();
+                updated = true;
+            }
+            pokes += usize::from(
+                engine
+                    .detector
+                    .process(
+                        MotionFeatures {
+                            frame,
+                            valid: true,
+                            present: true,
+                            distance_cm: Some(distance),
+                            z_max: 20.0,
+                            ..MotionFeatures::default()
+                        },
+                        true,
+                    )
+                    .is_some(),
+            );
+        }
+        assert_eq!(pokes, usize::from(!change_source));
+    }
+}
+
+#[test]
 fn signed_lags_wait_for_matching_reference_and_gaps_hold_instead_of_inventing_motion() {
     for rate in [44100, 48000] {
         let frames = rate as usize * 5;

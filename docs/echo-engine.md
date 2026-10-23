@@ -61,6 +61,9 @@ confirmation below score 15 and during unsafe or silent source conditions. New e
 capture off: callers must use `set_source_status` for their active source. `Meter` events arrive
 every 100 ms even when the engine is waiting for sound. Snapshot includes the latest reading.
 
+Updating only media volume preserves a pending gesture: direct-path normalization handles that
+gain change. Changing source, route, capture or microphone state still clears pending gestures.
+
 The physical-path inference experiment is opt-in through TOML. Coherence smoothing is independent
 of fast transfer smoothing. The default fast time remains 40 ms; a 5 ms candidate detects the
 basic single-speaker phone gestures but still fails other required scenarios. See

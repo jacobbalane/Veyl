@@ -225,7 +225,11 @@ impl Engine {
         self.paused = paused;
     }
     pub fn set_source_status(&mut self, status: SourceStatus) -> Result<(), &'static str> {
-        let changed = self.meter.status() != status;
+        // Volume changes use direct-path normalization; the capture context has not changed.
+        let changed = SourceStatus {
+            media_volume: status.media_volume,
+            ..self.meter.status()
+        } != status;
         self.meter.set_status(status)?;
         if changed {
             self.detector.suspend();
