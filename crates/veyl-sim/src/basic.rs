@@ -30,10 +30,13 @@ pub struct PokeTruth {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TruthSample {
+    #[serde(default)]
+    pub mover: usize,
     pub frame: u64,
     pub echo_distance_m: f32,
 }
 pub struct Rendered {
+    pub events: Vec<crate::scene::SceneEvent>,
     pub sample_rate: u32,
     pub ref_channels: u8,
     pub mic_channels: u8,
@@ -198,6 +201,7 @@ pub fn poke_basic(seed: u64, seconds: f32) -> io::Result<Rendered> {
             });
         }
         truth.push(TruthSample {
+            mover: 0,
             frame: first_frame,
             echo_distance_m: echo_distance(height(first_frame as f64 / FS as f64)) as f32,
         });
@@ -223,6 +227,7 @@ pub fn poke_basic(seed: u64, seconds: f32) -> io::Result<Rendered> {
         })
         .collect();
     Ok(Rendered {
+        events: vec![],
         sample_rate: FS,
         ref_channels: 2,
         mic_channels: 2,

@@ -5,7 +5,7 @@ use std::{
 };
 use veyl_lab::{fake_phone::FakePhone, recording::Input};
 
-const USAGE: &str = "Usage:\n  veyl-lab scenarios\n  veyl-lab analyze DIR [--out DIR2]\n  veyl-lab fake-phone (--scenario poke_basic | --recording DIR) [--port 47820] [--realtime] [--seed N]";
+const USAGE: &str = "Usage:\n  veyl-lab scenarios\n  veyl-lab sim SCENARIO [--seed N] [--seconds S] --out DIR\n  veyl-lab analyze DIR [--out DIR2]\n  veyl-lab fake-phone (--scenario NAME | --recording DIR) [--port 47820] [--realtime] [--seed N]";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -15,6 +15,9 @@ async fn main() {
     }
 }
 async fn run(arguments: Vec<String>) -> io::Result<()> {
+    if arguments.first().map(String::as_str) == Some("sim") {
+        return simulate(&arguments);
+    }
     if arguments.first().map(String::as_str) == Some("analyze") {
         let directory = arguments.get(1).ok_or_else(usage)?;
         let output = match arguments.len() {
@@ -29,14 +32,7 @@ async fn run(arguments: Vec<String>) -> io::Result<()> {
     }
     if arguments.as_slice() == ["scenarios"] {
         for scenario in veyl_sim::SCENARIOS {
-            println!(
-                "{scenario}{}",
-                if *scenario == "poke_basic" {
-                    " (available)"
-                } else {
-                    " (planned for M4)"
-                }
-            );
+            println!("{scenario} (available)");
         }
         return Ok(());
     }
@@ -79,7 +75,9 @@ async fn run(arguments: Vec<String>) -> io::Result<()> {
         }
     }
     let input = match (scenario.as_deref(), recording.as_deref()) {
-        (Some("poke_basic"), None) => Input::generated(veyl_sim::poke_basic(seed, 40.0)?),
+        (Some(name), None) => Input::generated(veyl_sim::scene::render(
+            &veyl_sim::scenarios::scene(name, seed, None)?,
+        )?),
         (None, Some(directory)) if !options.contains("--seed") => {
             Input::read(Path::new(directory))?
         }
@@ -109,6 +107,37 @@ async fn run(arguments: Vec<String>) -> io::Result<()> {
     let report = phone.report();
     phone.shutdown().await;
     println!("Stopped. Sessions: {}; reference blocks: {}; microphone blocks: {}; decryption errors: {}.", report.sessions, report.blocks[0], report.blocks[1], report.decryption_errors);
+    Ok(())
+}
+fn simulate(arguments: &[String]) -> io::Result<()> {
+    let name = arguments.get(1).ok_or_else(usage)?;
+    let mut seed = 1;
+    let mut seconds = None;
+    let mut output = None;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut options = arguments.iter().skip(2);
+    while let Some(option) = options.next() {
+        if !seen.insert(option) {
+            return Err(usage());
+        }
+        let value = options.next().ok_or_else(usage)?;
+        match option.as_str() {
+            "--seed" => seed = value.parse().map_err(|_| usage())?,
+            "--seconds" => seconds = Some(value.parse().map_err(|_| usage())?),
+            "--out" => output = Some(value),
+            _ => return Err(usage()),
+        }
+    }
+    let output = output.ok_or_else(usage)?;
+    let scene = veyl_sim::scenarios::scene(name, seed, seconds)?;
+    let mut input = Input::generated(veyl_sim::scene::render(&scene)?);
+    input.meta.notes = format!("Acoustic simulator: {name}; seed {seed}.");
+    input.save_generated(Path::new(output))?;
+    println!(
+        "Generated {name}: {} blocks, {} truth pokes. Audio is synthetic and privacy-filtered.",
+        input.blocks.len(),
+        input.labels.len()
+    );
     Ok(())
 }
 fn usage() -> io::Error {

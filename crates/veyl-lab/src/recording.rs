@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     path::Path,
 };
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -39,6 +39,61 @@ pub struct Input {
     capture_origin: i64,
 }
 impl Input {
+    /// The simulator's explicit export never overwrites an existing recording or other files.
+    pub fn save_generated(&self, directory: &Path) -> io::Result<()> {
+        if self.meta.source != "sim" {
+            return Err(invalid("Only generated scenes use this export."));
+        }
+        if directory.exists() {
+            if !directory.is_dir()
+                || directory.symlink_metadata()?.file_type().is_symlink()
+                || fs::read_dir(directory)?.next().is_some()
+            {
+                return Err(invalid("Choose a new or empty simulator output folder."));
+            }
+        } else {
+            fs::create_dir_all(directory)?;
+        }
+        let create = |name: &str| {
+            fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(directory.join(name))
+        };
+        let mut meta = create("meta.json")?;
+        serde_json::to_writer_pretty(&mut meta, &self.meta).map_err(io::Error::other)?;
+        meta.write_all(b"\n")?;
+        for (name, channels, samples) in [
+            ("ref.wav", self.meta.ref_channels, &self.reference),
+            ("mic.wav", self.meta.mic_channels, &self.mic),
+        ] {
+            let spec = hound::WavSpec {
+                channels: channels as u16,
+                sample_rate: self.meta.sample_rate,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+            let mut writer = hound::WavWriter::new(std::io::BufWriter::new(create(name)?), spec)
+                .map_err(io::Error::other)?;
+            for &sample in samples {
+                writer.write_sample(sample).map_err(io::Error::other)?;
+            }
+            writer.finalize().map_err(io::Error::other)?;
+        }
+        let mut blocks = std::io::BufWriter::new(create("blocks.jsonl")?);
+        for block in &self.blocks {
+            serde_json::to_writer(&mut blocks, block).map_err(io::Error::other)?;
+            blocks.write_all(b"\n")?;
+        }
+        blocks.flush()?;
+        let mut labels = create("labels.jsonl")?;
+        for label in &self.labels {
+            serde_json::to_writer(&mut labels, label).map_err(io::Error::other)?;
+            labels.write_all(b"\n")?;
+        }
+        create("events.jsonl")?;
+        Ok(())
+    }
     pub fn generated(rendered: Rendered) -> Self {
         Self {
             meta: RecordingMeta {
@@ -47,7 +102,7 @@ impl Input {
                 ref_channels: rendered.ref_channels,
                 mic_channels: rendered.mic_channels,
                 source: "sim".into(),
-                device: json!({"manufacturer":"Veyl","model":"Simulator"}),
+                device: json!({"manufacturer":"Veyl","model":"Simulator", "scene_events":rendered.events}),
                 app_versions: json!({"lab":env!("CARGO_PKG_VERSION")}),
                 hp_cutoff_hz: 8000,
                 started_at: OffsetDateTime::now_utc()
@@ -240,6 +295,25 @@ fn invalid(message: &'static str) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn simulated_exports_round_trip_without_overwriting_existing_files() {
+        let root = tempfile::tempdir().unwrap();
+        let output = root.path().join("scene");
+        let rendered =
+            veyl_sim::scene::render(&veyl_sim::scenarios::scene("blocked", 1, Some(0.1)).unwrap())
+                .unwrap();
+        let input = Input::generated(rendered);
+        input.save_generated(&output).unwrap();
+        let loaded = Input::read(&output).unwrap();
+        assert!(loaded.reference == input.reference && loaded.mic == input.mic);
+        assert_eq!(loaded.blocks.len(), 20);
+        assert_eq!(
+            loaded.meta.device["scene_events"][0]["kind"],
+            "capture_blocked"
+        );
+        assert!(input.save_generated(&output).is_err());
+        assert_eq!(fs::read(output.join("events.jsonl")).unwrap().len(), 0);
+    }
     #[test]
     fn replay_uses_absolute_frame_offsets_preserves_gaps_and_rebases_only_known_timestamps() {
         let mut input = Input::generated(veyl_sim::poke_basic(1, 0.1).unwrap());

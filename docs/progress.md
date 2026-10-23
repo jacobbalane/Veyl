@@ -570,8 +570,8 @@ a phone. This milestone is marked parallel-ok in the plan; work begins while M3.
 - [x] **M3P.2** WASAPI loopback/microphone threads, raw fallback, format conversion/resampling,
       privacy filtering and timed ten-millisecond blocks behind a fake-able capture interface.
 - [x] **M3P.3** Source switching, device settings/pickers, onboarding path, PC tips and diagnostics.
-- [ ] **M3P.4** Test-sound playback and Check this PC's sound.
-- [ ] **M3P.5** PC test recordings read by the lab analyzer.
+- [x] **M3P.4** Test-sound playback and Check this PC's sound.
+- [x] **M3P.5** PC test recordings read by the lab analyzer.
 - [ ] **M3P.6 [device]** P1/P4/P5, optional ARM64 P7, and recordings R11–R13.
 
 **Acceptance:** CI unit tests pass, P1/P4/P5 pass and R11–R13 exist. Device checks remain pending
@@ -643,7 +643,7 @@ M3P.3 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39822971
 portable checks, native Windows x64 tests/installer, ARM64 installer cross-build and Android
 tests/lint/APKs. Website deployment passed. GitHub work remains confined to Veyl.
 
-**M3P.4 implemented locally; CI pending.** Settings offers an optional five-second BrightLoop
+**M3P.4 implemented and verified.** Settings offers an optional five-second BrightLoop
 sound check through the selected speaker at the current Windows volume. It never starts on mode
 selection. A shared WASAPI render owner converts stereo float to the device's mix format; buffers,
 COM and Pro Audio scheduling stay on that thread. Cancel, source/device changes and Quit stop it.
@@ -661,11 +661,16 @@ changes. UI tests require the user's click, expose Cancel and display the result
 tests and required simulator/lab release checks pass. Real sound was neither captured nor played
 for these automated checks. The normal PC capture continues while the optional check runs.
 
-**M3P.5 implemented locally; CI pending.** PC capture uses the shared consent recorder. The
+**M3P.5 implemented and verified.** PC capture uses the shared consent recorder. The
 fake two-thread pipeline records source `pc`, 48 kHz filtered reference/microphone audio, real
 source metadata, timing/flags and Space marks; the lab reader accepts it. The test now also runs
 the same analyzer used by `veyl-lab analyze` and verifies its written PC summary. No physical
 recordings exist yet.
+
+M3P.4/M3P.5 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39879540665) at
+`202c5e3`: portable checks, native Windows x64 tests/installer, ARM64 installer cross-build and
+Android tests/lint/APKs. Only M3P's physical acceptance remains pending under §0.1.2. No tag or
+release was created.
 
 ### Waiting on M3P device tests
 
@@ -686,6 +691,44 @@ Keep these for the maintainer's final review. Use a laptop or connect real speak
    and a USB microphone, ten marked pokes. Use Record a test, keep Veyl focused for Space marks,
    and run `veyl-lab analyze DIR` on each folder. Keep recordings local and note hardware, versions
    and outcomes here. Echo/gesture measurements are added in M4/M5.
+
+## M4 — Echo engine, offline
+
+**Goal:** complete the acoustic scene catalogue, portable processing stages and lab analysis, with
+every scenario gate checked honestly. M4 is marked parallel-ok in the plan; its simulator work
+starts while M3P's final Windows/Android packaging runs. Local M3P checks and portable CI pass.
+
+- [ ] **M4.1** Scene model, BrightLoop variants, all scenarios including PC/Bluetooth, and
+      `veyl-lab sim`.
+- [ ] **M4.2** GCC-PHAT alignment, locking/rechecking and clock-drift tracking.
+- [ ] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
+- [ ] **M4.4** Normalization, background gating, motion floor/features and Hand events.
+- [ ] **M4.5** Poke detection and presets; poke scenario gates.
+- [ ] **M4.6** Meter factors, score and tip priority; meter scenario gates.
+- [ ] **M4.7** Full lab analysis outputs, motion plot and sweep; analyze R1–R10 if supplied.
+- [ ] **M4.8** Determinism/performance tests and how-it-works/tuning documentation.
+
+**Acceptance:** `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab` passes all required gates
+in CI. The plan's sim/analyze commands must produce an honest report and a clear motion plot.
+
+**M4.1 implemented locally; CI pending.** The general scene model supports speaker/channel maps,
+microphone geometry, static/diffuse/hand paths, hover/pokes/waves/walking/custom paths, speaker
+colour/nonlinearity, microphone clocks/noise, typing/fan/speech, source events and block dropouts.
+Bright/Dull/Compressed16k/Gappy/Silence/sample inputs produce real PCM. All 21 named scenarios
+have their specified durations and seeded parameters, including PC geometry, 150/200 ppm clocks
+and 350 ms Bluetooth latency. The original M3 fake-phone generator remains compatible.
+
+`veyl-lab sim NAME [--seed N] [--seconds S] --out DIR` writes the shared filtered recording format
+and refuses to overwrite a nonempty folder. Scene events survive in metadata. Fake-phone accepts
+the expanded catalogue. [Acoustic simulator](acoustic-simulator.md) documents local use. No
+hardware capture or playback is involved.
+
+Release tests pass: seven DSP, nine simulator, three lab unit, one CLI and two encrypted end-to-end
+tests. Every scene renders with seeds 1–3 in short validation runs. Further checks verify signed
+clock timing, known 200 ms acoustic lag, labels/geometry, blocked/silent audio, real gaps, repeatable
+PC samples, export/reload and overwrite refusal. The full forty-second `poke_basic` sim/analyze
+commands produced 4,000 blocks per stream, ten truth pokes and no missing frames. This is a stream
+report; echo features, detection gates and the motion plot remain M4.2–M4.8 work.
 
 ## Dependency follow-up
 

@@ -25,14 +25,14 @@ fn db(level: f32) -> f32 {
     10.0_f32.powf(level / 20.0)
 }
 
-fn pad(time: f32, chord: usize) -> f32 {
+fn pad(time: f32, chord: usize, ceiling: f32) -> f32 {
     let notes = [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]];
     notes[chord]
         .iter()
         .map(|note| {
             // Rounding by 1/16 Hz makes each oscillator meet itself at the loop boundary.
             let hz = (440.0 * 2.0_f32.powf((*note as f32 - 69.0) / 12.0) * 16.0).round() / 16.0;
-            (1..=(5000.0 / hz) as u32)
+            (1..=(ceiling / hz) as u32)
                 .map(|harmonic| (TAU * hz * harmonic as f32 * time).sin() / harmonic as f32)
                 .sum::<f32>()
         })
@@ -42,6 +42,12 @@ fn pad(time: f32, chord: usize) -> f32 {
 
 impl BrightLoop {
     pub fn new(sample_rate: u32, seed: u64) -> Result<Self, FilterError> {
+        Self::render(sample_rate, seed, true)
+    }
+    pub fn dull(sample_rate: u32, seed: u64) -> Result<Self, FilterError> {
+        Self::render(sample_rate, seed, false)
+    }
+    fn render(sample_rate: u32, seed: u64, bright: bool) -> Result<Self, FilterError> {
         if ![44_100, 48_000].contains(&sample_rate) || seed == 0 {
             return Err(FilterError(
                 "Test sound needs 44100 or 48000 Hz and a nonzero seed.",
@@ -86,13 +92,15 @@ impl BrightLoop {
                 db(-16.0) * (-hat_age / 0.025).exp() + db(-18.0) * (-open_age / 0.120).exp();
             let chord = (t / 4.0) as usize;
             let fade = ((t % 4.0) / 0.1).min(1.0);
-            let pad_value = 0.19 * (pad(t, chord) * fade + pad(t, (chord + 3) % 4) * (1.0 - fade));
+            let ceiling = if bright { 5000.0 } else { 3000.0 };
+            let pad_value = 0.19
+                * (pad(t, chord, ceiling) * fade + pad(t, (chord + 3) % 4, ceiling) * (1.0 - fade));
             let mut frame = [0.0; 2];
             for channel in 0..2 {
                 let hat = hats[channel][0].process(input[channel]);
                 let hat = hats[channel][1].process(hat);
-                let bright = shimmer[channel][0].process(input[channel]);
-                let bright = shimmer[channel][1].process(bright);
+                let shimmer_value = shimmer[channel][0].process(input[channel]);
+                let shimmer_value = shimmer[channel][1].process(shimmer_value);
                 let pan = if ((t / 0.25) as usize + channel).is_multiple_of(2) {
                     0.65_f32.sqrt()
                 } else {
@@ -101,8 +109,16 @@ impl BrightLoop {
                 let mix = kick
                     + snare_value
                     + pad_value
-                    + hat * hat_envelope * pan
-                    + bright * db(-36.0 + 3.0 * (TAU * 0.25 * t).sin()) * 2.4;
+                    + if bright {
+                        hat * hat_envelope * pan
+                    } else {
+                        0.0
+                    }
+                    + if bright {
+                        shimmer_value * db(-36.0 + 3.0 * (TAU * 0.25 * t).sin()) * 2.4
+                    } else {
+                        0.0
+                    };
                 frame[channel] = (1.2 * mix).tanh() / 1.2_f32.tanh();
             }
             samples.push(frame);
@@ -144,7 +160,7 @@ mod tests {
     fn repeatable_finite_stereo_and_looping() {
         let mut first = BrightLoop::new(48_000, DEFAULT_SEED).unwrap();
         let second = BrightLoop::new(48_000, DEFAULT_SEED).unwrap();
-        assert_eq!(first.frames(), second.frames());
+        assert!(first.frames() == second.frames());
         assert_eq!(first.frames().len(), 16 * 48_000);
         assert!(first
             .frames()
