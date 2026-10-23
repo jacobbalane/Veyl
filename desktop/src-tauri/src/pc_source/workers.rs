@@ -369,7 +369,7 @@ mod tests {
                     .unwrap();
             assert_eq!(report["source"], "pc");
             assert_eq!(report["analysis"], "stream_statistics");
-            assert!(input.blocks.iter().all(|block| block.flags & 4 != 0));
+            assert!(input.blocks.iter().all(|block| block.flags & 12 == 0));
             assert!(host.levels().arrival_ms.is_none());
             assert_eq!(host.levels().engine_drops, 0);
         })

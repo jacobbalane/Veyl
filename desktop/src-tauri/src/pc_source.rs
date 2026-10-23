@@ -331,10 +331,7 @@ impl Processor {
                     .iter()
                     .map(|&value| (value * 32768.0).round().clamp(-32768.0, 32767.0) as i16)
                     .collect();
-                let flags = 4
-                    | if self.stream == 0 { 8 } else { 0 }
-                    | if self.gap { 1 } else { 0 }
-                    | if pre_peak >= 0.99 { 2 } else { 0 };
+                let flags = if self.gap { 1 } else { 0 } | if pre_peak >= 0.99 { 2 } else { 0 };
                 sink(AudioBlock {
                     stream: self.stream,
                     channels: self.channels as u8,
@@ -443,7 +440,7 @@ mod tests {
             (blocks[0].capture_ns, blocks[1].capture_ns),
             (1_000_000_000, 1_010_000_000)
         );
-        assert_eq!(blocks[0].flags, 14);
+        assert_eq!(blocks[0].flags, 2);
         assert_eq!(blocks[0].channels, 2);
         assert_eq!(blocks[0].pre_peak, 1.0);
         assert!(blocks

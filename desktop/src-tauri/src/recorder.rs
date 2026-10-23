@@ -465,7 +465,6 @@ impl Recording {
         .unwrap() as u8;
         if block.sample_rate != rate
             || block.channels != channels
-            || block.flags & 4 == 0
             || block.frames as u32 != rate / 100
         {
             return Err(io::Error::other("Invalid filtered recording block."));
@@ -742,6 +741,42 @@ mod tests {
             assert!(recorder.delete(id).is_err());
         }
     }
+    #[tokio::test]
+    async fn ordinary_capture_and_player_audio_do_not_need_the_test_sound_flag() {
+        let temporary = tempfile::tempdir().unwrap();
+        let recorder = Recorder::new(temporary.path(), 7).unwrap();
+        let input = veyl_lab::recording::Input::generated(veyl_sim::poke_basic(1, 0.1).unwrap());
+        for (generation, source) in [(1, "capture"), (2, "player")] {
+            let mut configuration = config();
+            configuration.source = source.into();
+            let mut status = capture();
+            status.source = source.into();
+            recorder.configure(generation, configuration);
+            recorder.status(generation, &status);
+            recorder.start(30, false, json!({})).await.unwrap();
+            for index in 0..input.blocks.len() {
+                let mut block = input.block(index, 0).unwrap();
+                block.flags &= !12;
+                if source == "player" && block.stream == 0 {
+                    block.flags |= 8;
+                }
+                recorder.audio(generation, &block);
+            }
+            let saved = recorder.stop().await.unwrap();
+            assert_eq!(saved.state, "saved");
+            assert_eq!(saved.blocks, [10, 10]);
+            let restored =
+                veyl_lab::recording::Input::read(&temporary.path().join(&saved.id)).unwrap();
+            assert_eq!(restored.meta.source, source);
+            for block in &restored.blocks {
+                assert_eq!(block.flags & 4, 0);
+                assert_eq!(
+                    block.flags & 8 != 0,
+                    source == "player" && block.stream == 0
+                );
+            }
+        }
+    }
     #[test]
     fn retention_removes_only_expired_managed_folders_and_zero_keeps_them() {
         let temporary = tempfile::tempdir().unwrap();
@@ -770,7 +805,7 @@ mod tests {
         recorder.start(30, true, json!({})).await.unwrap();
         let input = veyl_lab::recording::Input::generated(veyl_sim::poke_basic(1, 0.01).unwrap());
         let mut block = input.block(0, 0).unwrap();
-        block.flags &= !4;
+        block.frames = 479;
         recorder.audio(1, &block);
         let failed = recorder.stop().await.unwrap();
         assert_eq!(failed.state, "failed");

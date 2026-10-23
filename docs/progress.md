@@ -672,6 +672,13 @@ M3P.4/M3P.5 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39
 Android tests/lint/APKs. Only M3P's physical acceptance remains pending under §0.1.2. No tag or
 release was created.
 
+**Recording flag correction.** The recorder now accepts ordinary playback capture and player
+blocks without the test-sound flag. That flag describes the sound source; it does not certify
+privacy filtering. PC capture sets only its actual gap/clipping flags, rather than labelling all
+audio as synthetic test sound. Filtering still runs at the source before either consumer. All 36
+desktop tests pass, including ordinary capture/player recording round trips, malformed-block
+rejection and the filtered PC pipeline.
+
 ### Waiting on M3P device tests
 
 Keep these for the maintainer's final review. Use a laptop or connect real speakers to this PC.
@@ -698,7 +705,7 @@ Keep these for the maintainer's final review. Use a laptop or connect real speak
 every scenario gate checked honestly. M4 is marked parallel-ok in the plan; its simulator work
 starts while M3P's final Windows/Android packaging runs. Local M3P checks and portable CI pass.
 
-- [ ] **M4.1** Scene model, BrightLoop variants, all scenarios including PC/Bluetooth, and
+- [x] **M4.1** Scene model, BrightLoop variants, all scenarios including PC/Bluetooth, and
       `veyl-lab sim`.
 - [ ] **M4.2** GCC-PHAT alignment, locking/rechecking and clock-drift tracking.
 - [ ] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
@@ -711,7 +718,7 @@ starts while M3P's final Windows/Android packaging runs. Local M3P checks and po
 **Acceptance:** `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab` passes all required gates
 in CI. The plan's sim/analyze commands must produce an honest report and a clear motion plot.
 
-**M4.1 implemented locally; CI pending.** The general scene model supports speaker/channel maps,
+**M4.1 implemented and verified.** The general scene model supports speaker/channel maps,
 microphone geometry, static/diffuse/hand paths, hover/pokes/waves/walking/custom paths, speaker
 colour/nonlinearity, microphone clocks/noise, typing/fan/speech, source events and block dropouts.
 Bright/Dull/Compressed16k/Gappy/Silence/sample inputs produce real PCM. All 21 named scenarios
@@ -729,6 +736,9 @@ clock timing, known 200 ms acoustic lag, labels/geometry, blocked/silent audio, 
 PC samples, export/reload and overwrite refusal. The full forty-second `poke_basic` sim/analyze
 commands produced 4,000 blocks per stream, ten truth pokes and no missing frames. This is a stream
 report; echo features, detection gates and the motion plot remain M4.2–M4.8 work.
+
+M4.1 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39881310754) at `1d31be1`,
+including the release tests, both Windows installers and Android. Website deployment passed.
 
 ## Dependency follow-up
 
