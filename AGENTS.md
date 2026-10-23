@@ -30,16 +30,12 @@ Never commit secrets, signing keys, recordings or build output. Never create tag
 Ask before installing system-wide tools. Account setup, secrets, publication and device tests
 belong to the maintainer; prepare exact steps and keep their acceptance checks pending.
 
-## Parallel work and local status
+## Parallel work and cleanup
 
 Use agents for independent tasks in the remaining milestones. Give each agent a clear scope and
 file ownership or an isolated worktree. Review their changes and verify the combined result
 before keeping it. Stop finished agents and their helper processes, preserving useful reports
 and the maintainer's files and processes.
-
-The maintainer's local status page lives under ignored `.cache/status/`. Never stage, commit,
-publish or copy any of its files into the app or website. Keep its local server running when
-cleaning up other helpers unless the maintainer asks to stop it.
 
 ## Privacy rules (hard requirements)
 
