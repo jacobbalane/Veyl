@@ -53,5 +53,13 @@ against labelled real recordings belongs to M5; no score-to-recall calibration i
 
 Run the component regressions with `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab`.
 Run `cargo run --release -p veyl-sim --example poke_gates` separately for the current failing
-default-gesture development probe. Full lab exports, deterministic replay and performance checks
-are the remaining M4 tools for the next tuning pass.
+default-gesture development probe. [Full lab exports and sweeps](lab.md) now support the next
+tuning pass. The seed-1 forty-second candidate report measures median truth-to-detect delay
+57.98 ms, p95 98.25 ms and median confirmation 18.67 ms. Its motion heatmap was inspected.
+Performance and allocation checks remain M4.8 work.
+
+One remaining investigation is direct-path normalization. The default phone's two microphone
+direct paths are about 15.4 samples apart, wider than the shared −8/+6-tap normalization window.
+One pair can therefore be normalized using sidelobes rather than its own direct peak. The lab's
+feature/heatmap output now makes that hypothesis testable; it has not yet been established as the
+cause of the remaining failures.

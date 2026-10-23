@@ -713,7 +713,7 @@ starts while M3P's final Windows/Android packaging runs. Local M3P checks and po
 - [x] **M4.4** Normalization, background gating, motion floor/features and Hand events.
 - [ ] **M4.5** Poke detection and presets; poke scenario gates.
 - [x] **M4.6** Meter factors, score and tip priority; meter scenario gates (decision 0013).
-- [ ] **M4.7** Full lab analysis outputs, motion plot and sweep; analyze R1–R10 if supplied.
+- [x] **M4.7** Full lab analysis outputs, motion plot and sweep; R1–R10 have not been supplied.
 - [ ] **M4.8** Determinism/performance tests and how-it-works/tuning documentation.
 
 **Acceptance:** `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab` passes all required gates
@@ -844,6 +844,33 @@ The specified eighth-order 16 kHz low-pass retains usable energy above its cutof
 measures 10,047–10,052 Hz and 1.7 cm detail. [Decision 0013](decisions/0013-meter-scenario-expectations.md)
 corrects that bandwidth/detail expectation and tests Dull against the specified tip priority.
 Its separate 90% gesture-recall requirement is unchanged and remains pending with M4.5.
+
+M4.5's guarded detector and M4.6 [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/39912383166)
+at `d114b5e`: component/scenario tests, both Windows installers, native x64 tests and signed
+Android. Website deployment passed. The explicit default-gesture development probe still fails;
+that CI result does not close M4.5's remaining accuracy gates.
+
+**M4.7 implemented and verified.** `analyze` now replays filtered PCM and original block metadata
+through the engine, then writes `summary.json`, `features.csv`, `meter.csv`, `pokes.csv` and
+`motion.png`. Profiles use validated TOML. The summary includes alignment, warnings, source
+quality, one-to-one label matching, recall/precision, false-poke rate and distinct truth/confirmation
+delays. Human reaction offsets do not become claimed detection latency. Unknown measurements
+remain undefined. Repeated replay is deterministic; changing labels cannot change sensing output.
+The local-only output writer preserves existing reports and creates no audio copy.
+
+`sweep` evaluates every parameter combination across the inputs, pools counts and raw delay
+samples, writes one CSV row per combination and ranks F1 among results with at most 0.2 false
+pokes/minute. It retains one recording at a time and does not collect full traces. Invalid fields,
+types, oversized grids and repeated parameters are rejected. [Decision 0014](decisions/0014-offline-analysis-measurements.md)
+and the new [lab guide](lab.md) specify the reporting and annotation rules.
+
+All 63 portable release tests, whole-workspace clippy and formatting pass. CLI tests cover profiles,
+all output files, sweeps, invalid configuration and overwrite refusal. A forty-second seed-1
+candidate replay was also run manually: 10/10 matches, precision/recall 100%, median truth-to-detect
+delay 57.98 ms, p95 98.25 ms, and median confirmation 18.67 ms. The complete heatmap was visually
+inspected. A four-combination sweep reproduces the successful candidate and failed defaults.
+These are synthetic measurements. No R1–R10 recordings exist here, and full gesture acceptance
+remains pending. M4.8's performance/allocation checks and the remaining M4.5 tuning follow.
 
 ## Dependency follow-up
 

@@ -64,7 +64,7 @@ cargo run --release -p veyl-sim --example poke_gates
 ```
 
 Passing the component suite below does not close those remaining gesture acceptance gates.
-Full lab analysis and plots follow in M4.7.
+The [lab](lab.md) now exports full analysis, motion plots and parameter sweeps for continued tuning.
 
 Run the required portable suite with:
 

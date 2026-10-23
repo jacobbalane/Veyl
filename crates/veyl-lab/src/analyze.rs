@@ -3,7 +3,7 @@ use crate::recording::Input;
 use serde::Serialize;
 use std::{fs, io, path::Path};
 
-#[derive(Default, Serialize)]
+#[derive(Clone, Default, Serialize)]
 pub struct StreamStatistics {
     pub blocks: u64,
     pub received_frames: u64,
@@ -17,7 +17,7 @@ pub struct StreamStatistics {
     pub filtered_rms_dbfs: Option<f64>,
     pub pre_peak: f32,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Summary {
     pub format: u32,
     pub analysis: &'static str,

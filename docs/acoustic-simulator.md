@@ -12,15 +12,16 @@ cargo run --release -p veyl-lab -- sim poke_basic --seed 1 --out .cache/sim/pb
 cargo run --release -p veyl-lab -- analyze .cache/sim/pb
 ```
 
-During M4.1, analyze reports stream statistics. Echo features, gesture results and plots follow in
-the later M4 tasks. No gesture acceptance gate has passed yet.
+Analysis now writes stream and engine statistics, feature/meter/poke CSVs and `motion.png`.
+The current defaults still miss gestures; an experimental phone profile passes the basic case
+but not the complete scenario matrix. See [offline analysis](lab.md) for profiles and sweeps.
 
 Use `--seconds 2` for a short input; omit it for the scenario's specified duration. Acceptance
 runs use the full duration and seeds 1, 2 and 3. Seeds, acoustic geometry and trajectories are
 deterministic. An export's creation timestamp identifies the run and is not a sensing input.
 
 The output contains `meta.json`, `ref.wav`, `mic.wav`, `blocks.jsonl`, `labels.jsonl` and an empty
-`events.jsonl` until the engine analyzes it. WAVs are 16-bit PCM after the 8 kHz privacy filter.
+`events.jsonl` reserved for live engine events. WAVs are 16-bit PCM after the 8 kHz privacy filter.
 The metadata contains simulator source events, the scenario and seed; it contains no recorded
 music. Exports refuse to overwrite a nonempty folder. Keep generated output under `.cache`.
 

@@ -130,9 +130,10 @@ feedback; the shared reader ignores it. M3's `events.jsonl` is empty until the e
 cargo run --release -p veyl-lab -- analyze PATH --out ANALYSIS_PATH
 ```
 
-M3 analysis writes `summary.json` with stream counts, frame/sequence gaps, overlaps, pre-filter
-level means, filtered RMS and timestamp availability. It does not yet estimate lock, distance or
-pokes. It reads only the selected local recording and writes statistics, never another audio copy.
+Analysis retains stream counts, frame/sequence gaps, overlaps, pre-filter level means, filtered RMS
+and timestamp availability alongside engine, gesture and meter measurements. It writes the full
+JSON/CSV report and motion PNG, preserving existing reports. It reads only the selected local
+recording and creates no audio copy. See [offline analysis](lab.md) for profiles and sweeps.
 
 Generate the shared brand assets with `node scripts/render-icons.mjs`. It uses the committed
 Manrope source font, creates an outlined ExtraBold wordmark, renders the icons, and copies font

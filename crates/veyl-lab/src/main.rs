@@ -1,11 +1,11 @@
 use std::{
-    io::{self, IsTerminal},
-    path::Path,
+    io::{self, IsTerminal, Read},
+    path::{Path, PathBuf},
     sync::Arc,
 };
 use veyl_lab::{fake_phone::FakePhone, recording::Input};
 
-const USAGE: &str = "Usage:\n  veyl-lab scenarios\n  veyl-lab sim SCENARIO [--seed N] [--seconds S] --out DIR\n  veyl-lab analyze DIR [--out DIR2]\n  veyl-lab fake-phone (--scenario NAME | --recording DIR) [--port 47820] [--realtime] [--seed N]";
+const USAGE: &str = "Usage:\n  veyl-lab scenarios\n  veyl-lab sim SCENARIO [--seed N] [--seconds S] --out DIR\n  veyl-lab analyze DIR [--config params.toml] [--out DIR2]\n  veyl-lab sweep DIR... --set parameter=value,value [--set ...] [--out sweep.csv]\n  veyl-lab fake-phone (--scenario NAME | --recording DIR) [--port 47820] [--realtime] [--seed N]";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -19,16 +19,10 @@ async fn run(arguments: Vec<String>) -> io::Result<()> {
         return simulate(&arguments);
     }
     if arguments.first().map(String::as_str) == Some("analyze") {
-        let directory = arguments.get(1).ok_or_else(usage)?;
-        let output = match arguments.len() {
-            2 => directory,
-            4 if arguments[2] == "--out" => &arguments[3],
-            _ => return Err(usage()),
-        };
-        let input = Input::read(Path::new(directory))?;
-        let summary = veyl_lab::analyze::write_summary(&input, Path::new(output))?;
-        println!("Stream statistics saved. Reference: {} blocks; microphone: {} blocks. Echo and gesture analysis arrive in M4.", summary.reference.blocks, summary.microphone.blocks);
-        return Ok(());
+        return analyze_command(&arguments);
+    }
+    if arguments.first().map(String::as_str) == Some("sweep") {
+        return sweep_command(&arguments);
     }
     if arguments.as_slice() == ["scenarios"] {
         for scenario in veyl_sim::SCENARIOS {
@@ -132,6 +126,27 @@ fn simulate(arguments: &[String]) -> io::Result<()> {
     let scene = veyl_sim::scenarios::scene(name, seed, seconds)?;
     let mut input = Input::generated(veyl_sim::scene::render(&scene)?);
     input.meta.notes = format!("Acoustic simulator: {name}; seed {seed}.");
+    input.meta.device["mode"] = if name.starts_with("pc_") {
+        "pc"
+    } else {
+        "phone"
+    }
+    .into();
+    input.meta.device["sound_source"] = if name == "blocked" {
+        "capture"
+    } else if name.starts_with("pc_") {
+        "pc"
+    } else {
+        "test_sound"
+    }
+    .into();
+    input.meta.device["route"] = if name == "pc_bluetooth" {
+        "bluetooth"
+    } else {
+        "speaker"
+    }
+    .into();
+    input.meta.device["media_volume"] = scene.volume.into();
     input.save_generated(Path::new(output))?;
     println!(
         "Generated {name}: {} blocks, {} truth pokes. Audio is synthetic and privacy-filtered.",
@@ -142,4 +157,95 @@ fn simulate(arguments: &[String]) -> io::Result<()> {
 }
 fn usage() -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, USAGE)
+}
+
+fn analyze_command(arguments: &[String]) -> io::Result<()> {
+    let directory = arguments.get(1).ok_or_else(usage)?;
+    let mut output = directory;
+    let mut config_path = None;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut args = arguments.iter().skip(2);
+    while let Some(option) = args.next() {
+        if !seen.insert(option) {
+            return Err(usage());
+        }
+        let value = args.next().ok_or_else(usage)?;
+        match option.as_str() {
+            "--out" => output = value,
+            "--config" => config_path = Some(value),
+            _ => return Err(usage()),
+        }
+    }
+    let input = Input::read(Path::new(directory))?;
+    let config = if let Some(path) = config_path {
+        let mut text = String::new();
+        std::fs::File::open(path)?
+            .take(65537)
+            .read_to_string(&mut text)?;
+        veyl_dsp::config::EngineConfig::from_toml(&text).map_err(io::Error::other)?
+    } else {
+        veyl_lab::analysis::default_config(&input)
+    };
+    let analyzed = veyl_lab::analysis::evaluate(&input, config, true)?;
+    veyl_lab::analysis::write_outputs(&input, &analyzed, Path::new(output))?;
+    let metric = |value: Option<f64>| {
+        value
+            .map(|v| format!("{:.1}%", v * 100.0))
+            .unwrap_or_else(|| "not defined".into())
+    };
+    println!(
+        "Analysis saved. Pokes: {}; recall: {}; precision: {}.",
+        analyzed.report.pokes.detected,
+        metric(analyzed.report.pokes.recall),
+        metric(analyzed.report.pokes.precision)
+    );
+    if analyzed.report.engine.lock_ms.is_none() {
+        println!("No alignment lock in this recording.");
+    }
+    Ok(())
+}
+fn sweep_command(arguments: &[String]) -> io::Result<()> {
+    let mut directories = vec![];
+    let mut parameters = vec![];
+    let mut output = PathBuf::from("sweep.csv");
+    let mut output_seen = false;
+    let mut args = arguments.iter().skip(1);
+    while let Some(option) = args.next() {
+        match option.as_str() {
+            "--set" => parameters.push(veyl_lab::sweep::parameter(args.next().ok_or_else(usage)?)?),
+            "--out" if !output_seen => {
+                output = PathBuf::from(args.next().ok_or_else(usage)?);
+                output_seen = true;
+            }
+            value if !value.starts_with('-') => directories.push(PathBuf::from(value)),
+            _ => return Err(usage()),
+        }
+    }
+    let report = veyl_lab::sweep::run(&directories, &parameters, &output)?;
+    println!(
+        "Saved {} parameter combinations across {} recording{}.",
+        report.rows.len(),
+        directories.len(),
+        if directories.len() == 1 { "" } else { "s" }
+    );
+    if report.best.is_empty() {
+        println!("No labelled result meets the 0.2 false-pokes-per-minute limit.");
+    }
+    for index in report.best.iter().take(5) {
+        let row = &report.rows[*index];
+        let settings = report
+            .parameters
+            .iter()
+            .zip(&row.values)
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        println!(
+            "{settings}: F1 {:.3}; recall {:.1}%; false pokes/min {:.3}",
+            row.metrics.f1.unwrap(),
+            row.metrics.recall.unwrap() * 100.0,
+            row.metrics.false_pokes_per_minute.unwrap()
+        );
+    }
+    Ok(())
 }

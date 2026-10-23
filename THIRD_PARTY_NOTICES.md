@@ -1,7 +1,7 @@
 # Third-party notices
 
 Veyl's original application code and brand assets are MIT licensed. Third-party components retain
-their own licenses. This inventory lists direct dependencies through M3. Bundled
+their own licenses. This inventory lists direct dependencies through M4. Bundled
 components include their own notices where required.
 
 ## Manrope
@@ -51,6 +51,7 @@ These are direct external dependencies of the workspace crates, including build 
 | hkdf                         | 0.13.0           | MIT OR Apache-2.0 |
 | hmac                         | 0.13.0           | MIT OR Apache-2.0 |
 | hound                        | 3.5.1            | Apache-2.0        |
+| png                          | 0.18.1           | MIT OR Apache-2.0 |
 | proptest                     | 1.12.0           | MIT OR Apache-2.0 |
 | rubato                       | 5.0.1            | MIT OR Apache-2.0 |
 | rustfft                      | 6.4.1            | MIT OR Apache-2.0 |
@@ -87,6 +88,9 @@ DSP tests.
 
 The engine's parameter loader uses the TOML crate. Its MIT license is in
 `assets/licenses/toml-MIT.txt` and ships as `licenses/toml.txt`.
+
+The lab's offline motion plots use the PNG crate. Its MIT license is in
+`assets/licenses/png-MIT.txt`. The lab does not upload plots or recordings.
 
 ## Android dependencies
 
