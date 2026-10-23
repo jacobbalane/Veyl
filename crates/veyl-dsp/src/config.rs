@@ -12,7 +12,9 @@ pub struct EngineConfig {
     pub f_hi: f32,
     pub edge_hz: f32,
     pub fast_seconds: f32,
+    pub coherence_seconds: f32,
     pub regularization: f32,
+    pub infer_single_path: bool,
     pub activity_db: f32,
     pub activity_bins: usize,
     pub mono_to_stereo: f32,
@@ -31,6 +33,7 @@ pub struct EngineConfig {
     pub background_hold_seconds: f32,
     pub presence_hold_seconds: f32,
     pub floor_seconds: f32,
+    pub floor_calibration_seconds: f32,
     pub floor_relative: f32,
     pub z_on: f32,
     pub peakiness: f32,
@@ -40,6 +43,15 @@ pub struct EngineConfig {
     pub range_min_cm: f32,
     pub range_max_cm: f32,
     pub temperature_c: f32,
+    pub poke_in_cm: f32,
+    pub poke_out_cm: f32,
+    pub poke_v_min: f32,
+    pub poke_v_max: f32,
+    pub poke_min_ms: f32,
+    pub poke_max_ms: f32,
+    pub poke_refractory_ms: f32,
+    pub poke_valid_fraction: f32,
+    pub poke_confidence_cm: f32,
     pub ring_seconds: usize,
     pub align_seconds: f32,
     pub align_ramp_ms: f32,
@@ -65,7 +77,9 @@ impl Default for EngineConfig {
             f_hi: 20000.0,
             edge_hz: 500.0,
             fast_seconds: 0.04,
+            coherence_seconds: 0.04,
             regularization: 1e-3,
+            infer_single_path: false,
             activity_db: 30.0,
             activity_bins: 9,
             mono_to_stereo: 0.95,
@@ -84,6 +98,7 @@ impl Default for EngineConfig {
             background_hold_seconds: 20.0,
             presence_hold_seconds: 3.0,
             floor_seconds: 3.0,
+            floor_calibration_seconds: 0.15,
             floor_relative: 1e-6,
             z_on: 8.0,
             peakiness: 3.0,
@@ -93,6 +108,15 @@ impl Default for EngineConfig {
             range_min_cm: 4.0,
             range_max_cm: 40.0,
             temperature_c: 20.0,
+            poke_in_cm: 3.0,
+            poke_out_cm: 2.0,
+            poke_v_min: 10.0,
+            poke_v_max: 500.0,
+            poke_min_ms: 100.0,
+            poke_max_ms: 900.0,
+            poke_refractory_ms: 350.0,
+            poke_valid_fraction: 0.8,
+            poke_confidence_cm: 6.0,
             ring_seconds: 4,
             align_seconds: 1.0,
             align_ramp_ms: 10.0,
@@ -123,6 +147,7 @@ impl EngineConfig {
             self.f_hi,
             self.edge_hz,
             self.fast_seconds,
+            self.coherence_seconds,
             self.regularization,
             self.activity_db,
             self.impulse_ratio,
@@ -136,12 +161,21 @@ impl EngineConfig {
             self.background_hold_seconds,
             self.presence_hold_seconds,
             self.floor_seconds,
+            self.floor_calibration_seconds,
             self.floor_relative,
             self.z_on,
             self.peakiness,
             self.distance_smooth_seconds,
             self.range_min_cm,
             self.range_max_cm,
+            self.poke_in_cm,
+            self.poke_out_cm,
+            self.poke_v_min,
+            self.poke_v_max,
+            self.poke_min_ms,
+            self.poke_max_ms,
+            self.poke_refractory_ms,
+            self.poke_confidence_cm,
             self.align_seconds,
             self.align_ramp_ms,
             self.align_min_psr,
@@ -169,6 +203,7 @@ impl EngineConfig {
             || self.f_lo >= self.f_hi
             || self.edge_hz > self.f_hi - self.f_lo
             || self.fast_seconds > 2.0
+            || self.coherence_seconds > 2.0
             || self.regularization > 1.0
             || self.activity_db > 120.0
             || self.activity_bins == 0
@@ -194,6 +229,7 @@ impl EngineConfig {
             || self.background_hold_seconds > 600.0
             || self.presence_hold_seconds > 60.0
             || self.floor_seconds > 300.0
+            || self.floor_calibration_seconds > 5.0
             || self.floor_relative > 1.0
             || self.z_on > 1000.0
             || self.peakiness > 1000.0
@@ -204,6 +240,17 @@ impl EngineConfig {
             || self.range_max_cm > 60.0
             || !self.temperature_c.is_finite()
             || !(-40.0..=60.0).contains(&self.temperature_c)
+            || self.poke_in_cm > 60.0
+            || self.poke_out_cm > 60.0
+            || self.poke_v_min > 1000.0
+            || self.poke_v_max < self.poke_v_min
+            || self.poke_v_max > 10000.0
+            || self.poke_min_ms > self.poke_max_ms
+            || self.poke_max_ms > 5000.0
+            || self.poke_refractory_ms > 10000.0
+            || !self.poke_valid_fraction.is_finite()
+            || !(0.5..=1.0).contains(&self.poke_valid_fraction)
+            || self.poke_confidence_cm > 60.0
             || self.align_seconds > 1.0
             || self.align_seconds < 0.1
             || self.align_ramp_ms >= self.align_seconds * 500.0

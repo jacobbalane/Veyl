@@ -8,7 +8,8 @@ complete. The maintainer reports that both installed apps open: Windows shows th
 placeholder and Android shows the waiting-for-PC placeholder. M0's listed acceptance criteria pass;
 the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
 checks are complete; hardware acceptance remains pending. M3's connection and recording implementation
-is complete. M3P (PC mode) is in progress under §0.1.2. The published 0.0.1 preview still contains the
+is complete. M3P's PC-mode implementation and automated checks are complete; its device checks
+remain pending under §0.1.2. M4's offline engine is in progress. The published 0.0.1 preview still contains the
 M0 interface skeleton. The maintainer authorized continuing non-destructive implementation while
 away and limited all GitHub work to this repository. Physical review remains deferred.
 
@@ -711,7 +712,7 @@ starts while M3P's final Windows/Android packaging runs. Local M3P checks and po
 - [x] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
 - [x] **M4.4** Normalization, background gating, motion floor/features and Hand events.
 - [ ] **M4.5** Poke detection and presets; poke scenario gates.
-- [ ] **M4.6** Meter factors, score and tip priority; meter scenario gates.
+- [x] **M4.6** Meter factors, score and tip priority; meter scenario gates (decision 0013).
 - [ ] **M4.7** Full lab analysis outputs, motion plot and sweep; analyze R1–R10 if supplied.
 - [ ] **M4.8** Determinism/performance tests and how-it-works/tuning documentation.
 
@@ -803,6 +804,46 @@ runs produce finite features and no model jumps; the basic phone run emits Hand 
 the poke. Its first-poke peak is 10.04 at Normal; PC's is only 3.22, and the drifting run currently
 favours a near static return. These are recorded tuning concerns for M4.5's full gesture gates,
 not passing recall/precision results. The installed preview still uses the level-only host until M5.
+
+**M4.5 implementation; acceptance still pending.** The frame-indexed poke detector now implements
+approach/turn/retreat, speed/depth, valid-hop fraction, confidence and refractory rules. It rejects
+implausible jumps between echoes. Preset/source changes, pauses and gaps clear pending gestures.
+Noise calibration measures model variance; motion includes reference correlation and current-echo
+support. Background distance uses the same measured-path continuity as alignment. An opt-in
+physical-path inference experiment recognizes a speaker playing the equal L/R mix without reading
+scene labels. [Decision 0012](decisions/0012-motion-and-poke-guards.md) explains these changes.
+
+The 5 ms candidate with physical-path inference detects all 30 basic phone pokes across seeds 1–3,
+with no extras and median confirmation below 80 ms. A regression test checks this after meter
+integration, and a separate acoustic test verifies that off/external/silenced/headphone/paused
+sources cannot confirm otherwise visible hand motion. This candidate is not the default preset.
+The original 40 ms default and disabled physical-path inference remain until the remaining gates
+pass. Before meter integration, full negative runs produced no pokes for still, wave, typing or
+walking across seeds 1–3. Hovering produced 0, 8 and 1 false pokes, exceeding the seed-2 limit.
+PC, stereo and drifting gesture recall remain insufficient. No gesture accuracy gate was relaxed.
+
+`cargo run --release -p veyl-sim --example poke_gates` is an explicit development probe for the
+unfinished default basic/drift/PC cases. It still exits unsuccessfully: the latest forty-second
+runs matched 0/10 truth pokes for each case and seed. It is not the completed full CI scenario
+matrix; M4.5 and M4 acceptance remain open. `inspect` prints only derived measurements for local
+tuning. Failed ridge, covariance-whitening and adaptive-cancellation experiments were removed
+from the engine; their source snapshots remain ignored under `.cache/`.
+
+**M4.6 implemented and verified as a dependency of the detector's safety gates.** The portable
+engine emits a meter reading every 100 ms, including before alignment and during silence. It
+tracks filtered/pre-filter levels, bandwidth, prediction clarity, three-second steady fraction,
+one-second clipping, factors, score, detail and prioritized tips. Source status starts off;
+unconfigured, external, silenced, headphone, paused, weak or currently silent input cannot confirm
+pokes. The caller must set the current source status. No live application bridge is claimed yet.
+
+All 57 portable release tests pass, including both sample rates, physical mono/stereo inference,
+the phone candidate and source-safety regressions, unchanged clock-feedback limits and the full
+meter scenarios with seeds 1–3. Whole-workspace clippy passes. Dull has mean high factor 0.274;
+Gappy has mean steady factor 0.552; blocked and silent capture report the correct zero-score tips.
+The specified eighth-order 16 kHz low-pass retains usable energy above its cutoff: Compressed16k
+measures 10,047–10,052 Hz and 1.7 cm detail. [Decision 0013](decisions/0013-meter-scenario-expectations.md)
+corrects that bandwidth/detail expectation and tests Dull against the specified tip priority.
+Its separate 90% gesture-recall requirement is unchanged and remains pending with M4.5.
 
 ## Dependency follow-up
 

@@ -13,6 +13,9 @@ pub struct MotionFeatures {
     pub valid: bool,
     pub settling: bool,
     pub z_max: f32,
+    pub peak_floor: f32,
+    pub peak_energy: f32,
+    pub direct_energy: f32,
     pub peakiness: f32,
     pub mean_energy: f32,
     pub r_peak_cm: Option<f32>,
@@ -23,9 +26,11 @@ pub struct MotionFeatures {
 pub struct MotionInput<'a> {
     pub frame: u64,
     pub dynamic: &'a [Complex<f32>],
+    pub normalized: Option<&'a [Complex<f32>]>,
     pub direct_position: f64,
     pub direct_energy: f32,
     pub reference_weights: [f32; 2],
+    pub reference_cross: Complex<f32>,
     pub settling: bool,
     pub held: bool,
 }
@@ -36,6 +41,11 @@ pub struct MotionTracker {
     taps: usize,
     cm_per_tap: f32,
     floor_alpha: f32,
+    calibration_alpha: f32,
+    calibration_mean: Vec<Complex<f32>>,
+    calibration_variance: Vec<f32>,
+    calibration_cross: Vec<Complex<f32>>,
+    calibration_initialized: bool,
     distance_alpha: f32,
     z_on: f32,
     range: (f32, f32),
@@ -68,6 +78,19 @@ impl MotionTracker {
             cm_per_tap: (331.3 + 0.606 * config.temperature_c) * 100.0
                 / (2.0 * format.sample_rate as f32),
             floor_alpha: alpha(config.floor_seconds),
+            calibration_alpha: alpha(config.floor_calibration_seconds),
+            calibration_mean: vec![
+                Complex::default();
+                taps * format.ref_channels as usize
+                    * format.mic_channels as usize
+            ],
+            calibration_variance: vec![
+                0.0;
+                taps * format.ref_channels as usize
+                    * format.mic_channels as usize
+            ],
+            calibration_initialized: false,
+            calibration_cross: vec![Complex::default(); taps * format.mic_channels as usize],
             distance_alpha: alpha(config.distance_smooth_seconds),
             z_on: config.z_on,
             range: (config.range_min_cm, config.range_max_cm),
@@ -128,6 +151,10 @@ impl MotionTracker {
     pub fn reset(&mut self) {
         self.reset_presence();
         self.floor.fill(0.0);
+        self.calibration_mean.fill(Complex::default());
+        self.calibration_variance.fill(0.0);
+        self.calibration_cross.fill(Complex::default());
+        self.calibration_initialized = false;
         self.energy.fill(0.0);
         self.z.fill(0.0);
         self.smoothed.fill(0.0);
@@ -139,19 +166,25 @@ impl MotionTracker {
         let MotionInput {
             frame,
             dynamic,
+            normalized,
             direct_position,
             direct_energy,
             reference_weights,
+            reference_cross,
             settling,
             held,
         } = input;
         if dynamic.len() != self.taps * self.refs * self.mics
+            || normalized.is_some_and(|samples| samples.len() != dynamic.len())
             || !direct_position.is_finite()
             || !direct_energy.is_finite()
             || direct_energy < 0.0
             || reference_weights
                 .iter()
                 .any(|weight| !weight.is_finite() || !(0.0..=1.0).contains(weight))
+            || !reference_cross.re.is_finite()
+            || !reference_cross.im.is_finite()
+            || reference_cross.norm_sqr() > reference_weights[0] * reference_weights[1] + 1e-5
         {
             return Err("Invalid motion-map dimensions or energy.");
         }
@@ -163,15 +196,56 @@ impl MotionTracker {
         }
         self.energy.fill(0.0);
         for c in 0..self.mics {
-            for (s, weight) in reference_weights.iter().enumerate().take(self.refs) {
-                for k in 0..self.taps {
-                    self.energy[k] +=
-                        weight * dynamic[(c * self.refs + s) * self.taps + k].norm_sqr();
+            for k in 0..self.taps {
+                let mut change = [Complex::default(); 2];
+                for (s, weight) in reference_weights.iter().enumerate().take(self.refs) {
+                    let i = (c * self.refs + s) * self.taps + k;
+                    let changed = dynamic[i].norm_sqr();
+                    // A vanished background echo must not become the strongest moving return.
+                    let supported =
+                        normalized.map_or(changed, |current| changed.min(current[i].norm_sqr()));
+                    self.energy[k] += weight * supported;
+                    change[s] = dynamic[i]
+                        * if changed > 1e-30 {
+                            (supported / changed).sqrt()
+                        } else {
+                            0.0
+                        };
+                }
+                if self.refs == 2 {
+                    self.energy[k] += 2.0 * (reference_cross * change[0] * change[1].conj()).re;
                 }
             }
         }
         if settling {
             self.settling_count += 1;
+            if let Some(samples) = normalized {
+                if self.calibration_initialized && self.refs == 2 {
+                    for c in 0..self.mics {
+                        for k in 0..self.taps {
+                            let left = (c * self.refs) * self.taps + k;
+                            let right = left + self.taps;
+                            let cross = (samples[left] - self.calibration_mean[left])
+                                * (samples[right] - self.calibration_mean[right]).conj();
+                            let i = c * self.taps + k;
+                            self.calibration_cross[i] = (1.0 - self.calibration_alpha)
+                                * (self.calibration_cross[i] + self.calibration_alpha * cross);
+                        }
+                    }
+                }
+                for (i, value) in samples.iter().enumerate() {
+                    if self.calibration_initialized {
+                        let delta = *value - self.calibration_mean[i];
+                        self.calibration_mean[i] += self.calibration_alpha * delta;
+                        self.calibration_variance[i] = (1.0 - self.calibration_alpha)
+                            * (self.calibration_variance[i]
+                                + self.calibration_alpha * delta.norm_sqr());
+                    } else {
+                        self.calibration_mean[i] = *value;
+                    }
+                }
+                self.calibration_initialized = true;
+            }
         }
         let lower = (self.config.floor_relative * direct_energy).max(1e-20);
         for k in 0..self.taps {
@@ -181,11 +255,26 @@ impl MotionTracker {
                 self.energy[k] = 0.0;
             }
             if settling {
-                self.floor[k] += (self.energy[k] - self.floor[k]) / self.settling_count as f32;
+                if normalized.is_some() {
+                    self.floor[k] = 0.0;
+                    for c in 0..self.mics {
+                        for (s, weight) in reference_weights.iter().enumerate().take(self.refs) {
+                            self.floor[k] += weight
+                                * self.calibration_variance[(c * self.refs + s) * self.taps + k];
+                        }
+                        if self.refs == 2 {
+                            self.floor[k] += 2.0
+                                * (reference_cross * self.calibration_cross[c * self.taps + k]).re;
+                        }
+                    }
+                } else {
+                    self.floor[k] += (self.energy[k] - self.floor[k]) / self.settling_count as f32;
+                }
             } else if self.energy[k] / self.floor[k].max(lower) < self.z_on {
                 self.floor[k] += self.floor_alpha * (self.energy[k] - self.floor[k]);
             }
             self.floor[k] = self.floor[k].max(lower);
+            self.energy[k] = self.energy[k].max(0.0);
             self.z[k] = self.energy[k] / self.floor[k];
         }
         let mut count = 0;
@@ -278,6 +367,9 @@ impl MotionTracker {
             valid: true,
             settling,
             z_max,
+            peak_floor: best.map_or(0.0, |k| self.floor[k]),
+            peak_energy: best.map_or(0.0, |k| self.energy[k]),
+            direct_energy,
             peakiness,
             mean_energy: sum / count.max(1) as f32,
             r_peak_cm,

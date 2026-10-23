@@ -3,7 +3,9 @@ use crate::{
     background::Background,
     config::EngineConfig,
     echo::{EchoEstimator, EchoFrame},
+    meter::{Meter, MeterReading, SourceStatus},
     motion::{MotionFeatures, MotionInput, MotionTracker},
+    poke::{PokeDetector, PokeEvent},
     ring::SampleRing,
     BlockFlags, BlockIn, RangePreset, Sensitivity, Stream, StreamFormat,
 };
@@ -45,6 +47,8 @@ pub enum EngineEvent {
         distance_cm: Option<f32>,
     },
     Features(MotionFeatures),
+    Poke(PokeEvent),
+    Meter(MeterReading),
     Warning(Warning),
 }
 #[derive(Clone, Copy, Debug)]
@@ -57,6 +61,7 @@ pub struct EngineSnapshot {
     pub hand: MotionFeatures,
     pub motion: [f32; 60],
     pub echo: Option<EchoFrame>,
+    pub meter: MeterReading,
     pub suspended: bool,
     pub paused: bool,
     pub processed_hops: u64,
@@ -73,6 +78,8 @@ pub struct Engine {
     echo: EchoEstimator,
     background: Background,
     motion: MotionTracker,
+    detector: PokeDetector,
+    meter: Meter,
     reference_window: Vec<f32>,
     microphone_window: Vec<f32>,
     state: EngineState,
@@ -89,6 +96,7 @@ pub struct Engine {
     row: Cell<[f32; 60]>,
     processed_hops: u64,
     invalid_hops: u64,
+    pending_hand_end: bool,
 }
 impl Engine {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -109,6 +117,13 @@ impl Engine {
             echo: EchoEstimator::new(config.clone(), format)?,
             background: Background::new(config.clone(), format)?,
             motion: MotionTracker::new(config.clone(), format)?,
+            detector: PokeDetector::new(config.clone(), format.sample_rate)?,
+            meter: Meter::new(
+                format.sample_rate,
+                config.hop,
+                config.pc_mode,
+                config.temperature_c,
+            ),
             reference_window: vec![0.0; config.window * format.ref_channels as usize],
             microphone_window: vec![0.0; config.window * format.mic_channels as usize],
             state: EngineState::NoAudio,
@@ -125,6 +140,7 @@ impl Engine {
             row: Cell::new([0.0; 60]),
             processed_hops: 0,
             invalid_hops: 0,
+            pending_hand_end: false,
             config,
             format,
         })
@@ -152,6 +168,9 @@ impl Engine {
             block.capture_ns,
             block.flags.0 & BlockFlags::GAP_BEFORE != 0,
         )?;
+        if accepted.frames == block.samples.len() / channels {
+            self.meter.observe_block(&block, channels);
+        }
         if accepted.frames > 0 && block.stream == Stream::Reference {
             let power = block
                 .samples
@@ -171,25 +190,42 @@ impl Engine {
         }
     }
     fn reset_motion(&mut self, short: bool, events: &mut Vec<EngineEvent>) {
-        if self.motion.present() {
+        if self.motion.present() || self.pending_hand_end {
             events.push(EngineEvent::Hand {
                 present: false,
                 distance_cm: None,
             });
         }
+        self.pending_hand_end = false;
         self.background.reset(short);
         self.motion.reset();
+        self.detector.suspend();
         self.running_frames = 0;
         self.row.set([0.0; 60]);
     }
     pub fn set_sensitivity(&mut self, preset: Sensitivity) {
+        self.pending_hand_end |= self.motion.present();
         self.motion.set_sensitivity(preset);
+        self.detector.set_sensitivity(preset);
     }
     pub fn set_range(&mut self, preset: RangePreset) {
+        self.pending_hand_end |= self.motion.present();
         self.motion.set_range(preset);
+        self.detector.set_range(preset);
     }
     pub fn set_paused(&mut self, paused: bool) {
+        if self.paused != paused {
+            self.detector.suspend();
+        }
         self.paused = paused;
+    }
+    pub fn set_source_status(&mut self, status: SourceStatus) -> Result<(), &'static str> {
+        let changed = self.meter.status() != status;
+        self.meter.set_status(status)?;
+        if changed {
+            self.detector.suspend();
+        }
+        Ok(())
     }
     pub fn reset(&mut self) {
         self.reference.clear();
@@ -198,6 +234,13 @@ impl Engine {
         self.echo.reset();
         self.background.reset(false);
         self.motion.reset();
+        self.detector.reset();
+        self.meter = Meter::new(
+            self.format.sample_rate,
+            self.config.hop,
+            self.config.pc_mode,
+            self.config.temperature_c,
+        );
         self.row.set([0.0; 60]);
         self.state = EngineState::NoAudio;
         self.next_hop = None;
@@ -211,6 +254,7 @@ impl Engine {
         self.drift_warning = false;
         self.processed_hops = 0;
         self.invalid_hops = 0;
+        self.pending_hand_end = false;
     }
     pub fn snapshot(&self) -> EngineSnapshot {
         EngineSnapshot {
@@ -222,7 +266,11 @@ impl Engine {
             hand: self.motion.features(),
             motion: self.row.replace([0.0; 60]),
             echo: self.latest_echo,
+            meter: self.meter.reading(),
             suspended: self.paused
+                || !self.meter.status().permits_detection(self.config.pc_mode)
+                || self.meter.reading().score < 15
+                || !self.meter.reference_active()
                 || self.state != EngineState::Running
                 || self
                     .last_frame
@@ -234,6 +282,24 @@ impl Engine {
     }
     /// The caller can reuse an event Vec; this method never clears its existing entries.
     pub fn process(&mut self, events: &mut Vec<EngineEvent>) -> Result<(), &'static str> {
+        self.process_hops(events)?;
+        if let Some(reading) = self.meter.tick(
+            self.microphone.end().unwrap_or(0),
+            self.reference.end().is_some() && self.microphone.end().is_some(),
+            self.impulsive_noise,
+        ) {
+            events.push(EngineEvent::Meter(reading));
+        }
+        Ok(())
+    }
+    fn process_hops(&mut self, events: &mut Vec<EngineEvent>) -> Result<(), &'static str> {
+        if self.pending_hand_end {
+            events.push(EngineEvent::Hand {
+                present: false,
+                distance_cm: None,
+            });
+            self.pending_hand_end = false;
+        }
         let (Some(_), Some(mic_end)) = (self.reference.end(), self.microphone.end()) else {
             self.set_state(EngineState::NoAudio, events);
             return Ok(());
@@ -325,13 +391,16 @@ impl Engine {
                 let features = self.motion.process(MotionInput {
                     frame,
                     dynamic: self.background.dynamic(),
+                    normalized: None,
                     direct_position: 0.0,
                     direct_energy: 0.0,
                     reference_weights: [1.0, 0.0],
+                    reference_cross: Default::default(),
                     settling: !self.background.settled(),
                     held: true,
                 })?;
                 events.push(EngineEvent::Features(features));
+                self.detector.suspend();
                 continue;
             }
             let fast = self.echo.process(
@@ -368,9 +437,11 @@ impl Engine {
             let features = self.motion.process(MotionInput {
                 frame,
                 dynamic: self.background.dynamic(),
+                normalized: Some(self.background.normalized_maps()),
                 direct_position: background.direct.position,
                 direct_energy: background.direct_energy,
                 reference_weights: fast.reference_weights,
+                reference_cross: fast.reference_cross,
                 settling: background.settling,
                 held: fast.impulse || background.model_jump || frame < self.model_jump_until,
             })?;
@@ -381,6 +452,17 @@ impl Engine {
                 });
             }
             events.push(EngineEvent::Features(features));
+            if let Some(poke) = self.detector.process(
+                features,
+                !background.settling
+                    && !self.paused
+                    && frame >= self.suspended_until
+                    && self.meter.status().permits_detection(self.config.pc_mode)
+                    && self.meter.reading().score >= 15
+                    && self.meter.reference_active(),
+            ) {
+                events.push(EngineEvent::Poke(poke));
+            }
             let mut row = self.row.get();
             for (maximum, value) in row.iter_mut().zip(self.motion.take_row()) {
                 *maximum = maximum.max(value);
@@ -408,6 +490,7 @@ impl Engine {
             }
             self.drift_warning = drift;
             self.latest_echo = Some(fast);
+            self.meter.observe_echo(frame, fast);
         }
         Ok(())
     }

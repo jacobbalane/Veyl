@@ -1,7 +1,7 @@
 //! Normalize the direct sound before learning stationary echoes.
 use crate::{
     config::EngineConfig,
-    echo::{direct_peak, DirectPeak, MapTransform},
+    echo::{direct_peak_near, DirectPeak, MapTransform},
     StreamFormat,
 };
 use rustfft::num_complex::Complex;
@@ -23,10 +23,12 @@ pub struct Background {
     maps: Vec<Complex<f32>>,
     dynamic: Vec<Complex<f32>>,
     normalized: Vec<Complex<f32>>,
+    normalized_maps: Vec<Complex<f32>>,
     gains: Vec<Complex<f32>>,
     previous_gains: Vec<Complex<f32>>,
     transform: MapTransform,
     initialized: bool,
+    previous_direct: Option<f64>,
     settle_frames: u64,
     presence_frames: u64,
 }
@@ -46,10 +48,12 @@ impl Background {
             maps: vec![Complex::default(); taps * pairs],
             dynamic: vec![Complex::default(); taps * pairs],
             normalized: vec![Complex::default(); bins * pairs],
+            normalized_maps: vec![Complex::default(); taps * pairs],
             gains: vec![Complex::new(1.0, 0.0); pairs],
             previous_gains: vec![Complex::new(1.0, 0.0); pairs],
             transform: MapTransform::new(&config)?,
             initialized: false,
+            previous_direct: None,
             settle_frames: (config.settle_seconds * format.sample_rate as f32).ceil() as u64,
             presence_frames: 0,
             config,
@@ -64,6 +68,9 @@ impl Background {
     pub fn dynamic(&self) -> &[Complex<f32>] {
         &self.dynamic
     }
+    pub fn normalized_maps(&self) -> &[Complex<f32>] {
+        &self.normalized_maps
+    }
     pub fn settled(&self) -> bool {
         self.initialized && self.settle_frames == 0
     }
@@ -72,9 +79,11 @@ impl Background {
         self.maps.fill(Complex::default());
         self.dynamic.fill(Complex::default());
         self.normalized.fill(Complex::default());
+        self.normalized_maps.fill(Complex::default());
         self.gains.fill(Complex::new(1.0, 0.0));
         self.previous_gains.fill(Complex::new(1.0, 0.0));
         self.initialized = false;
+        self.previous_direct = None;
         self.presence_frames = 0;
         self.settle_frames = (self.rate as f32
             * if short {
@@ -106,7 +115,17 @@ impl Background {
         }
         self.transform
             .render(&self.transfer, weights, &mut self.maps)?;
-        let direct = direct_peak(&self.maps, self.config.pre_taps, self.config.taps);
+        let direct = direct_peak_near(
+            &self.maps,
+            self.config.pre_taps,
+            self.config.taps,
+            self.previous_direct,
+            self.config.align_tolerance_frames,
+            self.config.align_peak_ratio,
+        );
+        if direct.energy > 1e-12 {
+            self.previous_direct = Some(direct.position);
+        }
         let centre = (direct.position.floor() as i64 + self.config.pre_taps as i64)
             .clamp(0, self.taps as i64 - 1) as usize;
         let first = centre.saturating_sub(self.config.direct_before);
@@ -166,7 +185,8 @@ impl Background {
             }
             for k in 0..self.taps {
                 let i = pair * self.taps + k;
-                self.dynamic[i] = maps[i] / gain - self.maps[i];
+                self.normalized_maps[i] = maps[i] / gain;
+                self.dynamic[i] = self.normalized_maps[i] - self.maps[i];
             }
         }
         self.previous_gains.copy_from_slice(&self.gains);

@@ -86,6 +86,51 @@ fn analytic_maps_preserve_signed_delays_envelope_phase_and_window_correction() {
 }
 
 #[test]
+fn physical_path_inference_finds_an_equal_mix_and_reset_relearns_independent_speakers() {
+    let config = EngineConfig {
+        fast_seconds: 0.005,
+        infer_single_path: true,
+        ..EngineConfig::default()
+    };
+    for rate in [44100, 48000] {
+        let mut estimator = EchoEstimator::new(config.clone(), format(rate, 2, 1)).unwrap();
+        let length = rate as usize * 3 + config.window;
+        let left = noise(length, 411);
+        let right = noise(length, 719);
+        let mut reference = vec![0.0; 2 * config.window];
+        let mut microphone = vec![0.0; config.window];
+        for mono_speaker in [true, false] {
+            estimator.reset();
+            let mut last = ReferenceMode::Mono;
+            for first in (0..length - config.window).step_by(config.hop) {
+                reference[..config.window].copy_from_slice(&left[first..first + config.window]);
+                reference[config.window..].copy_from_slice(&right[first..first + config.window]);
+                for (i, value) in microphone.iter_mut().enumerate() {
+                    let at = first + i;
+                    *value = if mono_speaker {
+                        0.35 * (left[at] + right[at])
+                    } else {
+                        0.7 * left[at] + 0.6 * right[at.saturating_sub(12)]
+                    };
+                }
+                last = estimator
+                    .process(&reference, &microphone, 0.0, None, false)
+                    .unwrap()
+                    .mode;
+            }
+            assert_eq!(
+                last,
+                if mono_speaker {
+                    ReferenceMode::Mono
+                } else {
+                    ReferenceMode::Stereo
+                }
+            );
+        }
+    }
+}
+
+#[test]
 fn mono_and_independent_stereo_recover_known_echo_paths_at_both_rates() {
     let config = EngineConfig::default();
     for rate in [44100, 48000] {

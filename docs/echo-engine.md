@@ -2,8 +2,8 @@
 
 M4 builds the portable engine in stages. Alignment and echo estimation operate on actual filtered
 PCM; the application still uses the streaming/level host until M5 connects the complete engine.
-The offline pipeline reports hand presence and distance. Poke detection and the meter are the next
-stages; no live gesture behavior is connected yet.
+The offline pipeline reports hand presence, distance, candidate pokes and the sound-quality meter.
+Complete gesture accuracy is still under development; no live gesture behavior is connected yet.
 
 `SampleRing` stores four seconds per channel by absolute frame number. Missing frames and flagged
 boundaries invalidate any window that touches them. Overlap cannot replace previously accepted
@@ -48,7 +48,23 @@ processing events. Gap windows hold features, and valid windows resume learning 
 stays suspended. Background normalization rejects large gain/phase jumps. Presence slows learning
 for three seconds, then stationary objects fade normally. A gated noise floor, peakiness and
 three/six-hop hysteresis produce Hand changes; distance uses a three-value median and 15 ms
-smoothing. Detection, the meter and full lab reports remain next.
+smoothing. The frame-indexed poke detector confirms an approach and retreat, and discards
+trajectories on a source/preset change, pause, gap or impossible distance jump. The meter gates
+confirmation below score 15 and during unsafe or silent source conditions. New engines start with
+capture off: callers must use `set_source_status` for their active source. `Meter` events arrive
+every 100 ms even when the engine is waiting for sound. Snapshot includes the latest reading.
+
+The physical-path inference experiment is opt-in through TOML. Coherence smoothing is independent
+of fast transfer smoothing. The default fast time remains 40 ms; a 5 ms candidate detects the
+basic single-speaker phone gestures but still fails other required scenarios. See
+[decision 0012](decisions/0012-motion-and-poke-guards.md) and the explicit failing development probe:
+
+```powershell
+cargo run --release -p veyl-sim --example poke_gates
+```
+
+Passing the component suite below does not close those remaining gesture acceptance gates.
+Full lab analysis and plots follow in M4.7.
 
 Run the required portable suite with:
 

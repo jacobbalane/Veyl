@@ -3,6 +3,7 @@ mod gate;
 mod maps;
 use crate::{config::EngineConfig, StreamFormat};
 use gate::ImpulseGate;
+pub(crate) use maps::direct_peak_near;
 pub use maps::{direct_peak, DirectPeak, MapTransform};
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{f32::consts::TAU, sync::Arc};
@@ -19,6 +20,8 @@ pub struct EchoFrame {
     pub coherence: f32,
     pub bandwidth_hz: f32,
     pub reference_weights: [f32; 2],
+    pub reference_cross: Complex<f32>,
+    pub path_mismatch: f32,
     pub predicted_power: f64,
     pub residual_power: f64,
     pub impulse: bool,
@@ -35,6 +38,7 @@ pub struct EchoEstimator {
     mics: usize,
     mode: ReferenceMode,
     alpha: f32,
+    coherence_alpha: f32,
     forward: Arc<dyn Fft<f32>>,
     scratch: Vec<Complex<f32>>,
     window: Vec<f32>,
@@ -55,6 +59,9 @@ pub struct EchoEstimator {
     weights: Vec<f32>,
     gate: ImpulseGate,
     previous_direct: Option<f64>,
+    path_average: Vec<Complex<f32>>,
+    path_frames: u64,
+    single_path: bool,
 }
 impl EchoEstimator {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -89,6 +96,9 @@ impl EchoEstimator {
         Ok(Self {
             alpha: 1.0
                 - (-(config.hop as f32) / (config.fast_seconds * format.sample_rate as f32)).exp(),
+            coherence_alpha: 1.0
+                - (-(config.hop as f32) / (config.coherence_seconds * format.sample_rate as f32))
+                    .exp(),
             mode: ReferenceMode::Mono,
             n,
             bins,
@@ -114,6 +124,9 @@ impl EchoEstimator {
             band,
             gate,
             previous_direct: None,
+            path_average: vec![Complex::default(); bins * refs * mics],
+            path_frames: 0,
+            single_path: false,
             config,
             format,
         })
@@ -146,6 +159,9 @@ impl EchoEstimator {
     }
     pub fn reset(&mut self) {
         self.reset_averages();
+        self.path_average.fill(Complex::default());
+        self.path_frames = 0;
+        self.single_path = false;
         self.coherence_left.fill(0.0);
         self.coherence_right.fill(0.0);
         self.coherence_cross.fill(Complex::default());
@@ -216,7 +232,9 @@ impl EchoEstimator {
             self.coherence()
         };
         if self.refs == 2 && !impulse {
-            if self.mode == ReferenceMode::Mono && coherence < self.config.mono_to_stereo {
+            if self.single_path {
+                self.mode = ReferenceMode::Mono;
+            } else if self.mode == ReferenceMode::Mono && coherence < self.config.mono_to_stereo {
                 self.mode = ReferenceMode::Stereo;
             } else if self.mode == ReferenceMode::Stereo && coherence > self.config.stereo_to_mono {
                 self.mode = ReferenceMode::Mono;
@@ -258,7 +276,47 @@ impl EchoEstimator {
         if direct.energy > 1e-12 {
             self.previous_direct = Some(direct.position);
         }
+        let mut reference_cross = if self.mode == ReferenceMode::Stereo {
+            self.lr
+                .iter()
+                .zip(&self.band)
+                .map(|(value, band)| *value * *band)
+                .sum::<Complex<f32>>()
+                / total
+        } else {
+            Complex::default()
+        };
+        let bound = (reference_weights[0] * reference_weights[1]).sqrt();
+        if reference_cross.norm() > bound && reference_cross.norm() > 0.0 {
+            reference_cross *= bound / reference_cross.norm();
+        }
+        let mut difference = 0.0;
+        let mut path_power = 0.0;
+        if self.mode == ReferenceMode::Stereo && !impulse {
+            self.path_frames += self.config.hop as u64;
+            for (average, value) in self.path_average.iter_mut().zip(&self.transfer) {
+                *average += 0.01 * (*value - *average);
+            }
+            for c in 0..self.mics {
+                for bin in 0..self.bins {
+                    let left = self.path_average[c * self.refs * self.bins + bin];
+                    let right = self.path_average[(c * self.refs + 1) * self.bins + bin];
+                    difference += (left - right).norm_sqr() * self.band[bin];
+                    path_power += (left.norm_sqr() + right.norm_sqr()) * self.band[bin];
+                }
+            }
+        }
+        let path_mismatch = difference / path_power.max(1e-20);
+        if self.config.infer_single_path
+            && self.path_frames >= self.format.sample_rate as u64
+            && path_power > 1e-12
+            && path_mismatch < 0.01
+        {
+            self.single_path = true;
+        }
         Ok(EchoFrame {
+            reference_cross,
+            path_mismatch,
             mode: self.mode,
             mode_changed,
             coherence,
@@ -299,11 +357,12 @@ impl EchoEstimator {
         for bin in 0..self.bins {
             let left = self.x[bin];
             let right = self.x[self.n + bin];
-            self.coherence_left[bin] += self.alpha * (left.norm_sqr() - self.coherence_left[bin]);
+            self.coherence_left[bin] +=
+                self.coherence_alpha * (left.norm_sqr() - self.coherence_left[bin]);
             self.coherence_right[bin] +=
-                self.alpha * (right.norm_sqr() - self.coherence_right[bin]);
+                self.coherence_alpha * (right.norm_sqr() - self.coherence_right[bin]);
             self.coherence_cross[bin] = self.coherence_cross[bin]
-                + self.alpha * (left * right.conj() - self.coherence_cross[bin]);
+                + self.coherence_alpha * (left * right.conj() - self.coherence_cross[bin]);
         }
         self.coherence()
     }

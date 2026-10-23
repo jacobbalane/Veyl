@@ -85,7 +85,7 @@ pub struct DirectPeak {
 pub fn direct_peak(maps: &[Complex<f32>], pre: usize, taps: usize) -> DirectPeak {
     direct_peak_near(maps, pre, taps, None, 2.0, 0.5)
 }
-pub(super) fn direct_peak_near(
+pub(crate) fn direct_peak_near(
     maps: &[Complex<f32>],
     pre: usize,
     taps: usize,

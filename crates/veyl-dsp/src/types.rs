@@ -10,6 +10,13 @@ pub enum Sensitivity {
     High,
 }
 impl Sensitivity {
+    pub fn poke_thresholds(self) -> (f32, f32, f32) {
+        match self {
+            Self::Low => (4.0, 2.5, 15.0),
+            Self::Normal => (3.0, 2.0, 10.0),
+            Self::High => (2.0, 1.5, 8.0),
+        }
+    }
     pub fn z_on(self) -> f32 {
         match self {
             Self::Low => 12.0,

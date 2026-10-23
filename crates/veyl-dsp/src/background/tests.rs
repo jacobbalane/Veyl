@@ -141,3 +141,46 @@ fn presence_slows_learning_only_temporarily_and_impulses_hold_the_model() {
     assert!(late > early * 5.0);
     assert!(background.dynamic()[config.pre_taps + 60].norm() > 0.05);
 }
+
+#[test]
+fn distance_origin_keeps_a_strong_direct_path_when_microphones_exchange_peak_rank() {
+    let config = EngineConfig::default();
+    let format = StreamFormat {
+        sample_rate: 48000,
+        ref_channels: 1,
+        mic_channels: 1,
+    };
+    let mut background = Background::new(config.clone(), format).unwrap();
+    let weights = weights(&config);
+    let mut transform = MapTransform::new(&config).unwrap();
+    let mut maps = vec![Complex::default(); config.pre_taps + config.taps];
+    let spectrum = |first: f32, second: f32| {
+        (0..=config.window / 2)
+            .map(|bin| {
+                Complex::new(first, 0.0)
+                    + Complex::from_polar(
+                        second,
+                        std::f32::consts::TAU * bin as f32 * 15.0 / config.window as f32,
+                    )
+            })
+            .collect::<Vec<_>>()
+    };
+    for (first, second, expected) in [(1.0, 0.9, 0.0), (0.9, 1.0, 0.0), (0.1, 1.0, -15.0)] {
+        let response = spectrum(first, second);
+        transform.render(&response, &weights, &mut maps).unwrap();
+        background
+            .process(&response, &maps, &weights, false, false)
+            .unwrap();
+        let result = background
+            .process(&response, &maps, &weights, false, false)
+            .unwrap();
+        assert!((result.direct.position - expected).abs() < 0.3);
+    }
+    background.reset(true);
+    let response = spectrum(1.0, 0.9);
+    transform.render(&response, &weights, &mut maps).unwrap();
+    let result = background
+        .process(&response, &maps, &weights, false, false)
+        .unwrap();
+    assert!(result.direct.position.abs() < 0.3);
+}

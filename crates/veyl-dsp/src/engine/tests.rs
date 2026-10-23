@@ -24,6 +24,12 @@ fn signed_lags_wait_for_matching_reference_and_gaps_hold_instead_of_inventing_mo
                 },
             )
             .unwrap();
+            engine
+                .set_source_status(SourceStatus {
+                    capture_running: true,
+                    ..SourceStatus::default()
+                })
+                .unwrap();
             let block = rate as usize / 100;
             let mut events = Vec::with_capacity(32);
             for first in (0..frames - block).step_by(block) {
