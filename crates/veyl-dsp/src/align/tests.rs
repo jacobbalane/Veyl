@@ -169,3 +169,128 @@ fn controller_handles_different_absolute_origins_with_and_without_capture_timest
         }
     }
 }
+
+#[test]
+fn sparse_alignment_locks_through_short_gaps_but_rejects_long_gaps_and_unrelated_signals() {
+    use crate::{ring::SampleRing, StreamFormat};
+    for rate in [44100, 48000] {
+        let signal = noise(rate as usize * 6, 71);
+        let unrelated = noise(signal.len(), 97);
+        let pcm = |values: &[f32]| {
+            values
+                .iter()
+                .map(|v| (v * 16000.0) as i16)
+                .collect::<Vec<_>>()
+        };
+        let reference_pcm = pcm(&signal);
+        let unrelated_pcm = pcm(&unrelated);
+        let block = rate as usize / 100;
+        for (lag, missing_blocks, related, tolerate) in [
+            (-128, 1, true, true),
+            (112, 1, true, true),
+            (112, 1, true, false),
+            (112, 2, true, true),
+            (112, 10, true, true),
+            (112, 1, false, true),
+        ] {
+            let config = EngineConfig {
+                align_max_missing_fraction: if tolerate { 0.02 } else { 0.0 },
+                ..EngineConfig::default()
+            };
+            let mut aligner = Aligner::new(
+                config,
+                StreamFormat {
+                    sample_rate: rate,
+                    ref_channels: 1,
+                    mic_channels: 1,
+                },
+                false,
+            )
+            .unwrap();
+            let mut reference = SampleRing::new(rate, 1, 4).unwrap();
+            let mut microphone = SampleRing::new(rate, 1, 4).unwrap();
+            let mut locked_at = None;
+            for first in (block..reference_pcm.len() - block).step_by(block) {
+                let number = first / block;
+                if (60..60 + missing_blocks).contains(&(number % 80)) {
+                    continue;
+                }
+                let mic: Vec<_> = (first..first + block)
+                    .map(|i| {
+                        if related {
+                            reference_pcm[(i as i64 - lag) as usize]
+                        } else {
+                            unrelated_pcm[i]
+                        }
+                    })
+                    .collect();
+                let ns = Some(first as i64 * 1_000_000_000 / rate as i64);
+                reference
+                    .push(
+                        first as u64,
+                        &reference_pcm[first..first + block],
+                        ns,
+                        false,
+                    )
+                    .unwrap();
+                microphone.push(first as u64, &mic, ns, false).unwrap();
+                if aligner.try_align(&reference, &microphone).is_some() {
+                    locked_at = Some(first);
+                    break;
+                }
+            }
+            if related && missing_blocks == 1 && tolerate {
+                assert!(locked_at.is_some_and(|frame| frame < rate as usize * 3));
+                assert!((aligner.lag() - lag).abs() <= 1);
+            } else {
+                assert!(locked_at.is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn rejected_alignment_coverage_breaks_a_pending_pair_of_good_estimates() {
+    use crate::{ring::SampleRing, StreamFormat};
+    for rate in [44100, 48000] {
+        let pcm: Vec<_> = noise(rate as usize * 6, 101)
+            .iter()
+            .map(|v| (v * 16000.0) as i16)
+            .collect();
+        let mut aligner = Aligner::new(
+            EngineConfig::default(),
+            StreamFormat {
+                sample_rate: rate,
+                ref_channels: 1,
+                mic_channels: 1,
+            },
+            false,
+        )
+        .unwrap();
+        let mut reference = SampleRing::new(rate, 1, 4).unwrap();
+        let mut microphone = SampleRing::new(rate, 1, 4).unwrap();
+        let block = rate as usize / 100;
+        let mut locked_at = None;
+        for first in (0..pcm.len() - block).step_by(block) {
+            if (160..165).contains(&(first / block)) {
+                continue;
+            }
+            let mic: Vec<_> = (first..first + block)
+                .map(|i| i.checked_sub(112).map_or(0, |j| pcm[j]))
+                .collect();
+            let ns = Some(first as i64 * 1_000_000_000 / rate as i64);
+            reference
+                .push(first as u64, &pcm[first..first + block], ns, false)
+                .unwrap();
+            microphone.push(first as u64, &mic, ns, false).unwrap();
+            if aligner.try_align(&reference, &microphone).is_some() {
+                locked_at = Some(first);
+                break;
+            }
+        }
+        // The first good estimate precedes the 50 ms gap. The rejected search must erase it;
+        // two fresh estimates after that gap lock around 4.33 s rather than 3.33 s.
+        assert!(locked_at.is_some_and(|at| (rate as usize * 4..rate as usize * 5).contains(&at)));
+        assert!((aligner.lag() - 112).abs() <= 1);
+    }
+}

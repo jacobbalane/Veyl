@@ -21,6 +21,11 @@ pub struct PushResult {
     pub gap: bool,
     pub overlap: usize,
 }
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct CopyCoverage {
+    pub missing_frames: usize,
+    pub longest_gap: usize,
+}
 impl SampleRing {
     pub fn new(rate: u32, channels: u8, seconds: usize) -> Result<Self, &'static str> {
         if ![44100, 48000].contains(&rate)
@@ -121,14 +126,29 @@ impl SampleRing {
         })
     }
     pub fn copy(&self, first: u64, channel: Option<usize>, output: &mut [f32]) -> bool {
-        let mut valid = channel.is_none_or(|channel| channel < self.channels);
+        self.copy_with_coverage(first, channel, output)
+            .is_some_and(|coverage| coverage.missing_frames == 0)
+    }
+    /// Report holes only within retained stream bounds. Missing frames still contain zeros.
+    pub(crate) fn copy_with_coverage(
+        &self,
+        first: u64,
+        channel: Option<usize>,
+        output: &mut [f32],
+    ) -> Option<CopyCoverage> {
         let end = first.checked_add(output.len() as u64);
-        valid &= first >= self.oldest()
+        let within_bounds = channel.is_none_or(|channel| channel < self.channels)
+            && first >= self.oldest()
+            && self.first.is_some_and(|start| first >= start)
             && end.is_some_and(|end| self.end.is_some_and(|latest| end <= latest));
+        let mut coverage = CopyCoverage::default();
+        let mut gap = 0;
         for (index, sample) in output.iter_mut().enumerate() {
             let Some(frame) = first.checked_add(index as u64) else {
                 *sample = 0.0;
-                valid = false;
+                coverage.missing_frames += 1;
+                gap += 1;
+                coverage.longest_gap = coverage.longest_gap.max(gap);
                 continue;
             };
             let slot = (frame % self.capacity as u64) as usize;
@@ -138,9 +158,12 @@ impl SampleRing {
                 || channel.is_some_and(|channel| channel >= self.channels)
             {
                 *sample = 0.0;
-                valid = false;
+                coverage.missing_frames += 1;
+                gap += 1;
+                coverage.longest_gap = coverage.longest_gap.max(gap);
                 continue;
             }
+            gap = 0;
             *sample = match channel {
                 Some(channel) => self.samples[slot * self.channels + channel],
                 None => {
@@ -151,7 +174,7 @@ impl SampleRing {
                 }
             };
         }
-        valid
+        within_bounds.then_some(coverage)
     }
     pub fn capture_time(&self, frame: u64) -> Option<i64> {
         let anchor = self
@@ -172,6 +195,30 @@ impl SampleRing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn alignment_coverage_counts_holes_without_accepting_unreceived_or_overwritten_frames() {
+        let mut ring = SampleRing::new(48000, 1, 4).unwrap();
+        ring.push(100, &[1000; 100], None, false).unwrap();
+        ring.push(205, &[1000; 40], None, false).unwrap();
+        ring.push(248, &[1000; 52], None, false).unwrap();
+        let mut output = [0.0; 200];
+        let coverage = ring.copy_with_coverage(100, None, &mut output).unwrap();
+        assert_eq!(coverage.missing_frames, 8);
+        assert_eq!(coverage.longest_gap, 5);
+        assert!(output[100..105].iter().all(|value| *value == 0.0));
+        assert!(!ring.copy(100, None, &mut output));
+        assert!(ring.copy_with_coverage(99, None, &mut output).is_none());
+        assert!(ring.copy_with_coverage(101, None, &mut output).is_none());
+        assert!(ring.copy_with_coverage(100, Some(1), &mut output).is_none());
+        ring.push(300, &[1000; 20], None, true).unwrap();
+        let coverage = ring
+            .copy_with_coverage(290, None, &mut output[..30])
+            .unwrap();
+        assert_eq!(coverage.missing_frames, 1);
+        assert_eq!(coverage.longest_gap, 1);
+        ring.push(1_000_000, &[1000; 200], None, false).unwrap();
+        assert!(ring.copy_with_coverage(100, None, &mut output).is_none());
+    }
     #[test]
     fn gaps_overlaps_large_jumps_and_wrapping_never_make_old_audio_valid() {
         let mut ring = SampleRing::new(48000, 2, 4).unwrap();

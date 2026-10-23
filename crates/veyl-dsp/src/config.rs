@@ -59,6 +59,8 @@ pub struct EngineConfig {
     pub align_min_psr: f32,
     pub align_peak_ratio: f32,
     pub align_min_dbfs: f32,
+    pub align_max_missing_fraction: f32,
+    pub align_max_gap_ms: f32,
     pub align_tolerance_frames: f64,
     pub align_interval_seconds: f32,
     pub recheck_seconds: f32,
@@ -125,6 +127,8 @@ impl Default for EngineConfig {
             align_min_psr: 6.0,
             align_peak_ratio: 0.5,
             align_min_dbfs: -70.0,
+            align_max_missing_fraction: 0.02,
+            align_max_gap_ms: 10.0,
             align_tolerance_frames: 2.0,
             align_interval_seconds: 1.0,
             recheck_seconds: 5.0,
@@ -258,6 +262,10 @@ impl EngineConfig {
             || self.align_ramp_ms >= self.align_seconds * 500.0
             || !self.align_min_dbfs.is_finite()
             || !(-120.0..=0.0).contains(&self.align_min_dbfs)
+            || !self.align_max_missing_fraction.is_finite()
+            || !(0.0..=0.1).contains(&self.align_max_missing_fraction)
+            || !self.align_max_gap_ms.is_finite()
+            || !(0.0..=50.0).contains(&self.align_max_gap_ms)
             || !self.align_tolerance_frames.is_finite()
             || !(0.1..=16.0).contains(&self.align_tolerance_frames)
             || self.align_interval_seconds > 60.0
@@ -290,6 +298,20 @@ mod tests {
         assert!(EngineConfig::from_toml("alig_min_psr = 7.0").is_err());
         assert!(EngineConfig::from_toml("f_lo = nan").is_err());
         assert!(EngineConfig::from_toml("hop = 0").is_err());
+        for text in [
+            "align_max_missing_fraction = -0.01",
+            "align_max_missing_fraction = 0.11",
+            "align_max_missing_fraction = nan",
+            "align_max_gap_ms = -1.0",
+            "align_max_gap_ms = 51.0",
+            "align_max_gap_ms = inf",
+        ] {
+            assert!(EngineConfig::from_toml(text).is_err());
+        }
+        assert!(EngineConfig::from_toml(
+            "align_max_missing_fraction = 0.0\nalign_max_gap_ms = 0.0"
+        )
+        .is_ok());
         let text = toml::to_string(&config).unwrap();
         assert_eq!(
             EngineConfig::from_toml(&text).unwrap().drift_rate_noise,

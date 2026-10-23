@@ -75,7 +75,7 @@ impl Aligner {
         self.direct_reference = None;
         self.residual = None;
     }
-    /// Search complete, valid windows only. Window origins are converted back to absolute lag.
+    /// Bound missing alignment evidence separately from the stricter gesture-window validity.
     pub fn try_align(
         &mut self,
         reference: &SampleRing,
@@ -129,12 +129,23 @@ impl Aligner {
         let first = reference_end.checked_sub(frames)?;
         let mic_first = u64::try_from(first as i128 + minimum as i128).ok()?;
         let length = frames as usize + (maximum - minimum) as usize;
-        if !reference.copy(first, None, &mut self.reference)
-            || !microphone.copy(mic_first, None, &mut self.microphone[..length])
-        {
-            return None;
-        }
+        let reference_coverage = reference.copy_with_coverage(first, None, &mut self.reference)?;
+        let microphone_coverage =
+            microphone.copy_with_coverage(mic_first, None, &mut self.microphone[..length])?;
         self.last_attempt = Some(latest);
+        for (coverage, length) in [
+            (reference_coverage, self.reference.len()),
+            (microphone_coverage, length),
+        ] {
+            if coverage.missing_frames as f32
+                > self.config.align_max_missing_fraction * length as f32
+                || coverage.longest_gap as f32
+                    > self.config.align_max_gap_ms * self.rate as f32 / 1000.0
+            {
+                self.lock.reject();
+                return None;
+            }
+        }
         let middle = first + frames / 2;
         let timestamp_offset = offset(middle).unwrap_or(centre);
         let tracked = self.hop_frame.map(|frame| {
