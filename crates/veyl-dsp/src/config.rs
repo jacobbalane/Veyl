@@ -16,6 +16,10 @@ pub struct EngineConfig {
     pub regularization: f32,
     pub infer_single_path: bool,
     pub resample_reference: bool,
+    pub residual_motion: bool,
+    pub motion_seconds: f32,
+    pub reference_power_seconds: f32,
+    pub residual_settle_seconds: f32,
     pub activity_db: f32,
     pub activity_bins: usize,
     pub mono_to_stereo: f32,
@@ -84,6 +88,10 @@ impl Default for EngineConfig {
             regularization: 1e-3,
             infer_single_path: false,
             resample_reference: false,
+            residual_motion: false,
+            motion_seconds: 0.005,
+            reference_power_seconds: 0.5,
+            residual_settle_seconds: 0.05,
             activity_db: 30.0,
             activity_bins: 9,
             mono_to_stereo: 0.95,
@@ -154,6 +162,9 @@ impl EngineConfig {
             self.edge_hz,
             self.fast_seconds,
             self.coherence_seconds,
+            self.motion_seconds,
+            self.reference_power_seconds,
+            self.residual_settle_seconds,
             self.regularization,
             self.activity_db,
             self.impulse_ratio,
@@ -210,6 +221,9 @@ impl EngineConfig {
             || self.edge_hz > self.f_hi - self.f_lo
             || self.fast_seconds > 2.0
             || self.coherence_seconds > 2.0
+            || self.motion_seconds > 2.0
+            || self.reference_power_seconds > 30.0
+            || self.residual_settle_seconds > 5.0
             || self.regularization > 1.0
             || self.activity_db > 120.0
             || self.activity_bins == 0

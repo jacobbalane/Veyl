@@ -1,4 +1,6 @@
 //! Development probe for gesture gates. This is not the completed M4 acceptance suite.
+//! `--set=key=value` overrides an engine parameter; `--explain` describes each missed poke
+//! from the derived features only.
 use std::{env, error::Error};
 use veyl_dsp::{config::EngineConfig, Sensitivity};
 use veyl_lab::{analysis, recording::Input};
@@ -14,8 +16,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut sensitivity = Sensitivity::Normal;
     let mut selected = false;
     let mut cases = vec![];
+    let mut overrides = vec![];
+    let mut explain = false;
     for argument in arguments.iter().skip(1) {
-        if let Some(value) = argument.strip_prefix("--sensitivity=") {
+        if argument == "--explain" {
+            explain = true;
+        } else if let Some(value) = argument.strip_prefix("--set=") {
+            let (key, value) = value.split_once('=').ok_or("Use --set=key=value.")?;
+            overrides.push((key.to_owned(), value.to_owned()));
+        } else if let Some(value) = argument.strip_prefix("--sensitivity=") {
             if selected {
                 return Err("Choose sensitivity once for the whole run.".into());
             }
@@ -74,21 +83,117 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         .into();
         input.meta.device["media_volume"] = scene.volume.into();
-        let run = analysis::evaluate(
-            &input,
-            EngineConfig {
-                fast_seconds: 0.005,
-                infer_single_path: true,
-                resample_reference: true,
-                z_on: sensitivity.z_on(),
-                poke_in_cm,
-                poke_out_cm,
-                poke_v_min,
-                ..analysis::default_config(&input)
-            },
-            true,
-        )?;
+        // The residual candidate (decision 0020). The earlier 5 ms candidate is
+        // --set=residual_motion=false --set=fast_seconds=0.005 --set=floor_relative=1e-6
+        // --set=impulse_ratio=6.
+        let mut config = serde_json::to_value(EngineConfig {
+            infer_single_path: true,
+            resample_reference: true,
+            residual_motion: true,
+            floor_relative: 1e-8,
+            impulse_ratio: 12.0,
+            z_on: sensitivity.z_on(),
+            poke_in_cm,
+            poke_out_cm,
+            poke_v_min,
+            ..analysis::default_config(&input)
+        })?;
+        for (key, value) in &overrides {
+            let parsed: serde_json::Value = serde_json::from_str(value)
+                .unwrap_or_else(|_| serde_json::Value::String(value.clone()));
+            if config.get(key).is_none() {
+                return Err(format!("Unknown engine parameter {key}.").into());
+            }
+            config[key] = parsed;
+        }
+        let config: EngineConfig = serde_json::from_value(config)?;
+        config.validate()?;
+        let run = analysis::evaluate(&input, config, true)?;
         let pokes = &run.report.pokes;
+        if explain {
+            let rate = scene.fs as f64;
+            for label in input
+                .labels
+                .iter()
+                .filter(|label| label.kind == "poke_truth")
+            {
+                let turn = label.frame as f64 / rate;
+                if run
+                    .pokes
+                    .iter()
+                    .any(|poke| (poke.turn_frame as f64 / rate - turn).abs() <= 0.15)
+                {
+                    continue;
+                }
+                let rows: Vec<_> = run
+                    .features
+                    .iter()
+                    .filter(|row| {
+                        let t = row.feature.frame as f64 / rate;
+                        t >= turn - 1.0 && t <= turn + 0.5
+                    })
+                    .collect();
+                let near = rows.iter().filter(|row| {
+                    let t = row.feature.frame as f64 / rate;
+                    (t - turn).abs() <= 0.15 && row.feature.distance_cm.is_some()
+                });
+                let Some(minimum) = near.min_by(|a, b| {
+                    a.feature
+                        .distance_cm
+                        .unwrap()
+                        .total_cmp(&b.feature.distance_cm.unwrap())
+                }) else {
+                    let present = rows.iter().filter(|row| row.feature.present).count();
+                    let peak = rows
+                        .iter()
+                        .map(|row| row.feature.z_max)
+                        .fold(0.0_f32, f32::max);
+                    let suspended = rows.iter().filter(|row| row.suspended).count();
+                    println!("  miss {turn:.2}s: no hand near turn; present {present}/{} hops, z_max {peak:.1}, suspended {suspended}", rows.len());
+                    continue;
+                };
+                let tm = minimum.feature.frame as f64 / rate;
+                let closest = minimum.feature.distance_cm.unwrap();
+                let before: Vec<_> = rows
+                    .iter()
+                    .filter(|row| {
+                        let t = row.feature.frame as f64 / rate;
+                        t <= tm && t >= tm - 0.9 && row.feature.distance_cm.is_some()
+                    })
+                    .collect();
+                let approach = before
+                    .iter()
+                    .max_by(|a, b| {
+                        a.feature
+                            .distance_cm
+                            .unwrap()
+                            .total_cmp(&b.feature.distance_cm.unwrap())
+                    })
+                    .unwrap();
+                let ta = approach.feature.frame as f64 / rate;
+                let depth = approach.feature.distance_cm.unwrap() - closest;
+                let after = rows
+                    .iter()
+                    .filter(|row| {
+                        let t = row.feature.frame as f64 / rate;
+                        t > tm && t <= tm + 0.5 && row.feature.distance_cm.is_some()
+                    })
+                    .map(|row| row.feature.distance_cm.unwrap() - closest)
+                    .fold(f32::MIN, f32::max);
+                let suspended = rows
+                    .iter()
+                    .filter(|row| {
+                        row.suspended && (row.feature.frame as f64 / rate - tm).abs() < 0.3
+                    })
+                    .count();
+                println!(
+                    "  miss {turn:.2}s: turn {tm:.3} at {closest:.1} cm z {:.1}; approach from {:.1} cm at {ta:.3} (depth {depth:.1}, {:.0} cm/s); max rise {after:.1}; suspended near turn {suspended}",
+                    minimum.feature.z_max,
+                    approach.feature.distance_cm.unwrap(),
+                    depth / (tm - ta).max(1e-3) as f32,
+                );
+            }
+        }
         let mut failures = vec![];
         let mut require = |passes: bool, condition: &'static str| {
             if !passes {

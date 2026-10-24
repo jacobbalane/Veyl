@@ -28,6 +28,7 @@ fn process(
             reference_cross: Complex::default(),
             settling,
             held,
+            energy_floor: false,
         })
         .unwrap()
 }
@@ -122,6 +123,7 @@ fn range_presets_and_channel_power_weights_apply_before_presence() {
             reference_cross: Complex::default(),
             settling: false,
             held: false,
+            energy_floor: false,
         })
         .unwrap();
     assert!((stereo.normalized_motion()[k] * stereo.floor()[k] - 0.0013).abs() < 1e-8);
@@ -150,6 +152,7 @@ fn calibration_measures_model_variance_instead_of_small_adjacent_hop_differences
                 reference_cross: Complex::default(),
                 settling: true,
                 held: false,
+                energy_floor: false,
             })
             .unwrap();
     }
@@ -183,6 +186,7 @@ fn a_disappeared_background_echo_cannot_hide_a_new_moving_return() {
                 reference_cross: Complex::default(),
                 settling: false,
                 held: false,
+                energy_floor: false,
             })
             .unwrap();
     }
@@ -219,6 +223,7 @@ fn correlated_references_cancel_unobservable_opposite_transfer_changes() {
                 reference_cross: Complex::new(correlation, 0.0),
                 settling: false,
                 held: false,
+                energy_floor: false,
             })
             .unwrap();
         if hop == 0 {

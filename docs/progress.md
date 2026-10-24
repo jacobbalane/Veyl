@@ -938,6 +938,36 @@ and candidate, including scheduled alignment rechecks. The counter itself is cal
 new output fields require explicit test coverage. Full scenario replays preserve the basic,
 clock and negative-case results; the remaining gesture gates still fail. M4.8 remains open.
 
+**Review on 2026-10-24.** Before continuing, every milestone's local checks were rerun on the
+committed `40728df`: `npm ci`, formatting, 14 script tests, the version check, desktop
+TypeScript/12 Vitest tests/build, site 3 tests/build, Android `:core:test` (33) and
+`:app:testDebugUnitTest` (14) without the Gradle cache plus debug lint (no issues) and the debug
+APK, Rust formatting and whole-workspace clippy, 29 Link tests, 36 native desktop tests, the
+74 DSP/simulator/lab release tests, the byte-identical protocol vectors and the lab `sim` and
+`analyze` commands. All passed. The live site's three pages respond, and the last 30 GitHub runs
+passed. As recorded above, `analyze` with defaults confirms 0 of 10 basic pokes. A debug-mode
+`cargo test --workspace --exclude veyl-desktop` was stopped in the 120-second clock scenarios
+after 12 test files passed; CI runs those scenarios in release.
+
+**M4.5 residual candidate.** [Decision 0020](decisions/0020-residual-motion.md) adds opt-in
+`residual_motion`: change is measured from the microphone residual against the gain-matched
+background, after removing each hop's whole-field gain and timing, with one matched filter
+against the mean reference. Stereo backgrounds learn with a loaded long-term covariance
+inverse; clock feedback uses each microphone's background peak plus the hop's field delay.
+Full-duration probe replays now match all stereo (30/30) and compressed (30/30) pokes, 17/30
+PC and 21/30 PC Bluetooth pokes (from none), keep basic, clock and negative cases passing, and
+raise no model jump, drift warning or re-lock. 18 of 54 probe cases still fail, against 24
+before; volume steps lose one poke per seed. Several varied pokes are shallower than Normal's own
+3 cm threshold (22–28 of 30 per seed meet it), but most varied misses come from motion blur
+during fast approaches. Defaults and gesture gates are unchanged. See [tuning](tuning.md).
+
+New tests: a synthetic residual test (correlated Stereo paths learned, a new echo found at its
+delay and size), `residual_pokes` (stereo and compressed scenes, seeds 1–3, every poke and no
+model jump), and the residual candidate in the zero-allocation, bit-exact replay property test.
+The probe gains `--set` and `--explain`. The candidate costs about 48 ms per second of audio
+against 31.6 ms for the earlier one on the development desktop; M4.8's 30 ms target is unmet.
+M4.5 and M4 acceptance remain open.
+
 ## Dependency follow-up
 
 [Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the

@@ -2,7 +2,7 @@ use crate::{
     align::{Aligner, LockChange},
     background::Background,
     config::EngineConfig,
-    echo::{EchoEstimator, EchoFrame},
+    echo::{direct_peak_near, DirectPeak, EchoEstimator, EchoFrame},
     meter::{Meter, MeterReading, SourceStatus},
     motion::{MotionFeatures, MotionInput, MotionTracker},
     poke::{PokeDetector, PokeEvent},
@@ -100,6 +100,9 @@ pub struct Engine {
     processed_hops: u64,
     invalid_hops: u64,
     pending_hand_end: bool,
+    jump_streak: u32,
+    /// Per microphone: the tracked direct position and where it started.
+    residual_direct: Vec<Option<(f64, f64)>>,
 }
 impl Engine {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -146,6 +149,8 @@ impl Engine {
             processed_hops: 0,
             invalid_hops: 0,
             pending_hand_end: false,
+            jump_streak: 0,
+            residual_direct: vec![None; format.mic_channels as usize],
             config,
             format,
         })
@@ -202,6 +207,7 @@ impl Engine {
             });
         }
         self.pending_hand_end = false;
+        self.residual_direct.fill(None);
         self.background.reset(short);
         self.motion.reset();
         self.detector.suspend();
@@ -263,6 +269,8 @@ impl Engine {
         self.drift_warning = false;
         self.processed_hops = 0;
         self.invalid_hops = 0;
+        self.jump_streak = 0;
+        self.residual_direct.fill(None);
         self.pending_hand_end = false;
     }
     pub fn snapshot(&self) -> EngineSnapshot {
@@ -287,6 +295,58 @@ impl Engine {
             paused: self.paused,
             processed_hops: self.processed_hops,
             invalid_hops: self.invalid_hops,
+        }
+    }
+    /// Correlated channels leave each speaker's share of the fast estimate ambiguous, and several
+    /// direct sounds compete for the strongest peak of a summed map. Each microphone's slowly
+    /// learned background, seen through the mean reference, keeps a stable direct peak; the hop's whole-field delay against that
+    /// background adds the fast change. The feedback averages each microphone's movement from
+    /// where it started.
+    fn observe_residual_direct(&mut self, mode_changed: bool) {
+        let length = (self.config.pre_taps + self.config.taps) * self.format.ref_channels as usize;
+        let mut restarted = mode_changed;
+        let (mut offset, mut variance, mut energy, mut count) = (0.0, 0.0, 0.0, 0);
+        let delays = self.background.field_delays();
+        for (mic, maps) in self.background.mean_maps().chunks(length).enumerate() {
+            let Some(delay) = delays[mic] else {
+                continue;
+            };
+            let tracked = &mut self.residual_direct[mic];
+            let peak = direct_peak_near(
+                maps,
+                self.config.pre_taps,
+                self.config.taps,
+                tracked.map(|(position, _)| position),
+                self.config.align_tolerance_frames,
+                self.config.align_peak_ratio,
+            );
+            if peak.energy <= 1e-12 || !peak.position.is_finite() {
+                continue;
+            }
+            let position = peak.position + delay;
+            let origin = match *tracked {
+                Some((_, origin)) => origin,
+                None => {
+                    restarted = true;
+                    position
+                }
+            };
+            *tracked = Some((peak.position, origin));
+            offset += position - origin;
+            // Each hop's delay fit carries a few hundredths of a frame of noise.
+            variance += peak.variance + 0.02;
+            energy += peak.energy;
+            count += 1;
+        }
+        if count > 0 {
+            self.aligner.observe_fast(
+                DirectPeak {
+                    position: offset / count as f64,
+                    variance: variance / (count * count) as f64,
+                    energy,
+                },
+                restarted,
+            );
         }
     }
     /// The caller can reuse an event Vec; this method never clears its existing entries.
@@ -435,6 +495,7 @@ impl Engine {
                     reference_cross: Default::default(),
                     settling: !self.background.settled(),
                     held: true,
+                    energy_floor: self.config.residual_motion,
                 })?;
                 events.push(EngineEvent::Features(features));
                 self.detector.suspend();
@@ -448,25 +509,42 @@ impl Engine {
                 } else {
                     fraction
                 },
-                self.background
-                    .settled()
-                    .then(|| self.background.transfer()),
+                self.background.settled().then(|| {
+                    if self.config.residual_motion {
+                        self.background.gain_matched_transfer()
+                    } else {
+                        self.background.transfer()
+                    }
+                }),
                 self.running_frames >= self.format.sample_rate as u64,
             )?;
-            if !fast.impulse {
+            if !fast.impulse && !self.config.residual_motion {
                 self.aligner.observe_fast(fast.direct, fast.mode_changed);
             }
             if fast.mode_changed {
                 let short = self.background.settled();
                 self.reset_motion(short, events);
             }
-            let background = self.background.process(
-                self.echo.transfer(),
-                self.echo.maps(),
-                self.echo.weights(),
-                self.motion.present(),
-                fast.impulse || frame < self.model_jump_until,
-            )?;
+            let held = fast.impulse || frame < self.model_jump_until;
+            let background = if self.config.residual_motion {
+                self.background.process_residual(
+                    &self.echo,
+                    self.echo.weights(),
+                    self.motion.present(),
+                    held,
+                )?
+            } else {
+                self.background.process(
+                    self.echo.transfer(),
+                    self.echo.maps(),
+                    self.echo.weights(),
+                    self.motion.present(),
+                    held,
+                )?
+            };
+            if self.config.residual_motion && !held && !background.model_jump {
+                self.observe_residual_direct(fast.mode_changed);
+            }
             if background.model_jump {
                 events.push(EngineEvent::Warning(Warning::ModelJump));
                 self.echo.reset_averages();
@@ -474,6 +552,14 @@ impl Engine {
                     (self.config.jump_suspend_ms * self.format.sample_rate as f32 / 1000.0) as u64,
                 );
                 self.model_jump_until = self.suspended_until;
+                self.jump_streak += 1;
+                if self.config.residual_motion && self.jump_streak >= 3 {
+                    // A background that no longer matches the room would otherwise hold forever.
+                    self.reset_motion(true, events);
+                    self.jump_streak = 0;
+                }
+            } else if !held {
+                self.jump_streak = 0;
             }
             let features = self.motion.process(MotionInput {
                 frame,
@@ -481,10 +567,20 @@ impl Engine {
                 normalized: Some(self.background.normalized_maps()),
                 direct_position: background.direct.position,
                 direct_energy: background.direct_energy,
-                reference_weights: fast.reference_weights,
-                reference_cross: fast.reference_cross,
+                // Residual motion uses one matched filter against the mean reference.
+                reference_weights: if self.config.residual_motion {
+                    [1.0, 0.0]
+                } else {
+                    fast.reference_weights
+                },
+                reference_cross: if self.config.residual_motion {
+                    Default::default()
+                } else {
+                    fast.reference_cross
+                },
                 settling: background.settling,
                 held: fast.impulse || background.model_jump || frame < self.model_jump_until,
+                energy_floor: self.config.residual_motion,
             })?;
             if features.changed {
                 events.push(EngineEvent::Hand {
@@ -525,7 +621,10 @@ impl Engine {
                 events.push(EngineEvent::Warning(Warning::ImpulsiveNoise));
             }
             self.impulsive_noise = impulsive;
-            let drift = self.aligner.drift_warning();
+            // Residual clock feedback starts while the background is still being learned; its
+            // first estimates are not a measured drift.
+            let drift = self.aligner.drift_warning()
+                && !(self.config.residual_motion && background.settling);
             if drift && !self.drift_warning {
                 events.push(EngineEvent::Warning(Warning::Drift));
             }

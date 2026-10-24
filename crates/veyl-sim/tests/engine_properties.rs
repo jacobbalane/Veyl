@@ -303,17 +303,30 @@ fn warmed_engine_allocates_nothing_and_replays_all_outputs_bit_identically() {
         ref_channels: 2,
         mic_channels: 2,
     };
-    for candidate in [false, true] {
-        let config = if candidate {
+    let candidates = [
+        ("defaults", EngineConfig::default()),
+        (
+            "phone",
             EngineConfig {
                 fast_seconds: 0.005,
                 infer_single_path: true,
                 resample_reference: true,
                 ..EngineConfig::default()
-            }
-        } else {
-            EngineConfig::default()
-        };
+            },
+        ),
+        (
+            "residual",
+            EngineConfig {
+                infer_single_path: true,
+                resample_reference: true,
+                residual_motion: true,
+                floor_relative: 1e-8,
+                impulse_ratio: 12.0,
+                ..EngineConfig::default()
+            },
+        ),
+    ];
+    for (candidate, config) in candidates {
         assert_eq!(config.recheck_seconds, 5.0);
         let make_engine = || {
             let mut engine = Engine::new(config.clone(), format).unwrap();

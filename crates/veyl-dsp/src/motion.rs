@@ -33,6 +33,8 @@ pub struct MotionInput<'a> {
     pub reference_cross: Complex<f32>,
     pub settling: bool,
     pub held: bool,
+    /// The dynamic map already measures change, so settling learns its recent mean energy.
+    pub energy_floor: bool,
 }
 pub struct MotionTracker {
     config: EngineConfig,
@@ -173,6 +175,7 @@ impl MotionTracker {
             reference_cross,
             settling,
             held,
+            energy_floor,
         } = input;
         if dynamic.len() != self.taps * self.refs * self.mics
             || normalized.is_some_and(|samples| samples.len() != dynamic.len())
@@ -254,7 +257,13 @@ impl MotionTracker {
             if !(0.0..60.0).contains(&distance) {
                 self.energy[k] = 0.0;
             }
-            if settling {
+            if settling && energy_floor {
+                self.floor[k] = if self.settling_count <= 1 {
+                    self.energy[k]
+                } else {
+                    self.floor[k] + self.calibration_alpha * (self.energy[k] - self.floor[k])
+                };
+            } else if settling {
                 if normalized.is_some() {
                     self.floor[k] = 0.0;
                     for c in 0..self.mics {

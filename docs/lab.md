@@ -76,3 +76,10 @@ stereo-mode selection, remain separate. The current candidate fails several case
 Use `--sensitivity=low`, `--sensitivity=normal` or `--sensitivity=high` after the seed to compare
 an existing preset. One preset applies to every case in that run and is included in each JSON
 measurement. The default remains Normal. No preset is selected from truth labels.
+
+The probe runs the residual candidate of [decision 0020](decisions/0020-residual-motion.md).
+`--set=key=value` overrides one engine parameter for every case and rejects unknown names; for
+example, `--set=residual_motion=false --set=fast_seconds=0.005 --set=floor_relative=1e-6
+--set=impulse_ratio=6` restores the earlier 5 ms candidate. `--explain` prints, for each missed
+truth poke, the derived turn, approach and retreat the detector saw. It reads features only and
+never prints audio.

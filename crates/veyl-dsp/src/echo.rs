@@ -62,6 +62,12 @@ pub struct EchoEstimator {
     path_average: Vec<Complex<f32>>,
     path_frames: u64,
     single_path: bool,
+    power_alpha: f32,
+    power: Vec<f32>,
+    power_cross: Vec<Complex<f32>>,
+    power_hops: u32,
+    mean_power: Vec<f32>,
+    mean_hops: u32,
 }
 impl EchoEstimator {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -127,6 +133,15 @@ impl EchoEstimator {
             path_average: vec![Complex::default(); bins * refs * mics],
             path_frames: 0,
             single_path: false,
+            power_alpha: 1.0
+                - (-(config.hop as f32)
+                    / (config.reference_power_seconds * format.sample_rate as f32))
+                    .exp(),
+            power: vec![0.0; bins * 2],
+            power_cross: vec![Complex::default(); bins],
+            power_hops: 0,
+            mean_power: vec![0.0; bins],
+            mean_hops: 0,
             config,
             format,
         })
@@ -166,15 +181,66 @@ impl EchoEstimator {
         self.coherence_right.fill(0.0);
         self.coherence_cross.fill(Complex::default());
         self.mode = ReferenceMode::Mono;
+        self.power.fill(0.0);
+        self.power_cross.fill(Complex::default());
+        self.power_hops = 0;
+        self.mean_power.fill(0.0);
+        self.mean_hops = 0;
     }
-    fn channels(&self) -> usize {
+    pub(crate) fn channels(&self) -> usize {
         if self.mode == ReferenceMode::Mono {
             1
         } else {
             2
         }
     }
-    fn reference(&self, channel: usize, bin: usize) -> Complex<f32> {
+    pub(crate) fn band(&self, bin: usize) -> f32 {
+        self.band[bin]
+    }
+    pub(crate) fn microphone(&self, channel: usize, bin: usize) -> Complex<f32> {
+        self.y[channel * self.n + bin]
+    }
+    /// The mean of all reference channels, whatever the current transfer mode.
+    pub(crate) fn mean_reference(&self, bin: usize) -> Complex<f32> {
+        if self.refs == 2 {
+            (self.x[bin] + self.x[self.n + bin]) * 0.5
+        } else {
+            self.x[bin]
+        }
+    }
+    /// Long-term power of each reference in the current transfer mode.
+    pub(crate) fn long_term_power(&self, channel: usize, bin: usize) -> f32 {
+        self.power[channel * self.bins + bin]
+    }
+    /// Long-term cross power of the Stereo references, left times conjugate right.
+    pub(crate) fn long_term_cross(&self, bin: usize) -> Complex<f32> {
+        self.power_cross[bin]
+    }
+    pub(crate) fn long_term_mean_power(&self, bin: usize) -> f32 {
+        self.mean_power[bin]
+    }
+    /// Running means warm the long-term spectra up before the exponential average takes over.
+    fn update_long_term_power(&mut self) {
+        self.power_hops = self.power_hops.saturating_add(1);
+        self.mean_hops = self.mean_hops.saturating_add(1);
+        let alpha = self.power_alpha.max(1.0 / self.power_hops as f32);
+        let mean_alpha = self.power_alpha.max(1.0 / self.mean_hops as f32);
+        for bin in 0..self.bins {
+            for channel in 0..self.channels() {
+                let power = self.reference(channel, bin).norm_sqr();
+                let average = &mut self.power[channel * self.bins + bin];
+                *average += alpha * (power - *average);
+            }
+            if self.mode == ReferenceMode::Stereo {
+                let cross = self.reference(0, bin) * self.reference(1, bin).conj();
+                let average = self.power_cross[bin];
+                self.power_cross[bin] = average + alpha * (cross - average);
+            }
+            let power = self.mean_reference(bin).norm_sqr();
+            self.mean_power[bin] += mean_alpha * (power - self.mean_power[bin]);
+        }
+    }
+    pub(crate) fn reference(&self, channel: usize, bin: usize) -> Complex<f32> {
         if self.mode == ReferenceMode::Mono && self.refs == 2 {
             (self.x[bin] + self.x[self.n + bin]) * 0.5
         } else {
@@ -243,8 +309,15 @@ impl EchoEstimator {
         let mode_changed = previous != self.mode;
         if mode_changed {
             self.reset_averages();
+            // The mean reference keeps its meaning; the per-mode spectra do not.
+            self.power.fill(0.0);
+            self.power_cross.fill(Complex::default());
+            self.power_hops = 0;
         }
         if !impulse {
+            if self.config.residual_motion {
+                self.update_long_term_power();
+            }
             self.average();
             self.estimate_transfer();
             self.update_mask();

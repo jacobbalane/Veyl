@@ -3,6 +3,60 @@
 M4 is still in progress. These are synthetic PCM measurements, not device performance. No real
 recordings have been supplied, and the installed preview still uses the earlier level host.
 
+## Residual candidate
+
+[Decision 0020](decisions/0020-residual-motion.md) adds `residual_motion`. The candidate sets it
+with `infer_single_path`, `resample_reference`, `floor_relative = 1e-8` and
+`impulse_ratio = 12`; every other parameter keeps its default. Full-duration replays through
+the lab, seeds 1–3 (matched / truth, plus extra detections):
+
+| Scenario       | Seed 1 | Seed 2 | Seed 3 | Gate   | Earlier 5 ms candidate |
+| -------------- | -----: | -----: | -----: | ------ | ---------------------- |
+| Basic          |  10/10 |  10/10 |  10/10 | passes | 30/30                  |
+| Varied         |  10/30 |   9/30 |  12/30 | fails  | 24/90                  |
+| Typing + pokes |   6/10 |   6/10 |   6/10 | fails  | 10/30                  |
+| Volume steps   |   7/10 |   7/10 |   7/10 | fails  | 25/30                  |
+| 50 ppm         |  10/10 |  10/10 |  10/10 | passes | 30/30                  |
+| 200 ppm        |  10/10 |  10/10 |  10/10 | passes | 30/30                  |
+| Dropouts       |   8/10 |   5/10 |   6/10 | fails  | 17/30                  |
+| Compressed16k  |  10/10 |  10/10 |  10/10 | passes | 21/30                  |
+| Stereo         |  10/10 |  10/10 |  10/10 | passes | 0/30                   |
+| PC             |   5/10 |   6/10 |   6/10 | fails  | 0/30                   |
+| PC Bluetooth   |   7/10 |   8/10 |   6/10 | fails  | 0/30                   |
+
+Negative cases detect 1, 0 and 0 pokes while hovering, and none for still, wave, walking, typing
+or blocked capture. Gappy confirms nothing during its gaps. No run raises a model jump, drift
+warning or re-lock; the largest direct residual after five seconds is 0.084 taps outside the
+gappy scene. Basic median truth-to-detect delays are 54, 77 and 62 ms. 18 of the 54 cases still
+fail their gates, against 24 for the earlier candidate. Volume steps lose one poke per seed
+compared with the earlier candidate; the other shared cases improve or hold.
+
+Several varied pokes are shallower than the Normal preset's own 3 cm minimum, measured in echo
+distance: 28, 25 and 22 of the 30 truth pokes per seed meet its depth and 10 cm/s speed
+thresholds. Most remaining misses, however, come from the tracker: a fast approach blurs the
+hand's echo within the 43 ms window, presence ends, and the turn arrives without its approach.
+
+Measurements behind the design, from probes of single scenes:
+
+- Stereo mode raised the PC motion floor to about three times that of the same speakers playing
+  one channel. Removing clock drift, the diffuse tail or static echoes each lowered the
+  remaining floor; the fixed 43 ms window cannot model the 30 ms tail exactly.
+- The per-hop gain and sub-sample timing fit raised the PC first-poke motion peak from about 6
+  to 10–11. Smoothing the gain instead made no difference.
+- With correlated channels, separate per-channel steps left a stereo residual as large as a
+  new echo after four seconds; the loaded long-term inverse converges.
+- Each choice of clock feedback source was tried on all five clock and geometry cases. Fast
+  per-speaker peaks ran away in PC seeds 2–3; peaks of the per-window mean field wandered with
+  the music's balance; delay-only feedback diverged. Background peaks plus the hop's delay track
+  every case within 2 ppm.
+- A gated tracker that coasts through blurred hops recovered varied pokes but produced 26–46
+  false typing pokes. A memory of absorbed echoes for the vanished-echo guard lost most dropout
+  pokes. Neither is part of the candidate.
+
+An isolated release comparison on the development desktop, twenty seconds of input with ten
+measured, five repetitions: the earlier candidate takes a median 31.6 ms per second of audio
+and the residual candidate 47.6–49.2 ms. Both exceed the 30 ms target; M4.8 remains open.
+
 ## Gesture measurements
 
 The original defaults retain a 40 ms complex average and input-coherence mode selection. The
