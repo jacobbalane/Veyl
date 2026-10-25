@@ -212,6 +212,12 @@ remain ignored under `.cache/release/v0.0.1-tag/`, `.cache/release/v0.0.1-public
 
 ## Waiting on device tests
 
+**v0.1 checks (M5.4, M5.5, M6.6, M7.5):** follow [device checks](device-checks.md) with the newest
+CI build: recordings R1–R14 and gate G2, processing cost and poke delay on the target laptop,
+D8, D9, D12, P3, P6 and gate G3, then D1–D17 and P1–P7. None has been reported yet.
+
+The 0.0.1 preview checks below also remain open.
+
 The preview is published, its public downloads are verified, and the maintainer reports that both
 installed apps open. Detailed tray/theme/orientation checks and device versions have not been
 reported; keep those checks pending:
