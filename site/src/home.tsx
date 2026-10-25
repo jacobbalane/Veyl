@@ -116,6 +116,20 @@ function Home() {
             Veyl sees your hand in the echo and clicks for you. Actions start off, so you can
             practise first.
           </p>
+          <figure className="app-screen">
+            <picture>
+              <source srcSet="screens/live-phone-dark.png" media="(prefers-color-scheme: dark)" />
+              <img
+                src="screens/live-phone-light.png"
+                alt="The Live tab of Veyl for Windows: the sound-quality meter shows 78, Great, and the echo view shows a hand about 16 cm from the phone and one poke."
+                width={1280}
+                height={800}
+                loading="lazy"
+                decoding="async"
+              />
+            </picture>
+            <figcaption>The Live tab in the Windows app, showing sample data.</figcaption>
+          </figure>
         </section>
         <section className="meter-section wrap section">
           <div className="meter-copy">

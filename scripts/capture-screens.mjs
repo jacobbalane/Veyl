@@ -9,12 +9,19 @@ import { isMain, repositoryRoot } from './versions.mjs';
 const port = 1421;
 export const screensDirectory = join(repositoryRoot, 'site', 'public', 'screens');
 
-/** Each screen: a file name, the preview's address options and the colour scheme. */
+/**
+ * Each screen: a file name, the preview's address options and the colour scheme. Live screens
+ * wait for the echo view to fill; the others only for the page.
+ */
 export const shots = [
   { name: 'live-phone-dark', query: { score: '78' }, scheme: 'dark' },
   { name: 'live-phone-light', query: { score: '78' }, scheme: 'light' },
   { name: 'live-pc-dark', query: { mode: 'pc', score: '72' }, scheme: 'dark' },
   { name: 'live-tip-dark', query: { tip: 'few_high_sounds', score: '41' }, scheme: 'dark' },
+  { name: 'poke-test-dark', query: { dialog: 'poke-test' }, scheme: 'dark', live: false },
+  { name: 'practice-dark', query: { onboarding: 'practice' }, scheme: 'dark', live: false },
+  { name: 'settings-dark', query: { tab: 'settings' }, scheme: 'dark', live: false },
+  { name: 'help-light', query: { tab: 'help' }, scheme: 'light', live: false },
 ];
 
 export function shotUrl(shot) {
@@ -66,9 +73,9 @@ async function capture() {
         reducedMotion: 'reduce',
       });
       await page.goto(shotUrl(shot));
-      await page.waitForSelector('.echo-canvas');
+      await page.waitForSelector(shot.live === false ? 'main' : '.echo-canvas');
       // Let the echo view fill with a few seconds of the preview's hand and pokes.
-      await page.waitForTimeout(4500);
+      await page.waitForTimeout(shot.live === false ? 1500 : 4500);
       await page.screenshot({ path: join(screensDirectory, `${shot.name}.png`) });
       await page.close();
       console.log(`Saved site/public/screens/${shot.name}.png`);

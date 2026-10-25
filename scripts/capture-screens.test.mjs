@@ -12,6 +12,10 @@ test('screens have unique names and address only the preview with known options'
     'mode',
     'connection',
     'hand',
+    'tab',
+    'dialog',
+    'onboarding',
+    'actions',
   ]);
   assert.equal(new Set(shots.map((shot) => shot.name)).size, shots.length);
   for (const shot of shots) {

@@ -9,7 +9,7 @@ placeholder and Android shows the waiting-for-PC placeholder. M0's listed accept
 the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
 checks are complete; hardware acceptance remains pending. M3's connection and recording implementation
 is complete. M3P's PC-mode implementation and automated checks are complete; its device checks
-remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. M5 is implemented except the device tuning and target-laptop timing; M6 and M7 are in progress. The published 0.0.1 preview still contains the
+remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. M5–M7 are implemented except the device checks, the target-laptop timing and the release, which belong to the maintainer. The published 0.0.1 preview still contains the
 M0 interface skeleton. The maintainer authorized continuing non-destructive implementation while
 away and limited all GitHub work to this repository. Physical review remains deferred.
 
@@ -1102,12 +1102,12 @@ tests; the preview was inspected in light and dark themes and at phone width.
 **Goal:** pokes trigger the chosen action safely and reliably. The Rust and phone parts run ahead
 of M5's interface work, which proceeds in parallel; the interface parts follow it.
 
-- [ ] **M6.1** Live detection, `veyl://gesture` events, the gesture log, `gesture` messages to the
-      phone (a short flash on the listening screen). The gesture log waits for the Live tab.
-- [ ] **M6.2** Actions behind the `Actions` trait, UIPI detection, the actions switch (header and
-      tray), "actions start off", the setting, the hotkey. The header switch waits for the interface.
-- [ ] **M6.3** Settings applied to the engine live. The Settings tab waits for the interface.
-- [ ] **M6.4** Poke test dialog and the onboarding practice step. Commands only so far.
+- [x] **M6.1** Live detection, `veyl://gesture` events, the gesture log, `gesture` messages to the
+      phone (a short flash on the listening screen).
+- [x] **M6.2** Actions behind the `Actions` trait, UIPI detection, the actions switch (header and
+      tray), "actions start off", the setting, the hotkey (Ctrl+Alt+V, changeable).
+- [x] **M6.3** Settings: poke action, sensitivity, range, temperature — applied to the engine live.
+- [x] **M6.4** Poke test dialog and the onboarding practice step (actions never run there).
 - [x] **M6.5** End-to-end test: fake phone `poke_basic` → at least 9 pokes reach the fake actions.
 - [ ] **M6.6 [device]** D8, D9, D12, P3, P6 and the latency target; gate G3.
 
@@ -1138,7 +1138,61 @@ at least 9 pokes to reach the fake actions; it passes.
 Verified locally: `cargo test -p veyl-desktop` (42 tests), `cargo test --release -p veyl-lab --test
 e2e`, whole-workspace clippy with `-D warnings`, Rust formatting, and from `android/`
 `./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`. Real input,
-the tray, the hotkey and autostart need the maintainer's Windows checks (D8, D9, D12).
+the tray, the hotkey and autostart need the maintainer's Windows checks (D8, D9, D12). This work
+then [passed full CI](https://github.com/jacobbalane/Veyl/actions/runs/40202631901).
+
+**Interface parts implemented and verified in the browser preview.** The header carries the
+Actions switch with the hotkey hint and tooltip; every change, from the header, the tray or the
+hotkey, arrives as `veyl://actions` and shows a short "Actions on"/"Actions off" message, and the
+switch never shows on unless Rust reports it. A blocked action shows "Windows blocked the click in
+an app running as administrator." The Settings tab offers every setting of §7.12, each saved
+through `set_settings` with its error under the control; "Change" records the next key
+combination (a modifier and one key; Escape cancels). The poke test dialog counts test pokes live,
+ends after 10 pokes or 20 s, shows "Veyl saw {n} of 10 pokes." with the advice, and always stops
+the test when it closes. Test pokes are labelled "test" in the gesture log. A Rust test checks
+that every key name the recorder can write parses.
+
+Verified locally: `npm run -w desktop typecheck`, `test` (72 tests), `build`, repository
+formatting, the script tests, `cargo test -p veyl-desktop` (44 tests) and clippy. The preview was
+inspected in dark and light themes and at 375 px, including Escape and focus wrapping in dialogs.
+Nothing in this part has run in the real Tauri app yet; the maintainer's checks D8, D9 and D12
+cover it.
+
+## M7 — Polish and release v0.1.0
+
+- [x] **M7.1** Desktop: onboarding (phone path and PC path), Help tab (placement, a troubleshooting
+      entry for every tip and error, privacy, diagnostics, about), every error state with Appendix
+      C text, accessibility pass (keyboard, labels, contrast, reduced motion).
+- [ ] **M7.2** Phone: onboarding polish, troubleshooting links, About and Licenses, "Copy
+      diagnostics". Links, About, Licenses and Copy diagnostics are in place; onboarding is
+      unchanged since M2 and waits for device feedback (P1).
+- [ ] **M7.3** Docs complete, final README, THIRD_PARTY_NOTICES, CHANGELOG entry and the first
+      `docs/compatibility.md` rows. Everything but the compatibility rows (the maintainer's
+      devices) is written.
+- [x] **M7.4** Website final content with screens from the preview (`scripts/capture-screens.mjs`).
+- [ ] **M7.5 [device]** The whole checklist D1–D17 and P1–P7, including battery, thermal and CPU.
+- [ ] **M7.6 [maintainer]** Release v0.1.0 (§10.8).
+
+**M7.1 implemented and verified in the browser preview.** Tabs are Live · Phones · Settings · Help.
+Onboarding runs on first start as an overlay: welcome, the phone-or-PC choice with the
+recommendation, then either getting the phone app (the website address shown large), pairing,
+placing the phone and starting, or choosing speakers and microphone and playing something; then a
+live poke practice with actions off ("Nice! Veyl saw that.") and the actions switch and hotkey.
+Only Finish saves `onboarding_done`. Help holds the placement guide for both modes, "If something
+isn't working" with every tip and connection error and a short fix for each, a privacy summary,
+Diagnostics with "Open logs" and "Copy diagnostics", and About. Dialogs keep focus inside and close
+with Escape; status and gesture log are announced politely. The M3 connection-preview banner is
+retired. [Decision 0026](decisions/0026-interface-wording-and-links.md) records the wording added
+beyond Appendix C (C.10, C.11) and the new `open_link` command, which opens only Veyl's website and
+repository pages in the default browser.
+
+**M7.2 phone links.** Home and the listening screen link "If something isn't working" to the
+website's troubleshooting guide. **M7.3 docs.** Architecture, privacy, getting started, placement,
+meter, troubleshooting, related work and compatibility are written from the plan and checked
+against the code; all compatibility results read "Not yet tested". The README and the changelog's
+unreleased section describe v0.1 as built but unreleased; the notices list the new Tauri plugins.
+**M7.4.** `scripts/capture-screens.mjs` captures eight preview screens with Edge (or Playwright's
+Chromium) into `site/public/screens/`; the home page shows the Live tab, in the visitor's theme.
 
 ## Dependency follow-up
 
