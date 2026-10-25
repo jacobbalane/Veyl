@@ -1,40 +1,28 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
-import metadata from '../../package.json';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import {
-  emptyLink,
-  emptyLevels,
-  emptySource,
-  emptyEngine,
-  type EngineView,
-  type GestureEvent,
-  type LiveFrame,
-  type SourceView,
-  type AppState,
-  type Diagnostics,
-  type LinkUpdate,
-  type ConnectionState,
-  type PhonesView,
-  type PairingEvent,
-  type Capture,
-  type PhoneTarget,
-  type RecordingInfo,
+import type {
+  EngineView,
+  GestureEvent,
+  LiveFrame,
+  SourceView,
+  AppState,
+  Diagnostics,
+  LinkUpdate,
+  ConnectionState,
+  PhonesView,
+  PairingEvent,
+  Capture,
+  PhoneTarget,
+  RecordingInfo,
 } from './types';
 export type { AppState } from './types';
 
 export const browserPreview = !isTauri();
+// Without Tauri, state and events come from sample data; the Windows app never loads it.
+const preview = () => import('../preview/fake-native');
 
 export async function getAppState(): Promise<AppState> {
-  return browserPreview
-    ? {
-        version: metadata.version,
-        pcName: 'Windows PC',
-        actionsEnabled: false,
-        link: structuredClone(emptyLink),
-        source: structuredClone(emptySource),
-        engine: structuredClone(emptyEngine),
-      }
-    : invoke<AppState>('get_app_state');
+  return browserPreview ? (await preview()).getAppState() : invoke<AppState>('get_app_state');
 }
 
 export async function uiReady(): Promise<void> {
@@ -70,11 +58,7 @@ export const watchRecording = async (
     : listen<RecordingInfo | null>('veyl://recording', ({ payload }) => update(payload));
 export async function getDiagnostics(): Promise<Diagnostics> {
   return browserPreview
-    ? {
-        link: structuredClone(emptyLink),
-        levels: structuredClone(emptyLevels),
-        source: structuredClone(emptySource),
-      }
+    ? (await preview()).getDiagnostics()
     : invoke<Diagnostics>('get_diagnostics');
 }
 export const setSource = (source: string) => command('set_source', { source });
@@ -83,14 +67,16 @@ export const cancelPcSoundCheck = () => command('cancel_pc_sound_check');
 export const setPcDevices = (speakerId: string | null, microphoneId: string | null) =>
   command('set_pc_devices', { speakerId, microphoneId });
 export const watchSource = async (update: (source: SourceView) => void): Promise<UnlistenFn> =>
-  browserPreview ? () => {} : listen<SourceView>('veyl://source', ({ payload }) => update(payload));
+  browserPreview
+    ? (await preview()).watchSource(update)
+    : listen<SourceView>('veyl://source', ({ payload }) => update(payload));
 export async function copyDiagnostics(): Promise<string> {
   return browserPreview
     ? JSON.stringify(await getDiagnostics(), null, 2)
     : invoke<string>('copy_diagnostics');
 }
 export async function watchLink(update: (value: LinkUpdate) => void): Promise<UnlistenFn> {
-  if (browserPreview) return () => {};
+  if (browserPreview) return (await preview()).watchLink(update);
   const results = await Promise.allSettled([
     listen<ConnectionState>('veyl://connection', ({ payload }) => update({ connection: payload })),
     listen<PhonesView>('veyl://phones', ({ payload }) => update({ phones: payload })),
@@ -108,16 +94,18 @@ export async function watchLink(update: (value: LinkUpdate) => void): Promise<Un
 }
 /** Live echo-view frames, about 30 per second; a new subscription replaces the previous one. */
 export async function subscribeLive(update: (frame: LiveFrame) => void): Promise<void> {
-  if (browserPreview) return;
+  if (browserPreview) return (await preview()).subscribeLive(update);
   const channel = new Channel<LiveFrame>();
   channel.onmessage = update;
   await invoke('subscribe_live', { channel });
 }
 export const watchEngine = async (update: (engine: EngineView) => void): Promise<UnlistenFn> =>
-  browserPreview ? () => {} : listen<EngineView>('veyl://engine', ({ payload }) => update(payload));
+  browserPreview
+    ? (await preview()).watchEngine(update)
+    : listen<EngineView>('veyl://engine', ({ payload }) => update(payload));
 export const watchGestures = async (
   update: (gesture: GestureEvent) => void,
 ): Promise<UnlistenFn> =>
   browserPreview
-    ? () => {}
+    ? (await preview()).watchGestures(update)
     : listen<GestureEvent>('veyl://gesture', ({ payload }) => update(payload));
