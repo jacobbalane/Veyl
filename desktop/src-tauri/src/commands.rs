@@ -206,6 +206,28 @@ pub fn delete_recording(state: tauri::State<'_, Runtime>, id: String) -> Result<
 pub fn open_recordings_folder(state: tauri::State<'_, Runtime>) -> Result<(), String> {
     open_folder(state.recorder.root())
 }
+/// Opens one of Veyl's own web pages in the default browser; any other address is refused.
+#[tauri::command]
+pub fn open_link(url: String) -> Result<(), String> {
+    if !allowed_link(&url) {
+        return Err("link_not_allowed".into());
+    }
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|_| "open_failed".into())
+}
+fn allowed_link(url: &str) -> bool {
+    const SITES: [&str; 2] = [
+        "https://jacobbalane.github.io/Veyl",
+        "https://github.com/jacobbalane/Veyl",
+    ];
+    url.len() <= 200
+        && !url
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '"')
+        && SITES.iter().any(|site| {
+            url.strip_prefix(site)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with(['/', '#', '?']))
+        })
+}
 #[tauri::command]
 pub fn open_logs_folder(state: tauri::State<'_, Runtime>) -> Result<(), String> {
     open_folder(&state.logs)
@@ -270,6 +292,31 @@ mod tests {
                 explorer_path(std::path::Path::new(original)),
                 std::path::PathBuf::from(expected)
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod link_tests {
+    #[test]
+    fn only_veyls_own_pages_open() {
+        for url in [
+            "https://jacobbalane.github.io/Veyl/",
+            "https://jacobbalane.github.io/Veyl/docs/#troubleshooting",
+            "https://github.com/jacobbalane/Veyl",
+            "https://github.com/jacobbalane/Veyl/blob/main/THIRD_PARTY_NOTICES.md",
+        ] {
+            assert!(super::allowed_link(url), "{url}");
+        }
+        for url in [
+            "https://github.com/jacobbalane/VeylEvil",
+            "http://jacobbalane.github.io/Veyl/",
+            "https://jacobbalane.github.io.example.com/Veyl/",
+            "file:///C:/Windows/System32/calc.exe",
+            "https://github.com/jacobbalane/Veyl/\" calc",
+            "https://github.com/jacobbalane/Veyl/ x",
+        ] {
+            assert!(!super::allowed_link(url), "{url}");
         }
     }
 }

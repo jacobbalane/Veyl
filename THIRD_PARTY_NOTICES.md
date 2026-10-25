@@ -61,6 +61,9 @@ These are direct external dependencies of the workspace crates, including build 
 | subtle                       | 2.6.1            | BSD-3-Clause      |
 | tauri                        | 2.12.5           | Apache-2.0 OR MIT |
 | tauri-build                  | 2.7.4            | Apache-2.0 OR MIT |
+| tauri-plugin-autostart       | 2.7.0            | Apache-2.0 OR MIT |
+| tauri-plugin-global-shortcut | 2.4.1            | Apache-2.0 OR MIT |
+| tauri-plugin-opener          | 2.7.2            | Apache-2.0 OR MIT |
 | tauri-plugin-single-instance | 2.5.4            | Apache-2.0 OR MIT |
 | tempfile                     | 3.27.0           | MIT OR Apache-2.0 |
 | time                         | 0.3.55           | MIT OR Apache-2.0 |

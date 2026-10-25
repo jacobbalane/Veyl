@@ -86,6 +86,11 @@ export const stopRecording = () => invoke<RecordingInfo>('stop_recording');
 export const markPoke = () => command('mark_poke');
 export const deleteRecording = (id: string) => command('delete_recording', { id });
 export const openRecordingsFolder = () => command('open_recordings_folder');
+/** Veyl's website and repository open in the default browser; the window never navigates. */
+export async function openLink(url: string): Promise<void> {
+  if (browserPreview) window.open(url, '_blank', 'noopener,noreferrer');
+  else await invoke('open_link', { url });
+}
 export const getRecording = async (): Promise<RecordingInfo | null> =>
   browserPreview ? null : invoke('get_recording');
 export const listRecordings = async (): Promise<RecordingInfo[]> =>

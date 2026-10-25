@@ -362,7 +362,8 @@ pub fn run() {
             commands::list_recordings,
             commands::delete_recording,
             commands::open_recordings_folder,
-            commands::open_logs_folder
+            commands::open_logs_folder,
+            commands::open_link
             ,commands::set_source,
             commands::set_pc_devices,
             commands::list_audio_devices
@@ -402,5 +403,58 @@ mod tests {
         }
         assert_eq!(super::parse_hotkey("Ctrl+").unwrap_err(), "invalid_hotkey");
         assert_eq!(super::tray_tooltip(false), "Veyl · Actions off");
+    }
+    /// Every key name and modifier the interface's hotkey recorder (desktop/src/ui/hotkey.ts)
+    /// can write.
+    #[test]
+    fn every_hotkey_the_interface_records_parses() {
+        let mut keys: Vec<String> = ('A'..='Z').map(String::from).collect();
+        keys.extend((1..=24).map(|n| format!("F{n}")));
+        keys.extend((0..=9).map(|n| format!("Digit{n}")));
+        keys.extend((0..=9).map(|n| format!("Numpad{n}")));
+        keys.extend(
+            [
+                "Backquote",
+                "Backslash",
+                "BracketLeft",
+                "BracketRight",
+                "Comma",
+                "Equal",
+                "Minus",
+                "Period",
+                "Quote",
+                "Semicolon",
+                "Slash",
+                "Backspace",
+                "Enter",
+                "Space",
+                "Tab",
+                "Delete",
+                "End",
+                "Home",
+                "Insert",
+                "PageDown",
+                "PageUp",
+                "PrintScreen",
+                "Pause",
+                "ArrowDown",
+                "ArrowLeft",
+                "ArrowRight",
+                "ArrowUp",
+                "NumpadAdd",
+                "NumpadDecimal",
+                "NumpadDivide",
+                "NumpadEnter",
+                "NumpadMultiply",
+                "NumpadSubtract",
+            ]
+            .map(String::from),
+        );
+        let failed: Vec<_> = keys
+            .iter()
+            .map(|key| format!("Ctrl+Alt+Shift+Super+{key}"))
+            .filter(|hotkey| super::parse_hotkey(hotkey).is_err())
+            .collect();
+        assert!(failed.is_empty(), "{failed:?}");
     }
 }

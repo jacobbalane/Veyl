@@ -9,12 +9,21 @@ import {
   tipFix,
   tipText,
 } from '../copy';
+import { openLink } from '../api/native';
 import { Diagnostics } from './Diagnostics';
 import { SavedRecordings, type RecordingsState } from './Recordings';
 
 function Link({ href, children }: { href: string; children: string }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer">
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => {
+        event.preventDefault();
+        void openLink(href).catch(() => {});
+      }}
+    >
       {children}
       <ExternalLink size={12} aria-hidden="true" />
     </a>
