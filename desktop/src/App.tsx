@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { AudioLines, CircleHelp, Radio, Settings, Smartphone } from 'lucide-react';
+import { CircleHelp, Radio, Settings, Smartphone } from 'lucide-react';
 import mark from '../../assets/brand/veyl-mark.svg';
 import {
   browserPreview,
   getAppState,
+  previewView,
   uiReady,
   watchLink,
   requestPhoneStart,
@@ -11,34 +12,45 @@ import {
 } from './api/native';
 import { emptyLink, type LinkSnapshot, type LinkUpdate } from './api/types';
 import { copy, connectionError, linkCopy, pcCopy, pcTip, tipText } from './copy';
-import { SourceChoice, SourceSettings, useSources } from './ui/Sources';
+import { SourceChoice, useSources } from './ui/Sources';
 import { Phones, PairingDialog, connectionLabel } from './ui/Connection';
-import { Diagnostics } from './ui/Diagnostics';
-import { RecordingStatus, RecordingDialogs, SavedRecordings, useRecordings } from './ui/Recordings';
+import { RecordingStatus, RecordingDialogs, useRecordings } from './ui/Recordings';
 import { Live, useLive } from './ui/Live';
+import { ActionsNotices, ActionsSwitch, useActions } from './ui/Actions';
+import { SettingsPanel, useSettings } from './ui/Settings';
+import { PokeTestDialog } from './ui/PokeTest';
+import { Onboarding, type OnboardingStep } from './ui/Onboarding';
+import { Help } from './ui/Help';
 
-const tabs = [
+export const tabs = [
   { name: 'Live', icon: Radio },
   { name: 'Phones', icon: Smartphone },
   { name: 'Settings', icon: Settings },
   { name: 'Help', icon: CircleHelp },
 ] as const;
-type Tab = (typeof tabs)[number]['name'];
+export type Tab = (typeof tabs)[number]['name'];
 
 export function App() {
   const [tab, setTab] = useState<Tab>('Live');
   const [app, setApp] = useState<AppState>();
   const [error, setError] = useState('');
+  const [pokeTest, setPokeTest] = useState(false);
+  // Closing onboarding early hides it until the next start; Finish saves that it is done.
+  const [onboardingClosed, setOnboardingClosed] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>();
   const link = app?.link ?? emptyLink;
   const recordings = useRecordings();
   const sources = useSources(app?.source);
   const live = useLive(app?.engine);
+  const settings = useSettings(app?.settings);
+  const actions = useActions(app?.actionsEnabled);
   const pc = sources.source.mode === 'pc';
-  const canRecord =
-    !browserPreview &&
-    (pc
-      ? sources.source.state === 'running'
-      : link.connection.state === 'connected' && link.connection.capture?.state === 'running');
+  const listening = pc
+    ? sources.source.state === 'running'
+    : link.connection.state === 'connected' && link.connection.capture?.state === 'running';
+  const canRecord = !browserPreview && listening;
+  const onboarding = !!settings.value && !settings.value.onboardingDone && !onboardingClosed;
+  const hotkey = settings.value?.hotkey ?? 'Ctrl+Alt+V';
   const updateLink = (link: LinkSnapshot, update: LinkUpdate): LinkSnapshot =>
     'capture' in update
       ? { ...link, connection: { ...link.connection, capture: update.capture } }
@@ -59,19 +71,23 @@ export function App() {
           return;
         }
         stop = unlisten;
-        const state = await getAppState();
+        const [state, view] = await Promise.all([getAppState(), previewView()]);
         if (active) {
           for (const update of buffered) state.link = updateLink(state.link, update);
           loaded = true;
+          // The browser preview can open on a tab, a dialog or an onboarding step.
+          if (view?.tab) setTab(view.tab);
+          if (view?.pokeTest) setPokeTest(true);
+          if (view?.onboarding) setOnboardingStep(view.onboarding);
           setApp(state);
         }
       })
       .catch(() => {
-        if (active) setError('Veyl could not load its settings.');
+        if (active) setError(copy.loadFailed);
       });
     // Showing the native window follows the first painted frame, even if state loading fails.
     const frame = requestAnimationFrame(() => {
-      void uiReady().catch(() => setError('Veyl could not open its window.'));
+      void uiReady().catch(() => setError(copy.windowFailed));
     });
     return () => {
       active = false;
@@ -79,6 +95,7 @@ export function App() {
       cancelAnimationFrame(frame);
     };
   }, []);
+  const capture = link.connection.capture;
 
   return (
     <div className="app-shell">
@@ -87,7 +104,7 @@ export function App() {
           href="#live"
           className="brand"
           onClick={() => setTab('Live')}
-          aria-label="Veyl live view"
+          aria-label={copy.brandLink}
         >
           <img src={mark} width="42" height="42" alt="" />
           <span>veyl</span>
@@ -95,9 +112,7 @@ export function App() {
         <span
           className="connection"
           aria-live="polite"
-          data-connected={
-            pc ? sources.source.state === 'running' : link.connection.state === 'connected'
-          }
+          data-connected={pc ? listening : link.connection.state === 'connected'}
         >
           <i />
           {pc
@@ -108,65 +123,53 @@ export function App() {
                 : pcCopy.noSound
             : connectionLabel(link.connection, link.phones.nearby.length)}
         </span>
-        <div className="actions" title={copy.actionsTooltip}>
-          <span>
-            Actions <b>Off</b>
-          </span>
-          <button role="switch" aria-label="Actions" aria-checked="false" disabled>
-            <i />
-          </button>
-          <kbd>Ctrl+Alt+V</kbd>
-        </div>
+        <ActionsSwitch actions={actions} hotkey={hotkey} ready={!!app} />
       </header>
-      <nav className="tabs" aria-label="Veyl views">
+      <nav className="tabs" aria-label={copy.navigation}>
         {tabs.map(({ name, icon: Icon }) => (
           <button
             key={name}
             aria-current={tab === name ? 'page' : undefined}
             onClick={() => setTab(name)}
           >
-            <Icon size={17} />
+            <Icon size={17} aria-hidden="true" />
             {name}
           </button>
         ))}
         {browserPreview && <span className="preview-badge">{copy.preview}</span>}
       </nav>
+      <ActionsNotices actions={actions} />
       <main>
-        <div className="foundation">
-          <AudioLines size={20} />
-          <div>
-            <strong>{copy.foundation}</strong>
-            <p>{copy.foundationDetail}</p>
-          </div>
-          <span>v{app?.version ?? '0.0.1'}</span>
-        </div>
         {error && <p role="alert">{error}</p>}
-        {sources.error && tab !== 'Settings' && <p role="alert">{sources.error}</p>}
-        {app && !sources.source.choiceDone && <SourceChoice controls={sources} />}
+        {sources.error && tab !== 'Settings' && !onboarding && <p role="alert">{sources.error}</p>}
+        {app && !sources.source.choiceDone && !onboarding && <SourceChoice controls={sources} />}
         <RecordingStatus recording={recordings} />
         {!pc && link.connection.error && connectionError(link.connection.error) && (
           <p role="alert">{connectionError(link.connection.error)}</p>
+        )}
+        {!pc && capture?.state === 'stopped' && capture.reason === 'screen_locked' && (
+          <p role="alert">{linkCopy.screenLocked}</p>
         )}
         {tab === 'Live' && (
           <Live
             live={live}
             pc={pc}
             tip={pc ? pcTip(sources.source.tip) : tipText('capture_off', false)}
+            canTest={listening}
+            onTest={() => setPokeTest(true)}
             canRecord={canRecord && recordings.info?.state !== 'recording'}
             onRecord={() => recordings.setDialog(true)}
           >
-            {!pc &&
-              link.connection.state === 'connected' &&
-              link.connection.capture?.state !== 'running' && (
-                <button
-                  disabled={browserPreview}
-                  onClick={() =>
-                    void requestPhoneStart().catch(() => setError(linkCopy.failedRequest))
-                  }
-                >
-                  {linkCopy.askPhoneToStart}
-                </button>
-              )}
+            {!pc && link.connection.state === 'connected' && capture?.state !== 'running' && (
+              <button
+                disabled={browserPreview}
+                onClick={() =>
+                  void requestPhoneStart().catch(() => setError(linkCopy.failedRequest))
+                }
+              >
+                {linkCopy.askPhoneToStart}
+              </button>
+            )}
           </Live>
         )}
         {tab === 'Phones' &&
@@ -177,72 +180,34 @@ export function App() {
           ) : (
             <Phones link={link} />
           ))}
-        {tab === 'Settings' && (
-          <section className="panel settings">
-            <h1>Settings</h1>
-            <SourceSettings controls={sources} />
-            <label>
-              Poke action
-              <select disabled>
-                <option>Click</option>
-                <option>Play or pause</option>
-                <option>Next track</option>
-                <option>Space bar</option>
-                <option>Nothing</option>
-              </select>
-            </label>
-            <label>
-              Sensitivity
-              <select disabled>
-                <option>Normal</option>
-              </select>
-            </label>
-            <label>
-              Distance range
-              <select disabled>
-                <option>Normal</option>
-              </select>
-            </label>
-            <label>
-              PC name
-              <input value={app?.pcName ?? ''} disabled />
-            </label>
-            <p>{copy.foundationDetail}</p>
-          </section>
-        )}
+        {tab === 'Settings' && <SettingsPanel settings={settings} sources={sources} />}
         {tab === 'Help' && (
-          <section className="panel help">
-            <h1>About</h1>
-            <p>Veyl · Version {app?.version ?? '0.0.1'}</p>
-            <p>Touch the air. Your screen follows.</p>
-            <h2>Privacy</h2>
-            <p>Sound stays on your devices. Veyl has no accounts, analytics or cloud services.</p>
-            <h2>{pc ? pcCopy.placementTitle : 'Placing your phone'}</h2>
-            <p>
-              {pc ? (
-                pcCopy.placement
-              ) : (
-                <>
-                  Lay it flat, screen up, in front of your monitor. Keep its speaker and microphones
-                  uncovered.
-                </>
-              )}
-            </p>
-            <a href="https://github.com/jacobbalane/Veyl" target="_blank" rel="noreferrer">
-              Source code
-            </a>
-            <p>Free and open source (MIT)</p>
-            <Diagnostics />
-            <SavedRecordings recording={recordings} canRecord={canRecord} />
-          </section>
+          <Help
+            pc={pc}
+            version={app?.version ?? '0.0.1'}
+            recordings={recordings}
+            canRecord={canRecord}
+          />
         )}
       </main>
+      {onboarding && (
+        <Onboarding
+          sources={sources}
+          link={link}
+          live={live}
+          settings={settings}
+          initialStep={onboardingStep}
+          onClose={() => setOnboardingClosed(true)}
+        />
+      )}
       {!pc && (
         <PairingDialog key={link.pairing?.sessionId} pairing={link.pairing} onError={setError} />
       )}
+      {pokeTest && <PokeTestDialog onClose={() => setPokeTest(false)} />}
       <RecordingDialogs recording={recordings} />
       <footer>
-        Touch the air. Your screen follows.<span>Sound stays home.</span>
+        {copy.tagline}
+        <span>{copy.footer}</span>
       </footer>
     </div>
   );

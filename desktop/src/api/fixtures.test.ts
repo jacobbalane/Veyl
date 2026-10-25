@@ -7,6 +7,8 @@ import checkJson from './fixtures/pc-check.json';
 import engineJson from './fixtures/engine.json';
 import liveJson from './fixtures/live-frame.json';
 import gestureJson from './fixtures/gesture.json';
+import actionsJson from './fixtures/actions.json';
+import pokeTestJson from './fixtures/poke-test.json';
 import type {
   AppState,
   Diagnostics,
@@ -16,7 +18,11 @@ import type {
   EngineView,
   LiveFrame,
   GestureEvent,
+  ActionsEvent,
+  PokeTestResult,
+  SettingsView,
 } from './types';
+import { defaultSettings } from './types';
 
 test('Rust fixtures fit the typed desktop API and contain metadata only', () => {
   const app = appJson as AppState;
@@ -47,4 +53,24 @@ test('Rust fixtures fit the typed desktop API and contain metadata only', () => 
   expect(Object.keys(app.link)).not.toContain('keys');
   expect(recording.blocks).toEqual([1000, 1000]);
   expect(recording.remainingSeconds).toBe(20);
+});
+
+test('settings, the actions event and the poke test result match their Rust payloads', () => {
+  // JSON imports widen string unions to strings; every other field keeps its exact type.
+  type Json<T> = { [K in keyof T]: T[K] extends string ? string : T[K] };
+  const json: Json<SettingsView> = appJson.settings;
+  const settings = json as SettingsView;
+  const actions = actionsJson as ActionsEvent;
+  const pokeTest: PokeTestResult = pokeTestJson;
+  // Every field the interface knows, and no other; Rust refuses unknown fields in a change.
+  expect(Object.keys(settings).sort()).toEqual(Object.keys(defaultSettings).sort());
+  expect(settings).toEqual({ ...defaultSettings, pcName: 'Test PC' });
+  expect(['click', 'play_pause', 'next_track', 'space', 'none']).toContain(settings.pokeAction);
+  expect(['low', 'normal', 'high']).toContain(settings.sensitivity);
+  expect(['near', 'normal', 'far']).toContain(settings.range);
+  expect(settings.hotkey).toBe('Ctrl+Alt+V');
+  expect(settings.keepRecordingsDays).toBe(7);
+  expect(settings.onboardingDone).toBe(false);
+  expect(actions).toEqual({ enabled: true, error: 'blocked_elevated' });
+  expect(pokeTest).toEqual({ seen: 8, of: 10 });
 });

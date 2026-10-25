@@ -87,10 +87,73 @@ export interface Diagnostics {
 export interface AppState {
   version: string;
   pcName: string;
+  /** Whether pokes run their action right now; only Rust changes it. */
   actionsEnabled: boolean;
   link: LinkSnapshot;
   source: SourceView;
   engine: EngineView;
+  settings: SettingsView;
+}
+export type PokeAction = 'click' | 'play_pause' | 'next_track' | 'space' | 'none';
+export type Sensitivity = 'low' | 'normal' | 'high';
+export type DistanceRange = 'near' | 'normal' | 'far';
+/** The settings the interface shows and changes through `set_settings`. */
+export interface SettingsView {
+  pcName: string;
+  pokeAction: PokeAction;
+  sensitivity: Sensitivity;
+  range: DistanceRange;
+  /** Modifiers `Ctrl`, `Alt`, `Shift`, `Super` and one key, joined with `+`, e.g. "Ctrl+Alt+V". */
+  hotkey: string;
+  actionsOnAtStart: boolean;
+  startWithWindows: boolean;
+  closeToTray: boolean;
+  /** Applies from the next start. */
+  detailedLogs: boolean;
+  /** 0 keeps test recordings until they are deleted. */
+  keepRecordingsDays: number;
+  temperatureC: number;
+  onboardingDone: boolean;
+}
+/** A change to some settings; Rust rejects unknown fields. */
+export type SettingsPatch = Partial<SettingsView>;
+/** Why `set_settings` refused a change. Other errors are shown as a general failure. */
+export type SettingsError =
+  | 'invalid_pc_name'
+  | 'invalid_poke_action'
+  | 'invalid_sensitivity'
+  | 'invalid_range'
+  | 'invalid_hotkey'
+  | 'invalid_keep_days'
+  | 'invalid_temperature'
+  | 'hotkey_unavailable'
+  | 'autostart_failed'
+  | 'settings_save_failed'
+  | 'engine_busy'
+  | 'engine_stopped';
+export const defaultSettings: SettingsView = {
+  pcName: 'Windows PC',
+  pokeAction: 'click',
+  sensitivity: 'normal',
+  range: 'normal',
+  hotkey: 'Ctrl+Alt+V',
+  actionsOnAtStart: false,
+  startWithWindows: false,
+  closeToTray: true,
+  detailedLogs: false,
+  keepRecordingsDays: 7,
+  temperatureC: 20,
+  onboardingDone: false,
+};
+/** 'veyl://actions': the switch changed (header, tray or hotkey), or Windows blocked an action. */
+export interface ActionsEvent {
+  enabled: boolean;
+  error: 'blocked_elevated' | null;
+}
+/** What `stop_poke_test` counted: at most 10 pokes within 20 s. */
+export interface PokeTestResult {
+  seen: number;
+  of: number;
 }
 export interface AudioDevice {
   id: string;

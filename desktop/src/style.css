@@ -280,6 +280,120 @@ input:focus-visible {
   height: 12px;
   border-radius: 50%;
   background: var(--muted);
+  transition: transform 0.15s ease;
+}
+.actions {
+  position: relative;
+}
+.actions b[data-on='true'] {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.actions button[aria-checked='true'] {
+  background: var(--aqua);
+  border-color: var(--aqua);
+}
+.actions button[aria-checked='true'] i {
+  transform: translateX(14px);
+  background: var(--ink);
+}
+.actions button:disabled {
+  opacity: 0.45;
+}
+/* The tooltip shows on hover and on keyboard focus, and the switch names it as its description. */
+.actions-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 5;
+  width: min(300px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.6;
+  box-shadow: 0 12px 40px #0006;
+}
+.actions:hover .actions-tooltip,
+.actions:focus-within .actions-tooltip {
+  display: block;
+}
+.toast-region {
+  position: fixed;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+}
+.toast {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid var(--aqua);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 12px 40px #0006;
+  animation: toast-in 0.2s ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 32px 0;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--fair);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fair) 10%, var(--panel));
+}
+.notice p {
+  flex: 1;
+  margin: 0;
+  color: var(--text);
+}
+p[role='alert'] {
+  color: var(--poor);
+}
+.icon-button {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.icon-button:hover {
+  border-color: var(--line);
+  color: var(--text);
+}
+select:focus-visible,
+summary:focus-visible,
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--aqua);
+  outline-offset: 2px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 kbd {
   color: var(--muted);
@@ -319,28 +433,6 @@ kbd {
 }
 main {
   padding: 24px 32px;
-}
-.foundation {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
-  padding: 15px 18px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--aqua);
-  font-size: 12px;
-}
-.foundation p {
-  color: var(--muted);
-  margin: 4px 0 0;
-  font-size: 11px;
-}
-.foundation > span {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--muted);
 }
 .live-grid {
   display: grid;
@@ -563,10 +655,8 @@ p {
   color: var(--muted);
   font-size: 10px;
 }
-.poke-log .note {
-  grid-column: 2;
-  margin: 6px 0 0;
-  font-size: 11px;
+.poke-log li[data-acted='true'] {
+  border-color: color-mix(in srgb, var(--aqua) 55%, var(--line));
 }
 @keyframes poke-flash {
   from {
@@ -725,7 +815,7 @@ footer {
   color: var(--muted);
 }
 .source-options button small {
-  color: var(--aqua);
+  color: var(--accent-text);
 }
 .settings select {
   min-width: 0;
@@ -783,9 +873,6 @@ footer {
   .button-row {
     margin-top: 16px;
   }
-  .foundation > span {
-    display: none;
-  }
   footer {
     padding: 0 18px 18px;
   }
@@ -794,8 +881,380 @@ footer {
   .tabs button[aria-current] {
     color: #087668;
   }
-  .foundation,
   .help a {
     color: #087668;
+  }
+}
+
+/* Settings: one row per setting, its note and its error below it. */
+.settings .setting {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings .setting label,
+.setting-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+}
+.settings h2 {
+  margin: 36px 0 0;
+}
+.setting-note,
+.setting-error {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.settings .entry input[type='number'] {
+  width: 100px;
+}
+.settings input.switch,
+input.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--line);
+  cursor: pointer;
+}
+input.switch::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease;
+}
+.settings input.switch:checked {
+  border-color: var(--aqua);
+  background: var(--aqua);
+}
+input.switch:checked::before {
+  transform: translateX(14px);
+  background: var(--ink);
+}
+input.switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.hotkey {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.hotkey kbd,
+.onboarding-hotkey kbd {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.panel .hotkey-button[aria-pressed='true'] {
+  border-color: var(--aqua);
+  color: var(--text);
+}
+.diagnostic-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* The poke test dialog. */
+.poke-counter {
+  margin: 20px 0 4px;
+  color: var(--text);
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.poke-result strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 18px;
+}
+
+/* Onboarding: a card over the whole window on first run. */
+.onboarding {
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+.onboarding[open] {
+  display: grid;
+  place-items: center;
+}
+.onboarding::backdrop {
+  background: #0b0f14e0;
+}
+.onboarding-card {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 22px 28px 28px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px #0008;
+}
+.onboarding-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.onboarding-progress {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onboarding-progress li {
+  width: 16px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.onboarding-progress li[data-state='done'] {
+  background: color-mix(in srgb, var(--aqua) 45%, var(--line));
+}
+.onboarding-progress li[data-state='now'] {
+  width: 28px;
+  background: var(--aqua);
+}
+.onboarding h2 {
+  margin: 22px 0 6px;
+  font-size: 22px;
+  letter-spacing: -0.3px;
+}
+.onboarding h2:focus {
+  outline: none;
+}
+.onboarding-body p {
+  font-size: 13px;
+}
+.onboarding-body .setting-note {
+  font-size: 11px;
+}
+.onboarding-mark {
+  display: block;
+  margin: 8px 0 4px;
+}
+.onboarding-body .onboarding-url {
+  margin: 20px 0 8px;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  color: var(--accent-text);
+  font-size: clamp(19px, 5.4vw, 26px);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+.onboarding-body .onboarding-status {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.onboarding-hotkey {
+  margin: 18px 0 0;
+  text-align: center;
+}
+.onboarding-hotkey kbd {
+  padding: 8px 14px;
+  font-size: 16px;
+}
+.onboarding button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  font-size: 12px;
+}
+.onboarding button:hover:enabled {
+  border-color: var(--aqua);
+}
+.onboarding button:disabled {
+  opacity: 0.45;
+}
+.onboarding button.primary {
+  border-color: var(--aqua);
+  background: var(--aqua);
+  color: var(--ink);
+}
+.onboarding .icon-button {
+  padding: 0;
+  border-color: transparent;
+}
+.onboarding .source-options {
+  margin-top: 18px;
+}
+.onboarding .source-options button {
+  justify-content: flex-start;
+  align-content: flex-start;
+  padding: 16px;
+  text-align: left;
+}
+.source-options button[aria-pressed='true'] {
+  border-color: var(--aqua);
+}
+.onboarding-devices label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.onboarding-devices select {
+  width: 220px;
+  min-width: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--text);
+}
+.onboarding-devices .button-row {
+  margin-top: 4px;
+}
+.practice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 100px;
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+  text-align: center;
+}
+.practice span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.practice[data-seen='true'] {
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+}
+.practice-nice {
+  font-size: 18px;
+}
+.onboarding .phone-list li {
+  padding: 12px 0;
+}
+.onboarding .phone-list li:last-child {
+  border-bottom: 0;
+}
+
+/* Help. */
+.help h2:first-of-type {
+  margin-top: 0;
+}
+.help ul {
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.help .saved-recordings,
+.help .about {
+  margin-top: 32px;
+}
+.help-entries details {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.help-entries summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.help-entries details p {
+  margin: 6px 0 0 16px;
+}
+.help .link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 0;
+  list-style: none;
+}
+.help a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+@media (max-width: 560px) {
+  .source-options {
+    grid-template-columns: 1fr;
+  }
+  .settings .setting > label,
+  .setting-line,
+  .onboarding-devices label {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .settings select,
+  .onboarding-devices select {
+    width: 100%;
+  }
+  .onboarding-card {
+    padding: 18px 18px 22px;
+  }
+  .notice {
+    margin: 14px 18px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .actions button i,
+  input.switch::before {
+    transition: none;
+  }
+  .toast {
+    animation: none;
   }
 }

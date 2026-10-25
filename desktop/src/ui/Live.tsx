@@ -189,6 +189,8 @@ export function Live({
   live,
   pc,
   tip,
+  canTest,
+  onTest,
   canRecord,
   onRecord,
   children,
@@ -197,6 +199,9 @@ export function Live({
   pc: boolean;
   /** The tip to show before the engine sends a meter. */
   tip: string;
+  /** The poke test needs a listening source. */
+  canTest: boolean;
+  onTest: () => void;
   canRecord: boolean;
   onRecord: () => void;
   /** Extra controls for the meter card, such as asking the phone to start. */
@@ -243,7 +248,11 @@ export function Live({
             <li className="empty">{copy.pokesEmpty}</li>
           ) : (
             gestures.map((gesture) => (
-              <li key={gesture.at} className={gesture.at === newest ? 'fresh' : ''}>
+              <li
+                key={gesture.at}
+                className={gesture.at === newest ? 'fresh' : ''}
+                data-acted={gesture.acted}
+              >
                 {gestureLine(gesture)}
                 {gesture.testOnly && <small>{liveCopy.test}</small>}
               </li>
@@ -251,16 +260,13 @@ export function Live({
           )}
         </ol>
         <div className="button-row">
-          <button disabled aria-describedby="poke-test-note">
+          <button disabled={!canTest} onClick={onTest}>
             {liveCopy.testPokes}
           </button>
           <button disabled={!canRecord} onClick={onRecord}>
             {recordingCopy.title}
           </button>
         </div>
-        <p id="poke-test-note" className="note">
-          {liveCopy.pokeTestSoon}
-        </p>
       </section>
     </div>
   );

@@ -14,7 +14,12 @@ import type {
   Capture,
   PhoneTarget,
   RecordingInfo,
+  ActionsEvent,
+  PokeTestResult,
+  SettingsPatch,
+  SettingsView,
 } from './types';
+import type { PreviewView } from '../preview/fake-native';
 export type { AppState } from './types';
 
 export const browserPreview = !isTauri();
@@ -23,6 +28,41 @@ const preview = () => import('../preview/fake-native');
 
 export async function getAppState(): Promise<AppState> {
   return browserPreview ? (await preview()).getAppState() : invoke<AppState>('get_app_state');
+}
+/** The tab, dialog or onboarding step the preview's page address asks for; null in the app. */
+export async function previewView(): Promise<PreviewView | null> {
+  return browserPreview ? (await preview()).previewView() : null;
+}
+
+/** Turns actions on or off; the new state arrives as a 'veyl://actions' event. */
+export async function setActionsEnabled(enabled: boolean): Promise<void> {
+  if (browserPreview) return (await preview()).setActionsEnabled(enabled);
+  await invoke('set_actions_enabled', { enabled });
+}
+export async function watchActions(update: (event: ActionsEvent) => void): Promise<UnlistenFn> {
+  return browserPreview
+    ? (await preview()).watchActions(update)
+    : listen<ActionsEvent>('veyl://actions', ({ payload }) => update(payload));
+}
+/** Saves a settings change and returns all settings; rejects with a `SettingsError` code. */
+export async function setSettings(patch: SettingsPatch): Promise<SettingsView> {
+  return browserPreview
+    ? (await preview()).setSettings(patch)
+    : invoke<SettingsView>('set_settings', { patch });
+}
+/** While a poke test runs, pokes are counted and actions never run. */
+export async function startPokeTest(): Promise<void> {
+  if (browserPreview) return (await preview()).startPokeTest();
+  await invoke('start_poke_test');
+}
+export async function stopPokeTest(): Promise<PokeTestResult> {
+  return browserPreview
+    ? (await preview()).stopPokeTest()
+    : invoke<PokeTestResult>('stop_poke_test');
+}
+export async function openLogsFolder(): Promise<void> {
+  if (browserPreview) return (await preview()).openLogsFolder();
+  await invoke('open_logs_folder');
 }
 
 export async function uiReady(): Promise<void> {
@@ -61,7 +101,9 @@ export async function getDiagnostics(): Promise<Diagnostics> {
     ? (await preview()).getDiagnostics()
     : invoke<Diagnostics>('get_diagnostics');
 }
-export const setSource = (source: string) => command('set_source', { source });
+// The preview switches its sample data between phone and PC mode, so onboarding works there.
+export const setSource = async (source: string) =>
+  browserPreview ? (await preview()).setSource(source) : command('set_source', { source });
 export const checkPcSound = () => command('check_pc_sound');
 export const cancelPcSoundCheck = () => command('cancel_pc_sound_check');
 export const setPcDevices = (speakerId: string | null, microphoneId: string | null) =>
