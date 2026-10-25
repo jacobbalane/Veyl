@@ -4,9 +4,9 @@ Veyl Link is the private, encrypted connection between one phone and one PC. It 
 twice — in Rust (`crates/veyl-link`, used by the desktop app and by `veyl-lab`) and in Kotlin
 (`android/core`). Shared test vectors (§4.15) keep the two byte-for-byte compatible.
 
-M1 implements the protocol core and its tests. The installed 0.0.1 preview does not connect:
-Android capture arrives in M2; discovery, sockets, protected pairing storage and app integration
-arrive in M3. The sections below also specify those integration requirements.
+Both apps use it for discovery, pairing, the encrypted session, audio, control messages and clock
+sync. The installed 0.0.1 preview predates this and does not connect. The sections below specify
+the protocol and its integration requirements.
 
 ## Pairing and session flow
 

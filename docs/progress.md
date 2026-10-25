@@ -1,6 +1,6 @@
 # Implementation progress
 
-Last updated: 2026-10-25.
+Last updated: 2026-10-26.
 
 Section 0 followed: the full plan and the listed Glim references were read before writing source.
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
@@ -1201,6 +1201,20 @@ against the code; all compatibility results read "Not yet tested". The README an
 unreleased section describe v0.1 as built but unreleased; the notices list the new Tauri plugins.
 **M7.4.** `scripts/capture-screens.mjs` captures eight preview screens with Edge (or Playwright's
 Chromium) into `site/public/screens/`; the home page shows the Live tab, in the visitor's theme.
+
+**End-to-end verification, 2026-10-26, at `d253812` plus documentation fixes.** From a clean
+`npm ci`: repository formatting, the script tests, the version check, desktop typecheck, tests (72)
+and build, site tests and build, Rust formatting, whole-workspace clippy, `cargo test -p veyl-link
+-p veyl-desktop` (73), current protocol vectors, `cargo test --release -p veyl-dsp -p veyl-sim -p
+veyl-lab` (19 suites, 359 s) and the Android tests, lint and build with every task rerun all pass;
+CI passed on every job for the same code. The debug desktop app was also started on this PC,
+hidden in the tray with its data in a temporary folder: it started without warnings, registered
+the hotkey and built the tray. Through its own webview, the real commands returned the app state,
+diagnostics and settings; rejected an invalid range and an unknown field; moved the hotkey and back;
+switched actions on and off; ran and stopped a poke test; and refused a link outside Veyl's pages.
+The first-run onboarding opened with Appendix C's welcome text, and the page logged no errors. No
+audio device, phone or real input was exercised; those remain the device checks above. Stale status
+lines in `echo-engine.md` and `protocol.md` were corrected, and the website serves the new screens.
 
 ## Dependency follow-up
 

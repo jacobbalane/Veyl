@@ -1,9 +1,10 @@
 # Offline echo processing
 
-M4 builds the portable engine in stages. Alignment and echo estimation operate on actual filtered
-PCM; the application still uses the streaming/level host until M5 connects the complete engine.
-The offline pipeline reports hand presence, distance, candidate pokes and the sound-quality meter.
-Complete gesture accuracy is still under development; no live gesture behavior is connected yet.
+The portable engine (`crates/veyl-dsp`) works on actual filtered PCM. It reports hand presence,
+distance, pokes and the sound-quality meter. The desktop app's engine host runs it live in phone
+and PC mode (decision 0025); the lab runs the same engine offline on simulator scenes and test
+recordings. Its tuning so far comes from the simulator; real recordings decide the final values
+(see [tuning](tuning.md)).
 
 `SampleRing` stores four seconds per channel by absolute frame number. Missing frames and flagged
 boundaries invalidate any window that touches them. Overlap cannot replace previously accepted

@@ -64,6 +64,8 @@ screenshots, address options pick a state from the start, for example `?state=al
 `phone-app`, `pair`, `place`, `phone-play`, `pc-devices`, `pc-play`, `practice`, `actions`; the
 `pc-` steps pick PC mode), and `?actions=on` or `?actions=blocked` (Windows blocks the click).
 Settings, the actions switch and the poke test work on sample data in memory until a reload.
+`node scripts/capture-screens.mjs` saves the website's screens from this preview into
+`site/public/screens/` with Microsoft Edge (`VEYL_BROWSER=chromium` uses Playwright's Chromium).
 
 Use a Visual Studio Developer PowerShell if the MSVC linker is missing. Git's `link.exe` is not
 the Microsoft linker. Linux CI tests the portable crates without compiling the Tauri app.
