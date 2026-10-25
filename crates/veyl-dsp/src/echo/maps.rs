@@ -59,6 +59,11 @@ impl MapTransform {
             return Err("Invalid echo-map dimensions.");
         }
         for (spectrum, taps) in transfer.chunks(self.bins).zip(output.chunks_mut(self.taps)) {
+            // Mono mode leaves the second reference slot of each microphone empty.
+            if spectrum.iter().all(|value| *value == Complex::default()) {
+                taps.fill(Complex::default());
+                continue;
+            }
             self.buffer.fill(Complex::default());
             for bin in 1..self.n / 2 {
                 self.buffer[bin] = spectrum[bin] * (2.0 * weights[bin]);

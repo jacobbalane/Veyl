@@ -1,7 +1,91 @@
 # Tuning
 
-M4 is still in progress. These are synthetic PCM measurements, not device performance. No real
-recordings have been supplied, and the installed preview still uses the earlier level host.
+These are synthetic PCM measurements, not device performance. No real recordings have been
+supplied, and the installed preview still uses the earlier level host.
+
+## Current default
+
+`EngineConfig::default()` is the tuned engine of decisions 0020–0024. The CI scenario gates
+(`crates/veyl-lab/tests/scenario_gates.rs`, thresholds in
+[decision 0023](decisions/0023-tuned-defaults-and-scenario-thresholds.md)) pass on seeds 1–3.
+Against the plan's specified thresholds, the probe measures:
+
+| Scenario       | Seed 1        | Seed 2        | Seed 3         | Specified gate |
+| -------------- | ------------- | ------------- | -------------- | -------------- |
+| Basic          | 10/10, 130 ms | 10/10, 131 ms | 10/10, 127 ms  | fails (delay)  |
+| Varied         | 27/30         | 20/30         | 23/30          | fails          |
+| Typing + pokes | 9/10          | 10/10         | 10/10, 1 extra | passes         |
+| Volume steps   | 7/10, 1 extra | 7/10          | 6/10, 2 extra  | fails          |
+| Dropouts       | 10/10         | 8/10          | 9/10           | fails seed 2   |
+| PC             | 10/10         | 9/10          | 10/10          | passes         |
+| PC Bluetooth   | 10/10         | 10/10         | 8/10           | fails seed 3   |
+
+Still, hover, wave, walking, typing, gappy and blocked stay within their limits; stereo,
+compressed and both clock cases match every poke. 10 of 54 cases fail the specified thresholds.
+
+Processing cost on the development desktop ([decision 0024](decisions/0024-processing-cost.md)):
+31.4 ms per second of audio for a phone scene and about 47 ms for the stereo PC scene; the
+specified configuration costs 14.6 ms. The ignored 60-second performance test passes for the
+phone scene (1.84 s) and fails for PC (2.82 s). The older laptop of §6.10 is not measured yet.
+
+## Segment clicks, gaps and deferred pokes
+
+[Decision 0022](decisions/0022-segment-clicks-gaps-and-deferred-pokes.md) adds
+`change_in_band`, `change_own_fit`, `change_blank_ratio = 4`, `change_impulse_ratio = 12`,
+`change_gap_ms = 12`, `poke_defer_suspension` and `floor_learn_fraction = 0.5` to the
+short-change candidate. Full-duration probe replays, seeds 1–3:
+
+| Scenario       | Seed 1        | Seed 2        | Seed 3         | Gate   | Decision 0021 |
+| -------------- | ------------- | ------------- | -------------- | ------ | ------------- |
+| Basic          | 10/10, 130 ms | 10/10, 131 ms | 10/10, 127 ms  | fails  | 30/30         |
+| Varied         | 27/30         | 20/30         | 23/30          | fails  | 55/90         |
+| Typing + pokes | 8/10          | 10/10         | 10/10, 1 extra | fails  | 12/30         |
+| Volume steps   | 6/10          | 6/10          | 6/10, 2 extra  | fails  | 18/30         |
+| 50 ppm         | 10/10         | 10/10         | 10/10          | passes | 30/30         |
+| 200 ppm        | 10/10         | 10/10         | 10/10          | passes | 30/30         |
+| Dropouts       | 10/10         | 8/10          | 9/10           | fails  | 21/30         |
+| Compressed16k  | 10/10         | 10/10         | 10/10          | passes | 30/30         |
+| Stereo         | 10/10         | 10/10         | 10/10          | passes | 30/30         |
+| PC             | 10/10         | 10/10         | 10/10          | passes | 29/30         |
+| PC Bluetooth   | 10/10         | 10/10         | 8/10           | fails  | 24/30         |
+
+Still, hover, wave, walking, typing, gappy and blocked stay at or below their limits on every
+seed (typing seed 3 has one false poke, its limit). 11 of 54 cases fail, against 17; three are
+basic latency. Measured against the pokes deep and fast enough for Normal's own thresholds,
+varied matches 27/28, 20/25 and 21/22.
+
+What the remaining failures show:
+
+- **Volume steps.** After each ±6 dB step the simulated speaker's soft clipping changes the scene:
+  the segment gate holds for about a second while its median adapts, then the old background's
+  error near the top microphone's direct sound reaches z ≈ 10,000 until it relearns. Pokes
+  within about a second of a step are lost.
+- **Varied seed 2.** Most misses follow a brief blur during the approach (z below half the on
+  threshold for six hops), which ends presence and loses the approach.
+- **First pokes.** Several single-seed misses are the first poke at 5 s, during or just after
+  settling.
+
+Measured and rejected in this pass, seed by seed in the full matrix: a floor that falls faster
+than it rises (time constants 0.3, 1.0 and 1.5 s: 20–26 failing cases, with clock, walking, PC
+and typing failures); a floor that follows a tap above threshold for 1–1.5 s (no change: the
+disturbance lasts about 0.7 s); re-settling on a field-level change of 2–3 dB (volume steps 2–3
+of 10, because the floor then calibrated on an unconverged background); background adaptation
+after 12 or 24 held hops (up to 17 false volume-step pokes and 61 false typing pokes); a
+farther microphone's exclusion of 14 or 20 taps after its direct sound (more false typing
+pokes); and presence hold-overs of 10 or 14 hops (12–13 failing cases).
+
+A known weakness: after a long, still hover, a fast departure keeps the track where the hand
+was. `motion_speed` (six seconds still at 32 cm, then straight in and out) puts the strongest
+echo on the hand in 99%, 97%, 16% and 3% of moving hops at 8, 30, 50 and 80 cm/s, against 88%,
+81%, 35% and 0% for decision 0020's candidate and 100%, 97%, 43% and 17% for decision 0021's.
+The background still holds the hovering hand, and the 4 cm track gate keeps the track on that
+stale change; a stronger echo outside the gate takes the track only after three hops at twice
+its strength. Ratios of 1.25 and 1.5 gained a few percent and added a false typing poke. Without
+the gate, 77% and 27%. Pokes from a hover pass their gates because their approach starts from the
+hover position. Real recordings decide whether this needs more work.
+
+`processing_cost`, same method as below: specified 15.2 ms, residual 42.0 ms and default 63.0 ms
+per second of audio. M4.8's 30 ms budget is not met.
 
 ## Short-change candidate
 
@@ -218,8 +302,7 @@ and Dull-tip gate corrections. The specified filter and tip priority remain inta
 against labelled real recordings belongs to M5; no score-to-recall calibration is claimed yet.
 
 Run the component regressions with `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab`.
-Run `cargo run --release -p veyl-sim --example poke_gates` separately for the current failing
-default-gesture development probe. [Full lab exports and sweeps](lab.md) now support the next
+The scenario gates run in `crates/veyl-lab/tests/scenario_gates.rs`. [Full lab exports and sweeps](lab.md) now support the next
 tuning pass. The seed-1 forty-second candidate report measures median truth-to-detect delay
 57.98 ms, p95 98.25 ms and median confirmation 18.67 ms. Its motion heatmap was inspected.
 Performance and allocation checks remain M4.8 work.

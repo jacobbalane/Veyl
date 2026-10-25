@@ -14,6 +14,10 @@ pub struct BackgroundFrame {
     pub direct_energy: f32,
     pub settling: bool,
     pub model_jump: bool,
+    /// With short change measurements: this segment's residual, relative to its prediction,
+    /// jumped far above its recent median. A click inside loud music, which blanking cannot
+    /// separate, leaves the segment unusable for motion.
+    pub short_impulse: bool,
 }
 pub struct Background {
     config: EngineConfig,
@@ -56,6 +60,8 @@ struct Residual {
     hops: u32,
     /// Per microphone, for short change measurements.
     fits: Vec<Option<(Complex<f64>, Complex<f64>)>>,
+    /// The fits of the last hop without an impulse.
+    clean_fits: Vec<Option<(Complex<f64>, Complex<f64>)>>,
     mean_gains: Vec<Complex<f32>>,
 }
 impl Residual {
@@ -68,6 +74,7 @@ impl Residual {
         self.learn.fill(Complex::default());
         self.delays.fill(None);
         self.fits.fill(None);
+        self.clean_fits.fill(None);
         self.mean_gains.fill(Complex::new(1.0, 0.0));
         self.hops = 0;
     }
@@ -97,6 +104,7 @@ impl Background {
             delays: vec![None; format.mic_channels as usize],
             hops: 0,
             fits: vec![None; format.mic_channels as usize],
+            clean_fits: vec![None; format.mic_channels as usize],
             mean_gains: vec![Complex::new(1.0, 0.0); format.mic_channels as usize],
         };
         Ok(Self {
@@ -119,7 +127,12 @@ impl Background {
             settle_frames: (config.settle_seconds * format.sample_rate as f32).ceil() as u64,
             presence_frames: 0,
             residual,
-            short: ShortChange::new(&config, format.ref_channels as usize),
+            short: ShortChange::new(
+                &config,
+                format.sample_rate,
+                format.ref_channels as usize,
+                format.mic_channels as usize,
+            ),
             config,
         })
     }
@@ -134,6 +147,13 @@ impl Background {
     }
     pub fn normalized_maps(&self) -> &[Complex<f32>] {
         &self.normalized_maps
+    }
+    /// With short change measurements: the next hop's windows contain filled-in missing frames
+    /// at these window positions, for the microphone and the aligned reference.
+    pub fn set_gaps(&mut self, microphone: &[bool], reference: &[bool]) {
+        if let Some(short) = self.short.as_mut() {
+            short.set_gaps(microphone, reference);
+        }
     }
     /// Residual mode: the background seen through the mean reference, in the first slot of each
     /// microphone.
@@ -222,6 +242,7 @@ impl Background {
         }
         self.transform
             .render(&self.transfer, weights, &mut self.maps)?;
+
         let direct = direct_peak_near(
             &self.maps,
             self.config.pre_taps,
@@ -245,14 +266,19 @@ impl Background {
                 .map(|tap| tap.norm_sqr())
                 .sum::<f32>();
         }
-        let result = |model_jump| BackgroundFrame {
+        let mut short_impulse = false;
+        let result = |model_jump, short_impulse| BackgroundFrame {
             direct,
             direct_energy,
             settling,
             model_jump,
+            short_impulse,
         };
-        if held {
-            return Ok(result(false));
+        // A short change measurement blanks a click within its own segment, so an impulse hop
+        // still measures change. It only skips learning and the jump check.
+        let measure_only = held && echo.is_some() && self.short.is_some();
+        if held && !measure_only {
+            return Ok(result(false, false));
         }
         let mut jump = false;
         for pair in 0..self.pairs {
@@ -277,13 +303,14 @@ impl Background {
                 .arg()
                 .abs()
                 .to_degrees();
-            jump |= energy > 1e-20
+            jump |= !held
+                && energy > 1e-20
                 && (!(self.config.min_gain..=self.config.max_gain).contains(&gain.norm())
                     || phase_step > self.config.max_phase_step_degrees);
             self.gains[pair] = gain;
         }
         if jump && !settling {
-            return Ok(result(true));
+            return Ok(result(true, false));
         }
         for pair in 0..self.pairs {
             let gain = if self.gains[pair].norm_sqr() > 1e-20 {
@@ -303,12 +330,26 @@ impl Background {
                 }
             }
         }
+        if measure_only {
+            // The click is somewhere in the whole window: keep the last clean gains and fit.
+            self.gains.copy_from_slice(&self.previous_gains);
+        }
         if let Some(echo) = echo {
             self.residual(echo);
+
+            if measure_only {
+                self.residual
+                    .fits
+                    .copy_from_slice(&self.residual.clean_fits);
+            } else {
+                self.residual
+                    .clean_fits
+                    .copy_from_slice(&self.residual.fits);
+            }
             self.transform
                 .render(&self.residual.mean, weights, &mut self.mean_maps)?;
             if let Some(short) = self.short.as_mut() {
-                short.process(
+                short_impulse = short.process(
                     echo,
                     ShortInputs {
                         transfer: &self.transfer,
@@ -321,6 +362,7 @@ impl Background {
                     &self.mean_maps,
                     &mut self.dynamic,
                     &mut self.normalized_maps,
+                    !settling,
                 );
             } else {
                 self.transform
@@ -331,6 +373,9 @@ impl Background {
                     &mut self.normalized_maps,
                 )?;
             }
+        }
+        if measure_only {
+            return Ok(result(false, short_impulse));
         }
         self.previous_gains.copy_from_slice(&self.gains);
         self.presence_frames = if hand_present {
@@ -380,7 +425,7 @@ impl Background {
                 }
             }
         }
-        Ok(result(false))
+        Ok(result(false, short_impulse))
     }
     /// Residual mode keeps the background in normalized units and a separate field gain per
     /// microphone. Predictions of the microphone, such as the impulse gate's, need both.
@@ -421,6 +466,8 @@ impl Background {
     /// matrix inverse; correlated Stereo references made that inverse noisy. The background
     /// still predicts each speaker separately and learns each path with a normalized LMS step.
     fn residual(&mut self, echo: &EchoEstimator) {
+        // Short change measurements form their own change and current field.
+        let whole = self.short.is_none();
         let channels = echo.channels();
         let state = &mut self.residual;
         let (bins, refs) = (self.bins, state.refs);
@@ -497,18 +544,23 @@ impl Background {
                 }
                 let predicted = state.predicted[bin];
                 let errors = state.errors[bin];
-                // Small gain and timing changes of the whole field are not new echoes.
-                let moving = fit.map_or(errors, |(a, b)| {
-                    let w = std::f64::consts::TAU * bin as f64 / (2 * (bins - 1)) as f64;
-                    let p = Complex::new(predicted.re as f64, predicted.im as f64);
-                    let fitted = a * p + b * p * Complex::new(0.0, w);
-                    errors - Complex::new(fitted.re as f32, fitted.im as f32)
-                });
-                let x = echo.mean_reference(bin);
-                let cross = &mut state.cross[c * bins + bin];
-                *cross += state.alpha * (moving * x.conj() - *cross);
                 let mean_power = echo.long_term_mean_power(bin);
-                state.change[motion] = *cross / (mean_gain * (mean_power * level + regular));
+                let cross = if whole {
+                    // Small gain and timing changes of the whole field are not new echoes.
+                    let moving = fit.map_or(errors, |(a, b)| {
+                        let w = std::f64::consts::TAU * bin as f64 / (2 * (bins - 1)) as f64;
+                        let p = Complex::new(predicted.re as f64, predicted.im as f64);
+                        let fitted = a * p + b * p * Complex::new(0.0, w);
+                        errors - Complex::new(fitted.re as f32, fitted.im as f32)
+                    });
+                    let x = echo.mean_reference(bin);
+                    let cross = &mut state.cross[c * bins + bin];
+                    *cross += state.alpha * (moving * x.conj() - *cross);
+                    state.change[motion] = *cross / (mean_gain * (mean_power * level + regular));
+                    *cross
+                } else {
+                    Complex::default()
+                };
                 // The guard against vanished echoes needs an exact per-window estimate, so this
                 // copy uses the fast power of this window rather than the long-term spectrum.
                 let mut mean_background = Complex::default();
@@ -551,8 +603,10 @@ impl Background {
                         narrow((v * a - u * b) / determinant) / gain(first + 1);
                 }
                 state.mean[motion] = mean_background / (mean_power + regular / level.max(1e-6));
-                state.current[motion] =
-                    state.mean[motion] + *cross / (mean_gain * (state.fast_power[bin] + regular));
+                if whole {
+                    state.current[motion] = state.mean[motion]
+                        + cross / (mean_gain * (state.fast_power[bin] + regular));
+                }
             }
         }
     }

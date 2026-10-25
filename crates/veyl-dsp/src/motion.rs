@@ -67,6 +67,8 @@ pub struct MotionTracker {
     last: MotionFeatures,
     /// Per microphone, its own direct sound's tap position, when known.
     own_directs: Vec<Option<f64>>,
+    /// Consecutive hops with a much stronger echo outside the track gate.
+    escape_hops: u32,
 }
 impl MotionTracker {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -113,6 +115,7 @@ impl MotionTracker {
             row: [0.0; 60],
             last: MotionFeatures::default(),
             own_directs: vec![None; format.mic_channels as usize],
+            escape_hops: 0,
             config,
         })
     }
@@ -145,6 +148,7 @@ impl MotionTracker {
         row
     }
     fn reset_presence(&mut self) {
+        self.escape_hops = 0;
         self.on_count = 0;
         self.off_count = 0;
         self.distance_count = 0;
@@ -300,7 +304,9 @@ impl MotionTracker {
                 } else {
                     self.floor[k] += (self.energy[k] - self.floor[k]) / self.settling_count as f32;
                 }
-            } else if self.energy[k] / self.floor[k].max(lower) < self.z_on {
+            } else if self.energy[k] / self.floor[k].max(lower)
+                < self.z_on * self.config.floor_learn_fraction
+            {
                 self.floor[k] += self.floor_alpha * (self.energy[k] - self.floor[k]);
             }
             self.floor[k] = self.floor[k].max(lower);
@@ -309,6 +315,7 @@ impl MotionTracker {
         }
         let mut count = 0;
         let mut best = None;
+        let mut overall = None;
         let mut sum = 0.0;
         for k in 0..self.taps {
             let left = self.z[k.saturating_sub(1)];
@@ -336,6 +343,21 @@ impl MotionTracker {
                 if gated && best.is_none_or(|previous| self.smoothed[k] > self.smoothed[previous]) {
                     best = Some(k);
                 }
+                if overall.is_none_or(|previous| self.smoothed[k] > self.smoothed[previous]) {
+                    overall = Some(k);
+                }
+            }
+        }
+        // A burst lasts a hop or two. A stronger echo outside the gate for longer is where the
+        // hand went, for example after it left a spot the background still remembers.
+        if let (Some(gated), Some(outside)) = (best, overall) {
+            let escaping = outside != gated
+                && self.smoothed[outside]
+                    >= (self.config.track_escape_ratio * self.smoothed[gated]).max(self.z_on);
+            self.escape_hops = if escaping { self.escape_hops + 1 } else { 0 };
+            if self.escape_hops >= 3 {
+                best = Some(outside);
+                self.escape_hops = 0;
             }
         }
         self.scratch[..count].sort_unstable_by(f32::total_cmp);

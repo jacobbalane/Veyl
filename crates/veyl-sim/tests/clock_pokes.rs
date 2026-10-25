@@ -27,7 +27,7 @@ fn resampled_reference_recovers_full_phone_clock_scenarios_without_false_pokes_o
                 fast_seconds: 0.005,
                 infer_single_path: true,
                 resample_reference: true,
-                ..EngineConfig::default()
+                ..EngineConfig::specified()
             },
             StreamFormat {
                 sample_rate: scene.fs,

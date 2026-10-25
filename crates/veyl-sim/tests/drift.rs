@@ -27,7 +27,7 @@ fn fast_acoustic_maps_drive_continuous_clock_compensation_without_truth_labels()
                 scene.clock_drift_ppm = -200.0;
             }
             let rendered = scene::render(&scene).unwrap();
-            let config = EngineConfig::default();
+            let config = EngineConfig::specified();
             let format = StreamFormat {
                 sample_rate: scene.fs,
                 ref_channels: 2,

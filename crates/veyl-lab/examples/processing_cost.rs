@@ -1,7 +1,8 @@
 //! Development probe for the processing cost of each candidate: milliseconds of engine time
 //! per second of audio, from ten seconds measured after ten seconds of warm-up, on identical
 //! 2-reference, 2-microphone input at 48 kHz. Wall-clock time on a shared machine varies, so it
-//! prints the median and range of five repetitions. It never writes audio.
+//! prints the median and range of five repetitions. It never writes audio. `--set=key=value`
+//! arguments add one more line for the default engine with those parameters changed.
 use std::{error::Error, time::Instant};
 use veyl_dsp::{
     config::EngineConfig, BlockFlags, BlockIn, Engine, SoundSource, SourceStatus, Stream,
@@ -15,28 +16,37 @@ fn main() -> Result<(), Box<dyn Error>> {
         rendered.reference.iter().map(|v| quantize(*v)).collect(),
         rendered.mic.iter().map(|v| quantize(*v)).collect(),
     ];
-    let residual = EngineConfig {
-        infer_single_path: true,
-        resample_reference: true,
-        residual_motion: true,
-        floor_relative: 1e-8,
-        impulse_ratio: 12.0,
-        ..EngineConfig::default()
-    };
     let candidates = [
-        ("defaults", EngineConfig::default()),
-        ("residual (0020)", residual.clone()),
+        ("specified (plan section 6)", EngineConfig::specified()),
         (
-            "short change (0021)",
+            "residual (0020)",
             EngineConfig {
-                impulse_relative: true,
-                change_window: 1024,
-                change_smooth_bins: 8,
-                track_gate_cm: 4.0,
-                ..residual
+                infer_single_path: true,
+                resample_reference: true,
+                residual_motion: true,
+                floor_relative: 1e-8,
+                impulse_ratio: 12.0,
+                ..EngineConfig::specified()
             },
         ),
+        ("default (0023)", EngineConfig::default()),
     ];
+    let overrides: Vec<String> = std::env::args()
+        .skip(1)
+        .filter_map(|argument| argument.strip_prefix("--set=").map(str::to_owned))
+        .collect();
+    let mut candidates = candidates.to_vec();
+    if !overrides.is_empty() {
+        let mut value = serde_json::to_value(EngineConfig::default())?;
+        for setting in &overrides {
+            let (key, text) = setting.split_once('=').ok_or("Use --set=key=value.")?;
+            if value.get(key).is_none() {
+                return Err(format!("Unknown engine parameter {key}.").into());
+            }
+            value[key] = serde_json::from_str(text)?;
+        }
+        candidates.push(("default with overrides", serde_json::from_value(value)?));
+    }
     for (name, config) in candidates {
         let mut timings = vec![];
         for _ in 0..5 {

@@ -28,6 +28,9 @@ pub struct PokeDetector {
     maximum: u64,
     refractory: u64,
     refractory_until: u64,
+    deferred_until: u64,
+    /// A poke confirmed while confirmation was deferred, reported when the deferral ends.
+    pending: Option<PokeEvent>,
 }
 impl PokeDetector {
     pub fn new(config: EngineConfig, rate: u32) -> Result<Self, &'static str> {
@@ -47,15 +50,25 @@ impl PokeDetector {
             maximum,
             refractory: frames(config.poke_refractory_ms),
             refractory_until: 0,
+            deferred_until: 0,
+            pending: None,
             config,
         })
     }
     pub fn suspend(&mut self) {
         self.history.clear();
+        self.pending = None;
     }
     pub fn reset(&mut self) {
         self.suspend();
         self.refractory_until = 0;
+        self.deferred_until = 0;
+    }
+    /// No poke is reported before this frame, but the trajectory keeps its history: a short
+    /// gap or model jump counts as invalid hops instead of erasing an approach in progress. A
+    /// poke that meets every rule meanwhile is reported when the deferral ends.
+    pub fn defer_until(&mut self, frame: u64) {
+        self.deferred_until = frame;
     }
     pub fn set_sensitivity(&mut self, preset: Sensitivity) {
         self.z_on = preset.z_on();
@@ -68,8 +81,18 @@ impl PokeDetector {
     }
     pub fn process(&mut self, feature: MotionFeatures, allowed: bool) -> Option<PokeEvent> {
         let frame = feature.frame;
-        if !allowed || !feature.present || frame < self.refractory_until {
+        if !allowed {
             self.suspend();
+            return None;
+        }
+        if frame >= self.deferred_until {
+            if let Some(mut event) = self.pending.take() {
+                event.detect_frame = frame;
+                return Some(event);
+            }
+        }
+        if !feature.present || frame < self.refractory_until {
+            self.history.clear();
             return None;
         }
         if self
@@ -104,7 +127,7 @@ impl PokeDetector {
                     / (frame - previous.frame) as f32;
                 if speed > self.config.poke_v_max {
                     // A jump to another echo cannot form part of a hand trajectory.
-                    self.suspend();
+                    self.history.clear();
                 }
             }
         }
@@ -176,7 +199,11 @@ impl PokeDetector {
                 * (turn.z / (2.0 * self.z_on)).clamp(0.0, 1.0),
         };
         self.refractory_until = frame.saturating_add(self.refractory);
-        self.suspend();
+        self.history.clear();
+        if frame < self.deferred_until {
+            self.pending = Some(event);
+            return None;
+        }
         Some(event)
     }
 }

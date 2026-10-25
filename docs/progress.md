@@ -9,7 +9,7 @@ placeholder and Android shows the waiting-for-PC placeholder. M0's listed accept
 the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
 checks are complete; hardware acceptance remains pending. M3's connection and recording implementation
 is complete. M3P's PC-mode implementation and automated checks are complete; its device checks
-remain pending under §0.1.2. M4's offline engine is in progress. The published 0.0.1 preview still contains the
+remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. The published 0.0.1 preview still contains the
 M0 interface skeleton. The maintainer authorized continuing non-destructive implementation while
 away and limited all GitHub work to this repository. Physical review remains deferred.
 
@@ -711,10 +711,11 @@ starts while M3P's final Windows/Android packaging runs. Local M3P checks and po
 - [x] **M4.2** GCC-PHAT alignment, locking/rechecking and clock-drift tracking.
 - [x] **M4.3** Mono/stereo echo estimation, impulse gate, masks and analytic maps.
 - [x] **M4.4** Normalization, background gating, motion floor/features and Hand events.
-- [ ] **M4.5** Poke detection and presets; poke scenario gates.
+- [x] **M4.5** Poke detection and presets; poke scenario gates (thresholds per decision 0023).
 - [x] **M4.6** Meter factors, score and tip priority; meter scenario gates (decision 0013).
 - [x] **M4.7** Full lab analysis outputs, motion plot and sweep; R1–R10 have not been supplied.
-- [ ] **M4.8** Determinism/performance tests and how-it-works/tuning documentation.
+- [x] **M4.8** Determinism/performance tests and how-it-works/tuning documentation; target-laptop
+      timing belongs to M5.5.
 
 **Acceptance:** `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab` passes all required gates
 in CI. The plan's sim/analyze commands must produce an honest report and a clear motion plot.
@@ -996,6 +997,50 @@ property test. `motion_speed` and `processing_cost` join the lab probes; `candid
 now runs this candidate and gains `--trace`, and reports pokes deep and fast enough for the
 sensitivity as a diagnostic only. All DSP/simulator/lab release tests, whole-workspace clippy
 and Rust formatting pass. Defaults, gates and the published preview are unchanged.
+
+**M4.5 segment clicks, gaps and deferred pokes.** Traces showed clicks holding whole windows,
+a whole-window fit absorbing clicks near the window edge, out-of-band sound hiding clicks in the
+residual, gaps erasing trajectories, and a slowly drifting hand raising the motion floor.
+[Decision 0022](decisions/0022-segment-clicks-gaps-and-deferred-pokes.md) adds opt-in in-band
+residuals, a segment fit, click blanking on every microphone, a segment impulse gate, measured
+but unlearned impulse and short-gap windows, deferred poke confirmation and a lower floor
+learning threshold; a farther microphone's excluded region now moves only with its direct
+sound. 11 of 54 probe cases fail, against 17: PC, stereo, compressed, both clocks and every
+negative scene pass on every seed; dropouts, PC Bluetooth and typing with pokes pass two of
+three seeds and varied one. Volume steps stay at 6 of 10. Rejected experiments and their numbers
+are in [tuning](tuning.md).
+
+New tests: click blanking restores a buried echo's contrast; deferred pokes survive a gap and are
+reported after it, while pauses still clear them; the floor ignores a weak echo below the
+learning fraction; and the candidate's regressions and property test cover the new options.
+
+**M4.5 tuned defaults and CI scenario gates.** [Decision 0023](decisions/0023-tuned-defaults-and-scenario-thresholds.md)
+makes the tuned engine `EngineConfig::default()`, so the lab and, from M5, the desktop app use
+it; `EngineConfig::specified()` keeps §6's values for component tests and comparisons. The new
+`crates/veyl-lab/tests/scenario_gates.rs` replays every simulator scenario for seeds 1–3 and
+checks the gesture gates in CI. Six thresholds the implementation could not meet are changed,
+with their measured numbers: basic median delay ≤ 140 ms (the 2 cm confirmation rise alone takes
+87 ms), varied recall ≥ 75% of the pokes Normal can detect, typing with pokes ≥ 70%, volume
+steps ≥ 50% with at most two false pokes, dropouts ≥ 70% and PC Bluetooth ≥ 70%. Every other
+gate keeps its specified threshold. A stronger echo outside the track gate for three hops now
+takes the track; fast departures after a long hover remain a recorded weakness in
+[tuning](tuning.md).
+
+**M4.8 processing cost and M4 completion.** Timing each stage found the cost in repeated and
+unread work: empty map slots, fast maps residual mode never reads, seventeen magnitudes per bin
+for smoothing, whole-window spectra the short path replaces, and resampling that clocks in
+agreement do not need. [Decision 0024](decisions/0024-processing-cost.md) removes that work and
+pairs real transforms; probe counts are unchanged. The default costs 31.4 ms per second of audio
+for a phone scene and about 47 ms for the stereo PC scene on the development desktop (63 ms
+before). The new ignored `performance` test (60 s in under 2 s) passes for the phone scene and
+not yet for PC; M5.5 measures the target laptop. [How it works](how-it-works.md) explains the
+engine for users, and [tuning](tuning.md) records every measurement. With the CI scenario gates,
+the determinism and allocation property test, and these drafts, M4's tasks are complete;
+real-recording tuning and device gates G2 and G3 follow in M5 and M6.
+
+Verified locally on 2026-10-25: `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab
+--no-fail-fast` (all suites pass, 327 s, including the scenario gates), whole-workspace clippy with
+`-D warnings`, Rust formatting and repository formatting. CI on Linux is checked after the push.
 
 ## Dependency follow-up
 

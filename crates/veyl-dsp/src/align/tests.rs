@@ -12,7 +12,7 @@ fn noise(size: usize, seed: u64) -> Vec<f32> {
 }
 #[test]
 fn gcc_phat_finds_signed_lags_with_noise_rejects_silence_and_does_not_lock_unrelated_audio() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     for rate in [44100, 48000] {
         let reference = noise(rate as usize, 7);
         let unrelated = noise(rate as usize * 2, 21);
@@ -72,7 +72,7 @@ fn estimate(lag: f64) -> LagEstimate {
 #[test]
 fn lock_requires_two_spaced_estimates_and_rechecks_ignore_explained_drift_but_relock_a_route_jump()
 {
-    let mut lock = AlignmentLock::new(48000, EngineConfig::default()).unwrap();
+    let mut lock = AlignmentLock::new(48000, EngineConfig::specified()).unwrap();
     assert!(lock.observe(48000, estimate(2000.0), 0.0, None).is_none());
     assert!(lock.observe(48001, estimate(2000.0), 0.0, None).is_none());
     assert!(matches!(
@@ -95,7 +95,7 @@ fn lock_requires_two_spaced_estimates_and_rechecks_ignore_explained_drift_but_re
 #[test]
 fn kalman_feedback_tracks_both_clock_signs_and_keeps_delay_continuous_through_integer_folds() {
     for ppm in [-200.0, -50.0, 50.0, 200.0] {
-        let config = EngineConfig::default();
+        let config = EngineConfig::specified();
         let mut tracker = DriftTracker::new(&config);
         let mut integer = 0;
         for hop in 1..=48000 * 8 / 256 {
@@ -125,7 +125,7 @@ fn controller_handles_different_absolute_origins_with_and_without_capture_timest
             .map(|value| (value * 16000.0) as i16)
             .collect();
         for timestamps in [false, true] {
-            let config = EngineConfig::default();
+            let config = EngineConfig::specified();
             let format = StreamFormat {
                 sample_rate: rate,
                 ref_channels: 1,
@@ -195,7 +195,7 @@ fn sparse_alignment_locks_through_short_gaps_but_rejects_long_gaps_and_unrelated
         ] {
             let config = EngineConfig {
                 align_max_missing_fraction: if tolerate { 0.02 } else { 0.0 },
-                ..EngineConfig::default()
+                ..EngineConfig::specified()
             };
             let mut aligner = Aligner::new(
                 config,
@@ -258,7 +258,7 @@ fn rejected_alignment_coverage_breaks_a_pending_pair_of_good_estimates() {
             .map(|v| (v * 16000.0) as i16)
             .collect();
         let mut aligner = Aligner::new(
-            EngineConfig::default(),
+            EngineConfig::specified(),
             StreamFormat {
                 sample_rate: rate,
                 ref_channels: 1,

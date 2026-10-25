@@ -23,7 +23,7 @@ fn weights(config: &EngineConfig) -> Vec<f32> {
 }
 #[test]
 fn direct_normalization_removes_volume_and_phase_but_preserves_and_rejects_model_jumps() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let format = StreamFormat {
         sample_rate: 48000,
         ref_channels: 1,
@@ -87,7 +87,7 @@ fn presence_slows_learning_only_temporarily_and_impulses_hold_the_model() {
     let config = EngineConfig {
         settle_seconds: 0.02,
         presence_hold_seconds: 0.1,
-        ..EngineConfig::default()
+        ..EngineConfig::specified()
     };
     let format = StreamFormat {
         sample_rate: 48000,
@@ -144,7 +144,7 @@ fn presence_slows_learning_only_temporarily_and_impulses_hold_the_model() {
 
 #[test]
 fn distance_origin_keeps_a_strong_direct_path_when_microphones_exchange_peak_rank() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let format = StreamFormat {
         sample_rate: 48000,
         ref_channels: 1,
@@ -202,7 +202,7 @@ fn residual_change_learns_correlated_stereo_paths_and_finds_a_new_echo() {
     let config = EngineConfig {
         residual_motion: true,
         settle_seconds: 0.3,
-        ..EngineConfig::default()
+        ..EngineConfig::specified()
     };
     let format = StreamFormat {
         sample_rate: 48000,
@@ -319,7 +319,7 @@ fn short_change_keeps_a_fast_moving_echo_that_the_whole_window_cancels() {
             settle_seconds: 0.3,
             change_window,
             change_smooth_bins: 8,
-            ..EngineConfig::default()
+            ..EngineConfig::specified()
         };
         let (n, hop, pre) = (config.window, config.hop, config.pre_taps);
         let mut echo = EchoEstimator::new(config.clone(), format).unwrap();
@@ -361,5 +361,86 @@ fn short_change_keeps_a_fast_moving_echo_that_the_whole_window_cancels() {
     assert!(
         short.0 > 1.5 * whole.0 && short.1 > 0.9 && whole.1 < 0.5,
         "moving echo (size, located): short {short:?} against whole window {whole:?}"
+    );
+}
+
+#[test]
+fn a_click_in_the_segment_is_blanked_instead_of_spreading_over_every_tap() {
+    let format = StreamFormat {
+        sample_rate: 48000,
+        ref_channels: 1,
+        mic_channels: 1,
+    };
+    let length = 48000 * 2;
+    let reference = noise(length, 0x0c11_c4ed_5eed_0001);
+    let start = 48000 + 24000;
+    let microphone: Vec<_> = (0..length)
+        .map(|i| {
+            let at = |delay: usize| i.checked_sub(delay).map_or(0.0, |j| reference[j]);
+            let mut value = at(0) + 0.3 * at(10);
+            if i >= start {
+                // A new reflector, then a click far louder than its echo.
+                value += 0.02 * at(60);
+            }
+            value
+        })
+        .collect();
+    let mut clicked = microphone.clone();
+    let click = noise(96, 0xbeef_0000_c11c_0002);
+    for (i, value) in click.iter().enumerate() {
+        clicked[start + 6000 + i] += value * 3.0 * (-(i as f32) / 24.0).exp();
+    }
+    let mut contrast = vec![];
+    for (input, blank) in [(&microphone, 0.0), (&clicked, 0.0), (&clicked, 4.0)] {
+        let config = EngineConfig {
+            residual_motion: true,
+            settle_seconds: 0.3,
+            change_window: 1024,
+            change_smooth_bins: 8,
+            change_own_fit: true,
+            change_in_band: true,
+            change_blank_ratio: blank,
+            ..EngineConfig::specified()
+        };
+        let (n, pre) = (config.window, config.pre_taps);
+        let mut echo = EchoEstimator::new(config.clone(), format).unwrap();
+        let mut background = Background::new(config.clone(), format).unwrap();
+        let mut worst = f32::INFINITY;
+        let mut end = n;
+        while end <= length {
+            echo.process(
+                &reference[end - n..end],
+                &input[end - n..end],
+                0.0,
+                None,
+                false,
+            )
+            .unwrap();
+            background
+                .process_residual(&echo, echo.weights(), false, false)
+                .unwrap();
+            // Hops whose segment contains the click.
+            let centre = end - n / 2;
+            if centre.abs_diff(start + 6000) < 400 {
+                let taps = background.dynamic();
+                let echo_size = (pre + 58..=pre + 62)
+                    .map(|k| taps[k].norm())
+                    .fold(0.0_f32, f32::max);
+                let elsewhere = (pre + 20..pre + config.taps)
+                    .filter(|k| k.abs_diff(pre + 60) > 4)
+                    .map(|k| taps[k].norm())
+                    .fold(0.0_f32, f32::max);
+                worst = worst.min(echo_size / elsewhere);
+            }
+            end += config.hop;
+        }
+        contrast.push(worst);
+    }
+    let (clean, unblanked, blanked) = (contrast[0], contrast[1], contrast[2]);
+    // The click buries the echo; blanking restores most of its contrast.
+    assert!(unblanked < 1.0, "unblanked contrast {unblanked}");
+    assert!(
+        blanked > 0.5 * clean && blanked > 3.0,
+        "blanked {blanked} against clean {clean}"
     );
 }

@@ -1,5 +1,5 @@
 //! Fast multichannel transfer estimates, activity masks and analytic echo maps.
-mod gate;
+pub(crate) mod gate;
 mod maps;
 use crate::{config::EngineConfig, StreamFormat};
 use gate::ImpulseGate;
@@ -71,6 +71,8 @@ pub struct EchoEstimator {
     /// This hop's reference then microphone samples, kept only for short change measurements.
     signals: Vec<f32>,
     fraction: f64,
+    packed: Vec<Complex<f32>>,
+    forced_hold: bool,
 }
 impl EchoEstimator {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -151,6 +153,8 @@ impl EchoEstimator {
                 vec![]
             },
             fraction: 0.0,
+            packed: vec![Complex::default(); n],
+            forced_hold: false,
             config,
             format,
         })
@@ -257,6 +261,11 @@ impl EchoEstimator {
         let start = (self.refs + channel) * self.n;
         &self.signals[start..start + self.n]
     }
+    /// The next window is measured but not learned from, as for an impulse, without entering
+    /// the impulse history: it contains filled-in missing frames.
+    pub(crate) fn hold_next(&mut self) {
+        self.forced_hold = true;
+    }
     pub(crate) fn reference_channels(&self) -> usize {
         self.refs
     }
@@ -299,21 +308,45 @@ impl EchoEstimator {
             microphones.copy_from_slice(microphone);
         }
         self.fraction = fractional_delay;
-        for (input, output) in [(reference, &mut self.x), (microphone, &mut self.y)] {
-            for (signal, spectrum) in input.chunks(self.n).zip(output.chunks_mut(self.n)) {
-                for i in 0..self.n {
-                    spectrum[i] = Complex::new(signal[i] * self.window[i], 0.0);
+        // Two real windows share one complex transform: the first as the real part, the
+        // second as the imaginary part, separated afterwards by conjugate symmetry.
+        let (n, total) = (self.n, self.refs + self.mics);
+        for first in (0..total).step_by(2) {
+            let signal = |index: usize| {
+                if index < self.refs {
+                    &reference[index * n..(index + 1) * n]
+                } else {
+                    &microphone[(index - self.refs) * n..(index - self.refs + 1) * n]
                 }
-                self.forward
-                    .process_with_scratch(spectrum, &mut self.scratch);
+            };
+            let second = (first + 1 < total).then(|| signal(first + 1));
+            let a = signal(first);
+            for i in 0..n {
+                let imaginary = second.map_or(0.0, |b| b[i] * self.window[i]);
+                self.packed[i] = Complex::new(a[i] * self.window[i], imaginary);
+            }
+            self.forward
+                .process_with_scratch(&mut self.packed, &mut self.scratch);
+            for (offset, index) in [(0, first), (1, first + 1)] {
+                if index >= total {
+                    break;
+                }
+                let spectrum = if index < self.refs {
+                    &mut self.x[index * n..(index + 1) * n]
+                } else {
+                    &mut self.y[(index - self.refs) * n..(index - self.refs + 1) * n]
+                };
+                for (bin, value) in spectrum.iter_mut().enumerate().take(self.bins) {
+                    let (z, mirror) = (self.packed[bin], self.packed[(n - bin) % n].conj());
+                    *value = if offset == 0 {
+                        (z + mirror) * 0.5
+                    } else {
+                        (z - mirror) * Complex::new(0.0, -0.5)
+                    };
+                }
             }
         }
-        for bin in 0..self.bins {
-            self.phase[bin] = Complex::from_polar(
-                1.0,
-                (-std::f64::consts::TAU * bin as f64 * fractional_delay / self.n as f64) as f32,
-            );
-        }
+        phase_ramp(fractional_delay, self.n, &mut self.phase);
         for channel in self.x.chunks_mut(self.n) {
             for (bin, phase) in self.phase.iter().enumerate() {
                 channel[bin] *= phase;
@@ -322,16 +355,20 @@ impl EchoEstimator {
         let (predicted_power, residual_power) = self.prediction(background);
         // A louder moment of the music raises the model's error with it; a click or knock is
         // sound the reference did not cause, so it raises the residual relative to the prediction.
-        let impulse = self.gate.observe(
-            if self.config.impulse_relative {
-                residual_power / predicted_power.max(1e-30)
-            } else {
-                residual_power
-            },
-            impulse_enabled,
-        );
+        let impulse = std::mem::take(&mut self.forced_hold)
+            || self.gate.observe(
+                if self.config.impulse_relative {
+                    residual_power / predicted_power.max(1e-30)
+                } else {
+                    residual_power
+                },
+                impulse_enabled,
+            );
         let previous = self.mode;
-        let coherence = if !impulse {
+        // Once one speaker plays the mix, the mode is settled and coherence decides nothing.
+        let coherence = if self.single_path {
+            1.0
+        } else if !impulse {
             self.update_coherence()
         } else {
             self.coherence()
@@ -360,8 +397,12 @@ impl EchoEstimator {
             self.average();
             self.estimate_transfer();
             self.update_mask();
-            self.transform
-                .render(&self.transfer, &self.weights, &mut self.maps)?;
+            // Residual mode reads the background's maps; the fast maps only serve the
+            // difference-based mode's direct peak and model check.
+            if !self.config.residual_motion {
+                self.transform
+                    .render(&self.transfer, &self.weights, &mut self.maps)?;
+            }
         }
         let mut powers = [0.0; 2];
         for (channel, power) in powers.iter_mut().enumerate().take(self.channels()) {
@@ -586,6 +627,17 @@ impl EchoEstimator {
         (0..self.channels())
             .map(|s| self.xx[s * self.bins + bin])
             .sum()
+    }
+}
+
+/// Fills `table` with the phase factors of a delay of `frames` at each bin of an `n`-point
+/// transform, by a rotation per bin rather than a sine and cosine for each.
+pub(crate) fn phase_ramp(frames: f64, n: usize, table: &mut [Complex<f32>]) {
+    let step = Complex::from_polar(1.0, -std::f64::consts::TAU * frames / n as f64);
+    let mut value = Complex::new(1.0_f64, 0.0);
+    for entry in table.iter_mut() {
+        *entry = Complex::new(value.re as f32, value.im as f32);
+        value *= step;
     }
 }
 

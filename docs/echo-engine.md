@@ -38,7 +38,10 @@ relative. The estimator then applies no additional phase ramp. See
 The sampler combines eight independent tap sums for contiguous, fully supported input. Partial
 support and callbacks retain scalar sampling. The kernel is unchanged; addition order changes
 rounding within the tested numerical bound. See
-[decision 0019](decisions/0019-parallel-fractional-sampler-sums.md).
+[decision 0019](decisions/0019-parallel-fractional-sampler-sums.md). When the estimated rate
+difference spans less than 0.01 frames across the window, as with a phone's own playback copy
+and microphone, the sampler is skipped and the fraction becomes a phase ramp. Forward transforms
+of real windows run two to a complex FFT, and empty map slots are not rendered (decision 0024).
 
 `EchoEstimator` receives channel-major windows: N samples for reference channel 0, then channel 1;
 the microphone uses the same layout. Defaults are a periodic 2048-frame Hann window and a
@@ -92,17 +95,12 @@ current-field maps with an analytic inverse FFT of `EngineConfig::change_size()`
 bins on each side. While a hand is present, `track_gate_cm` limits the peak search to that
 distance around its track. See [decision 0021](decisions/0021-short-change-and-steady-tracking.md).
 
-The physical-path inference experiment is opt-in through TOML. Coherence smoothing is independent
-of fast transfer smoothing. The default fast time remains 40 ms; a 5 ms candidate detects the
-basic single-speaker phone gestures but still fails other required scenarios. See
-[decision 0012](decisions/0012-motion-and-poke-guards.md) and the explicit failing development probe:
-
-```powershell
-cargo run --release -p veyl-sim --example poke_gates
-```
-
-Passing the component suite below does not close those remaining gesture acceptance gates.
-The [lab](lab.md) now exports full analysis, motion plots and parameter sweeps for continued tuning.
+The default configuration is the tuned engine of decisions 0020–0023; `EngineConfig::specified()`
+keeps the plan's §6 values, including the 40 ms fast average without residual motion, for
+component tests and comparisons. `crates/veyl-lab/tests/scenario_gates.rs` replays every
+simulator scenario for seeds 1–3 through the lab and checks the gesture gates, with the
+thresholds decision 0023 changed. The [lab](lab.md) exports full analysis, motion plots and
+parameter sweeps for continued tuning.
 
 Run the required portable suite with:
 

@@ -1,5 +1,5 @@
-//! Short-change candidate regressions (decisions 0020 and 0021). These are narrower than the
-//! complete M4 gesture acceptance gates.
+//! Default engine regressions on scenes it must keep (decisions 0020–0023). The complete gates
+//! are in veyl-lab's scenario_gates test.
 use veyl_dsp::{
     config::EngineConfig, BlockFlags, BlockIn, Engine, EngineEvent, PokeEvent, SoundSource,
     SourceStatus, Stream, StreamFormat,
@@ -10,15 +10,6 @@ fn candidate(pc: bool) -> EngineConfig {
     EngineConfig {
         pc_mode: pc,
         range_max_cm: if pc { 55.0 } else { 40.0 },
-        infer_single_path: true,
-        resample_reference: true,
-        residual_motion: true,
-        floor_relative: 1e-8,
-        impulse_ratio: 12.0,
-        impulse_relative: true,
-        change_window: 1024,
-        change_smooth_bins: 8,
-        track_gate_cm: 4.0,
         ..EngineConfig::default()
     }
 }

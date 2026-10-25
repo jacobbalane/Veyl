@@ -106,21 +106,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         .into();
         input.meta.device["media_volume"] = scene.volume.into();
-        // The short-change candidate (decision 0021). The residual candidate of decision 0020 is
-        // --set=change_window=0 --set=change_smooth_bins=0 --set=track_gate_cm=0
-        // --set=impulse_relative=false. The earlier 5 ms candidate additionally sets
-        // --set=residual_motion=false --set=fast_seconds=0.005 --set=floor_relative=1e-6
-        // --set=impulse_ratio=6.
+        // The default engine (decision 0023). Decision 0021's candidate is
+        // --set=change_in_band=false --set=change_own_fit=false --set=change_blank_ratio=0
+        // --set=change_impulse_ratio=0 --set=change_gap_ms=0 --set=poke_defer_suspension=false
+        // --set=floor_learn_fraction=1. Decision 0020's also sets --set=change_window=0
+        // --set=change_smooth_bins=0 --set=track_gate_cm=0 --set=impulse_relative=false.
         let mut config = serde_json::to_value(EngineConfig {
-            infer_single_path: true,
-            resample_reference: true,
-            residual_motion: true,
-            floor_relative: 1e-8,
-            impulse_ratio: 12.0,
-            impulse_relative: true,
-            change_window: 1024,
-            change_smooth_bins: 8,
-            track_gate_cm: 4.0,
             z_on: sensitivity.z_on(),
             poke_in_cm,
             poke_out_cm,

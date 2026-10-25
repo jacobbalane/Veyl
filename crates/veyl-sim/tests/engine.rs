@@ -11,7 +11,7 @@ fn source_independent_engine_learns_acoustic_echoes_and_reports_finite_motion_an
         let rendered = scene::render(&scene).unwrap();
         let config = EngineConfig {
             pc_mode: name.starts_with("pc_"),
-            ..EngineConfig::default()
+            ..EngineConfig::specified()
         };
         let format = StreamFormat {
             sample_rate: scene.fs,

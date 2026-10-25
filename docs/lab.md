@@ -11,13 +11,13 @@ cargo run --release -p veyl-lab -- sim poke_basic --seed 1 --out .cache/lab/basi
 cargo run --release -p veyl-lab -- analyze .cache/lab/basic --out .cache/lab/basic-report
 ```
 
-The default report honestly shows the current defaults' missed gestures. For the experimental
-single-speaker phone candidate, save this profile as an ignored `params.toml`:
+The report uses the default engine ([decision 0023](decisions/0023-tuned-defaults-and-scenario-thresholds.md)).
+To compare another configuration, save a profile as an ignored `params.toml`, for example the
+residual candidate without the short change segment:
 
 ```toml
-fast_seconds = 0.005
-infer_single_path = true
-resample_reference = true
+change_window = 0
+track_gate_cm = 0.0
 ```
 
 Then pass `--config params.toml`. A profile uses the engine's defaults for omitted fields. Without
@@ -70,18 +70,16 @@ cargo run --release -p veyl-lab --example candidate_gestures -- 1
 
 Repeat with seeds 2 and 3. To select cases, append names after the seed. The probe runs the full
 specified durations, prints one JSON measurement per case and exits unsuccessfully on failed
-gesture checks. It is a development probe; the complete CI gates, including meter checks and
-stereo-mode selection, remain separate. The current candidate fails several cases.
+gesture checks against the plan's specified thresholds, so it reports the cases decision 0023
+relaxed as failures. The CI gates are `crates/veyl-lab/tests/scenario_gates.rs`.
 
 Use `--sensitivity=low`, `--sensitivity=normal` or `--sensitivity=high` after the seed to compare
 an existing preset. One preset applies to every case in that run and is included in each JSON
 measurement. The default remains Normal. No preset is selected from truth labels.
 
-The probe runs the short-change candidate of
-[decision 0021](decisions/0021-short-change-and-steady-tracking.md). `--set=key=value` overrides
-one engine parameter for every case and rejects unknown names; for example,
-`--set=change_window=0 --set=change_smooth_bins=0 --set=track_gate_cm=0
---set=impulse_relative=false` restores the residual candidate of
+The probe runs the default engine. `--set=key=value` overrides one engine parameter for every
+case and rejects unknown names; the probe's source lists the settings that restore the
+candidates of [decision 0021](decisions/0021-short-change-and-steady-tracking.md) and
 [decision 0020](decisions/0020-residual-motion.md). `--explain` prints, for each missed truth
 poke, the derived turn, approach and retreat the detector saw. `--trace=START..END` prints each
 hop's features in that time span beside the simulator's true echo distance, marking held and
@@ -95,7 +93,7 @@ Two more probes measure the engine itself:
 
 ```powershell
 cargo run --release -p veyl-lab --example motion_speed -- 8 30 50 80
-cargo run --release -p veyl-sim --example processing_cost
+cargo run --release -p veyl-lab --example processing_cost
 ```
 
 `motion_speed` moves a hand straight toward the phone and back at each speed in cm/s and reports

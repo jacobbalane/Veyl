@@ -1,6 +1,6 @@
 //! Development probe: how well the engine sees a hand moving straight toward the phone and back
 //! at fixed speeds (cm/s), with no hover beforehand. It prints derived measurements only.
-//! `--set=key=value` overrides a parameter of the short-change candidate (decision 0021).
+//! `--set=key=value` overrides a parameter of the default engine.
 use std::{env, error::Error};
 use veyl_dsp::config::EngineConfig;
 use veyl_lab::{analysis, recording::Input};
@@ -38,18 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         input.meta.device["sound_source"] = "test_sound".into();
         input.meta.device["route"] = "speaker".into();
         input.meta.device["media_volume"] = scene.volume.into();
-        let mut config = serde_json::to_value(EngineConfig {
-            infer_single_path: true,
-            resample_reference: true,
-            residual_motion: true,
-            floor_relative: 1e-8,
-            impulse_ratio: 12.0,
-            impulse_relative: true,
-            change_window: 1024,
-            change_smooth_bins: 8,
-            track_gate_cm: 4.0,
-            ..analysis::default_config(&input)
-        })?;
+        let mut config = serde_json::to_value(analysis::default_config(&input))?;
         for (key, value) in &overrides {
             if config.get(key).is_none() {
                 return Err(format!("Unknown engine parameter {key}.").into());

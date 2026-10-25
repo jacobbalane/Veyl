@@ -82,7 +82,7 @@ fn acoustic_delay_and_clock_scenarios_lock_from_pcm_and_capture_timestamps_withi
             };
             let reference = mono(&rendered.reference, 2);
             let mic = mono(&rendered.mic, scene.mics.len());
-            let config = EngineConfig::default();
+            let config = EngineConfig::specified();
             let mut gcc = GccPhat::new(48000, &config, 24000).unwrap();
             let mut lock = AlignmentLock::new(48000, config).unwrap();
             for first in [0, 48000] {

@@ -30,6 +30,8 @@ pub struct EngineStatistics {
     pub max_direct_residual_after_5s: Option<f64>,
     pub final_drift_ppm: f64,
     pub final_state: EngineState,
+    /// The reference mode of the last echo estimate: "mono" or "stereo".
+    pub final_mode: Option<String>,
 }
 #[derive(Clone, Default, Serialize)]
 pub struct MeterStatistics {
@@ -331,6 +333,13 @@ pub fn evaluate_with_statistics(
         report.invalid_hops = snapshot.invalid_hops;
         report.final_drift_ppm = snapshot.drift_ppm;
         report.final_state = snapshot.state;
+        report.final_mode = snapshot.echo.map(|echo| {
+            match echo.mode {
+                veyl_dsp::echo::ReferenceMode::Mono => "mono",
+                veyl_dsp::echo::ReferenceMode::Stereo => "stereo",
+            }
+            .to_owned()
+        });
     }
     report.lag_ms = report
         .lag_frames

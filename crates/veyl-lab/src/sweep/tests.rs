@@ -38,7 +38,9 @@ fn sweep_pools_label_counts_and_raw_latencies_ranks_the_candidate_and_preserves_
         })
         .collect();
     let parameters = [
-        parameter("fast_seconds=0.005,0.04").unwrap(),
+        // The default engine finds the poke; the specified 40 ms average without residual motion
+        // does not.
+        parameter("residual_motion=true,false").unwrap(),
         parameter("infer_single_path=true").unwrap(),
     ];
     let output = root.path().join("sweep.csv");

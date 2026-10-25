@@ -4,7 +4,7 @@ use super::*;
 fn source_control_changes_clear_pending_pokes_but_media_volume_updates_preserve_them() {
     for change_source in [false, true] {
         let mut engine = Engine::new(
-            EngineConfig::default(),
+            EngineConfig::specified(),
             StreamFormat {
                 sample_rate: 48000,
                 ref_channels: 1,
@@ -80,7 +80,7 @@ fn signed_lags_wait_for_matching_reference_and_gaps_hold_instead_of_inventing_mo
         for (lag, resample_reference) in [(-128, false), (112, false), (-128, true), (112, true)] {
             let config = EngineConfig {
                 resample_reference,
-                ..EngineConfig::default()
+                ..EngineConfig::specified()
             };
             let mut engine = Engine::new(
                 config,
@@ -146,7 +146,7 @@ fn signed_lags_wait_for_matching_reference_and_gaps_hold_instead_of_inventing_mo
 #[test]
 fn silent_input_waits_and_malformed_blocks_do_not_create_an_alignment() {
     let mut engine = Engine::new(
-        EngineConfig::default(),
+        EngineConfig::specified(),
         StreamFormat {
             sample_rate: 48000,
             ref_channels: 1,

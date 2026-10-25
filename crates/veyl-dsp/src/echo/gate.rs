@@ -1,5 +1,5 @@
 /// Sorting scratch is fixed at construction; no audio or allocation is retained per hop.
-pub(super) struct ImpulseGate {
+pub(crate) struct ImpulseGate {
     residuals: Vec<f64>,
     scratch: Vec<f64>,
     flags: Vec<bool>,

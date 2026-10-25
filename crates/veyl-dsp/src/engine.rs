@@ -104,7 +104,18 @@ pub struct Engine {
     /// Per microphone: the tracked direct position and where it started.
     residual_direct: Vec<Option<(f64, f64)>>,
     own_directs: Vec<Option<f64>>,
+    /// The last fully resampled hop: its frame, delay at that frame and rate.
+    resampled: Option<(u64, f64, f64)>,
+    /// Window positions of missing frames, for windows measured despite a short gap.
+    microphone_missing: Vec<bool>,
+    reference_missing: Vec<bool>,
+    scratch_missing: Vec<bool>,
 }
+/// Below this many frames of rate difference across a window, the sampler is skipped.
+const RESAMPLE_MIN_FRAMES: f64 = 0.01;
+/// Resampled samples are reused while the delay model moved less than this many frames: a
+/// phase error of about 2e-4 radians at 20 kHz.
+const RESAMPLE_REUSE_FRAMES: f64 = 1e-4;
 /// The strongest tap summed over a microphone's pairs, with a parabolic fraction.
 fn strongest_tap(maps: &[rustfft::num_complex::Complex<f32>], length: usize) -> Option<f64> {
     let at = |i: usize| {
@@ -175,6 +186,10 @@ impl Engine {
             jump_streak: 0,
             residual_direct: vec![None; format.mic_channels as usize],
             own_directs: vec![None; format.mic_channels as usize],
+            resampled: None,
+            microphone_missing: vec![false; config.window],
+            reference_missing: vec![false; config.window],
+            scratch_missing: vec![false; config.window * 2 + 128],
             config,
             format,
         })
@@ -296,6 +311,7 @@ impl Engine {
         self.jump_streak = 0;
         self.residual_direct.fill(None);
         self.pending_hand_end = false;
+        self.resampled = None;
     }
     pub fn snapshot(&self) -> EngineSnapshot {
         EngineSnapshot {
@@ -373,6 +389,9 @@ impl Engine {
             );
         }
     }
+    fn short_change(&self) -> bool {
+        self.config.residual_motion && self.config.change_window > 0
+    }
     /// The caller can reuse an event Vec; this method never clears its existing entries.
     pub fn process(&mut self, events: &mut Vec<EngineEvent>) -> Result<(), &'static str> {
         self.process_hops(events)?;
@@ -447,7 +466,12 @@ impl Engine {
                 break;
             };
             let rate = self.aligner.drift_ppm() * 1e-6;
-            let required_padding = if self.config.resample_reference {
+            // With clocks that agree, as a phone's playback copy and microphone usually do, the
+            // window spans no measurable rate difference: the fraction alone becomes a phase ramp
+            // and the 64-tap sampler is not needed.
+            let resample = self.config.resample_reference
+                && rate.abs() * self.config.window as f64 > RESAMPLE_MIN_FRAMES;
+            let required_padding = if resample {
                 33.0 + (rate.abs() * self.config.window as f64).ceil()
             } else {
                 0.0
@@ -470,36 +494,123 @@ impl Engine {
                 .aligner
                 .begin_hop(frame)
                 .ok_or("Non-increasing engine hop.")?;
+            // Consecutive windows share most samples. Those the previous hop resampled are
+            // reused when its delay model agrees with this hop's across them.
+            let delay = lag as f64 + fraction;
+            let window = self.config.window;
+            let reused = self
+                .resampled
+                .and_then(|(previous, previous_delay, previous_rate)| {
+                    let shift = usize::try_from(frame.checked_sub(previous)?).ok()?;
+                    let agree = |t: u64| {
+                        let old = previous_delay + previous_rate * (t as f64 - previous as f64);
+                        let new = delay + rate * (t as f64 - frame as f64);
+                        (old - new).abs() < RESAMPLE_REUSE_FRAMES
+                    };
+                    (resample
+                        && supported
+                        && shift > 0
+                        && shift < window
+                        && agree(mic_first)
+                        && agree(previous))
+                    .then_some(shift)
+                });
             let mut valid = supported;
+            // Missing frames within retained audio: the largest count in any copy and the
+            // longest run. Out-of-range windows can never be measured.
+            let (mut bounded, mut missing, mut longest) = (supported, 0, 0);
+            let mut note = |coverage: Option<crate::ring::CopyCoverage>| match coverage {
+                Some(coverage) => {
+                    missing = coverage.missing_frames.max(missing);
+                    longest = coverage.longest_gap.max(longest);
+                    coverage.missing_frames == 0
+                }
+                None => {
+                    bounded = false;
+                    false
+                }
+            };
             for channel in 0..self.format.ref_channels as usize {
                 let output = &mut self.reference_window
                     [channel * self.config.window..(channel + 1) * self.config.window];
-                if self.config.resample_reference && supported {
+                if resample && supported {
                     let scratch = &mut self.reference_scratch[..self.config.window + 2 * padding];
                     if let Some(first) = ref_first.checked_sub(padding as u64) {
-                        valid &= self.reference.copy(first, Some(channel), scratch);
-                        for (index, sample) in output.iter_mut().enumerate() {
+                        valid &= note(self.reference.copy_with_coverage(
+                            first,
+                            Some(channel),
+                            scratch,
+                        ));
+                        let first_new = if let Some(shift) = reused {
+                            output.copy_within(shift.., 0);
+                            window - shift
+                        } else {
+                            0
+                        };
+                        for (index, sample) in output.iter_mut().enumerate().skip(first_new) {
                             // The tracker predicts delay at this hop's last microphone frame.
                             let at = padding as f64 + index as f64
                                 - fraction
-                                - rate * (index as f64 - (self.config.window - 1) as f64);
+                                - rate * (index as f64 - (window - 1) as f64);
                             *sample = self.reference_sampler.read(scratch, at);
                         }
                     } else {
-                        valid = false;
+                        valid &= note(None);
                         output.fill(0.0);
                     }
                 } else {
-                    valid &= self.reference.copy(ref_first, Some(channel), output);
+                    valid &= note(self.reference.copy_with_coverage(
+                        ref_first,
+                        Some(channel),
+                        output,
+                    ));
                 }
             }
             for channel in 0..self.format.mic_channels as usize {
-                valid &= self.microphone.copy(
+                valid &= note(self.microphone.copy_with_coverage(
                     mic_first,
                     Some(channel),
                     &mut self.microphone_window
                         [channel * self.config.window..(channel + 1) * self.config.window],
-                );
+                ));
+            }
+            self.resampled = (valid && resample).then_some((frame, delay, rate));
+            // A short gap leaves most of a short change segment usable: measure the window with
+            // its missing frames blanked, and learn nothing from it.
+            let gap_frames =
+                (self.config.change_gap_ms * self.format.sample_rate as f32 / 1000.0) as usize;
+            let conceal = !valid
+                && bounded
+                && self.short_change()
+                && gap_frames > 0
+                && longest <= gap_frames
+                && missing * 4 <= self.config.window;
+            if conceal {
+                self.microphone_missing.fill(false);
+                self.microphone
+                    .mark_missing(mic_first, &mut self.microphone_missing);
+                self.reference_missing.fill(false);
+                if resample {
+                    let length = self.config.window + 2 * padding;
+                    let scratch = &mut self.scratch_missing[..length];
+                    scratch.fill(false);
+                    self.reference
+                        .mark_missing(ref_first - padding as u64, scratch);
+                    // Each output sample reads within a frame of its own position, plus the
+                    // sampler's support.
+                    for (index, missing) in self.reference_missing.iter_mut().enumerate() {
+                        let centre = padding + index;
+                        *missing = scratch[centre.saturating_sub(33)..(centre + 34).min(length)]
+                            .iter()
+                            .any(|value| *value);
+                    }
+                } else {
+                    self.reference
+                        .mark_missing(ref_first, &mut self.reference_missing);
+                }
+                self.background
+                    .set_gaps(&self.microphone_missing, &self.reference_missing);
+                self.echo.hold_next();
             }
             self.last_frame = Some(frame);
             self.processed_hops += 1;
@@ -509,6 +620,8 @@ impl Engine {
                 self.suspended_until = frame.saturating_add(
                     (self.config.jump_suspend_ms * self.format.sample_rate as f32 / 1000.0) as u64,
                 );
+            }
+            if !valid && !conceal {
                 let features = self.motion.process(MotionInput {
                     frame,
                     dynamic: self.background.dynamic(),
@@ -522,17 +635,19 @@ impl Engine {
                     energy_floor: self.config.residual_motion,
                 })?;
                 events.push(EngineEvent::Features(features));
-                self.detector.suspend();
+                if self.config.poke_defer_suspension {
+                    // The held features carry no distance: an invalid hop in the trajectory.
+                    self.detector.defer_until(self.suspended_until);
+                    self.detector.process(features, true);
+                } else {
+                    self.detector.suspend();
+                }
                 continue;
             }
             let fast = self.echo.process(
                 &self.reference_window,
                 &self.microphone_window,
-                if self.config.resample_reference {
-                    0.0
-                } else {
-                    fraction
-                },
+                if resample { 0.0 } else { fraction },
                 self.background.settled().then(|| {
                     if self.config.residual_motion {
                         self.background.gain_matched_transfer()
@@ -549,7 +664,7 @@ impl Engine {
                 let short = self.background.settled();
                 self.reset_motion(short, events);
             }
-            let held = fast.impulse || frame < self.model_jump_until;
+            let held = fast.impulse || conceal || frame < self.model_jump_until;
             let background = if self.config.residual_motion {
                 self.background.process_residual(
                     &self.echo,
@@ -592,9 +707,16 @@ impl Engine {
                 .iter_mut()
                 .zip(self.background.maps().chunks(length))
             {
-                // Each microphone's strongest background tap is its own direct sound.
-                *own = strongest_tap(maps, self.config.pre_taps + self.config.taps)
+                // Each microphone's strongest background tap is its own direct sound. It moves
+                // only when that sound does: a region edge flickering between taps would let a
+                // tap's floor learn the region's absence.
+                let strongest = strongest_tap(maps, self.config.pre_taps + self.config.taps)
                     .map(|index| index - self.config.pre_taps as f64);
+                if let Some(position) = strongest {
+                    if own.is_none_or(|previous| (position - previous).abs() > 2.0) {
+                        *own = Some(position.round());
+                    }
+                }
             }
             self.motion.set_own_directs(&self.own_directs);
             let origin = nearest_direct(
@@ -622,7 +744,13 @@ impl Engine {
                     fast.reference_cross
                 },
                 settling: background.settling,
-                held: fast.impulse || background.model_jump || frame < self.model_jump_until,
+                // A short change measurement blanks a click itself and judges its own segment.
+                held: if self.short_change() {
+                    background.short_impulse
+                } else {
+                    fast.impulse
+                } || background.model_jump
+                    || frame < self.model_jump_until,
                 energy_floor: self.config.residual_motion,
             })?;
             if features.changed {
@@ -632,11 +760,15 @@ impl Engine {
                 });
             }
             events.push(EngineEvent::Features(features));
+            let defer = self.config.poke_defer_suspension;
+            if defer {
+                self.detector.defer_until(self.suspended_until);
+            }
             if let Some(poke) = self.detector.process(
                 features,
                 !background.settling
                     && !self.paused
-                    && frame >= self.suspended_until
+                    && (defer || frame >= self.suspended_until)
                     && self.meter.status().permits_detection(self.config.pc_mode)
                     && self.meter.reading().score >= 15
                     && self.meter.reference_active(),

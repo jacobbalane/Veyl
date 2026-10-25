@@ -42,7 +42,7 @@ fn relative_map_error(actual: &[Complex<f32>], expected: &[Complex<f32>]) -> f32
 
 #[test]
 fn analytic_maps_preserve_signed_delays_envelope_phase_and_window_correction() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let mut transform = MapTransform::new(&config).unwrap();
     let n = config.window;
     let mut weights = vec![0.0; n / 2 + 1];
@@ -90,7 +90,7 @@ fn physical_path_inference_finds_an_equal_mix_and_reset_relearns_independent_spe
     let config = EngineConfig {
         fast_seconds: 0.005,
         infer_single_path: true,
-        ..EngineConfig::default()
+        ..EngineConfig::specified()
     };
     for rate in [44100, 48000] {
         let mut estimator = EchoEstimator::new(config.clone(), format(rate, 2, 1)).unwrap();
@@ -132,7 +132,7 @@ fn physical_path_inference_finds_an_equal_mix_and_reset_relearns_independent_spe
 
 #[test]
 fn mono_and_independent_stereo_recover_known_echo_paths_at_both_rates() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     for rate in [44100, 48000] {
         let n = config.window;
         let frames = rate as usize / 2;
@@ -205,7 +205,7 @@ fn mono_and_independent_stereo_recover_known_echo_paths_at_both_rates() {
 
 #[test]
 fn fractional_reference_delay_moves_the_echo_peak_in_the_compensating_direction() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let signal = noise(config.window + 32, 23);
     let reference = &signal[32..];
     let microphone = &signal[24..24 + config.window];
@@ -228,7 +228,7 @@ fn fractional_reference_delay_moves_the_echo_peak_in_the_compensating_direction(
 
 #[test]
 fn activity_masks_reject_silence_and_narrow_sound_and_impulses_hold_three_hops() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let n = config.window;
     let mut estimator = EchoEstimator::new(config.clone(), format(48000, 1, 1)).unwrap();
     let silence = vec![0.0; n];
@@ -279,7 +279,7 @@ fn activity_masks_reject_silence_and_narrow_sound_and_impulses_hold_three_hops()
 
 #[test]
 fn coherence_hysteresis_returns_to_mono_and_peak_continuity_does_not_hide_a_missing_path() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let n = config.window;
     let mut estimator = EchoEstimator::new(config.clone(), format(48000, 2, 1)).unwrap();
     let left = noise(n * 80, 37);
@@ -321,7 +321,7 @@ fn a_relative_impulse_gate_holds_a_click_but_not_a_louder_moment_of_the_music() 
     for relative in [false, true] {
         let config = EngineConfig {
             impulse_relative: relative,
-            ..EngineConfig::default()
+            ..EngineConfig::specified()
         };
         let n = config.window;
         let mut estimator = EchoEstimator::new(config, format(48000, 1, 1)).unwrap();
@@ -365,7 +365,7 @@ fn a_relative_impulse_gate_holds_a_click_but_not_a_louder_moment_of_the_music() 
 
 #[test]
 fn echo_distances_count_from_the_nearest_strong_direct_sound() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let (pre, taps) = (config.pre_taps, config.taps);
     // Two microphones' direct sounds, 12 taps apart; the later one is the strongest.
     let maps = |nearer: f32| {

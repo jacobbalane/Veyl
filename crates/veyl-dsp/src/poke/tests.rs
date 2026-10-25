@@ -25,7 +25,7 @@ fn feature(frame: u64, distance: f32, valid: bool) -> MotionFeatures {
 #[test]
 fn approach_turn_retreat_fires_once_with_frame_timing_and_confidence_at_both_rates() {
     for rate in [44100, 48000] {
-        let mut detector = PokeDetector::new(EngineConfig::default(), rate).unwrap();
+        let mut detector = PokeDetector::new(EngineConfig::specified(), rate).unwrap();
         let mut events = vec![];
         for frame in (0..rate as u64).step_by(256) {
             if let Some(event) = detector.process(
@@ -46,7 +46,7 @@ fn approach_turn_retreat_fires_once_with_frame_timing_and_confidence_at_both_rat
 #[test]
 fn slow_shallow_invalid_and_suspended_motion_cannot_fire_and_presets_reset_history() {
     for mode in 0..4 {
-        let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
+        let mut detector = PokeDetector::new(EngineConfig::specified(), 48000).unwrap();
         for (hop, frame) in (0..48000).step_by(256).enumerate() {
             let seconds = frame as f32 / 48000.0;
             let distance = match mode {
@@ -77,7 +77,7 @@ fn presence_hysteresis_cannot_confirm_a_turn_whose_motion_is_below_the_on_thresh
         (Sensitivity::Normal, 8.0),
         (Sensitivity::High, 5.0),
     ] {
-        let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
+        let mut detector = PokeDetector::new(EngineConfig::specified(), 48000).unwrap();
         detector.set_sensitivity(preset);
         for frame in (0..48000).step_by(256) {
             let seconds = frame as f32 / 48000.0;
@@ -93,7 +93,7 @@ fn presence_hysteresis_cannot_confirm_a_turn_whose_motion_is_below_the_on_thresh
 
 #[test]
 fn a_jump_between_echoes_breaks_the_trajectory_and_a_later_real_poke_recovers() {
-    let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
+    let mut detector = PokeDetector::new(EngineConfig::specified(), 48000).unwrap();
     let mut pokes = vec![];
     for frame in (0..96000).step_by(256) {
         let t = frame as f32 / 48000.0;
@@ -125,7 +125,7 @@ fn a_slow_drift_into_position_does_not_dilute_a_fast_approach() {
             distance(seconds - 0.5)
         }
     };
-    let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
+    let mut detector = PokeDetector::new(EngineConfig::specified(), 48000).unwrap();
     let events: Vec<_> = (0..48000_u64)
         .step_by(256)
         .filter_map(|frame| {
@@ -141,4 +141,36 @@ fn a_slow_drift_into_position_does_not_dilute_a_fast_approach() {
         "{}",
         events[0].depth_cm
     );
+}
+
+#[test]
+fn a_gap_defers_a_poke_instead_of_erasing_it_and_reports_it_when_the_deferral_ends() {
+    let mut detector = PokeDetector::new(EngineConfig::specified(), 48000).unwrap();
+    let mut events = vec![];
+    for frame in (0..48000_u64).step_by(256) {
+        let seconds = frame as f32 / 48000.0;
+        // A short gap during the retreat: invalid hops with no distance, and no poke may be
+        // reported until 300 ms after it.
+        let gap = (0.30..0.33).contains(&seconds);
+        if gap {
+            detector.defer_until(frame + 14400);
+        }
+        if let Some(event) = detector.process(feature(frame, distance(seconds), !gap), true) {
+            events.push(event);
+        }
+    }
+    assert_eq!(events.len(), 1);
+    let event = events[0];
+    assert!((event.turn_frame as f32 / 48000.0 - 0.28).abs() < 0.01);
+    assert!(event.detect_frame as f32 / 48000.0 >= 0.62);
+    // Leaving the deferral to a pause still clears everything.
+    let mut paused = PokeDetector::new(EngineConfig::specified(), 48000).unwrap();
+    paused.defer_until(48000);
+    for frame in (0..24000_u64).step_by(256) {
+        assert!(paused
+            .process(feature(frame, distance(frame as f32 / 48000.0), true), true)
+            .is_none());
+    }
+    assert!(paused.process(feature(48000, 20.0, true), false).is_none());
+    assert!(paused.process(feature(48256, 20.0, true), true).is_none());
 }

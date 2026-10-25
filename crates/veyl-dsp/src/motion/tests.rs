@@ -1,7 +1,7 @@
 use super::*;
 fn tracker() -> MotionTracker {
     MotionTracker::new(
-        EngineConfig::default(),
+        EngineConfig::specified(),
         StreamFormat {
             sample_rate: 48000,
             ref_channels: 1,
@@ -98,7 +98,7 @@ fn range_presets_and_channel_power_weights_apply_before_presence() {
     assert_eq!(tracker.z_on, 12.0);
     tracker.reset();
     assert!(tracker.floor().iter().all(|value| *value == 0.0));
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let mut stereo = MotionTracker::new(
         config.clone(),
         StreamFormat {
@@ -197,7 +197,7 @@ fn a_disappeared_background_echo_cannot_hide_a_new_moving_return() {
 
 #[test]
 fn correlated_references_cancel_unobservable_opposite_transfer_changes() {
-    let config = EngineConfig::default();
+    let config = EngineConfig::specified();
     let mut tracker = MotionTracker::new(
         config.clone(),
         StreamFormat {
@@ -240,7 +240,7 @@ fn a_present_hand_keeps_its_track_through_a_stronger_burst_elsewhere() {
         let mut tracker = MotionTracker::new(
             EngineConfig {
                 track_gate_cm: gate,
-                ..EngineConfig::default()
+                ..EngineConfig::specified()
             },
             StreamFormat {
                 sample_rate: 48000,
@@ -281,7 +281,7 @@ fn a_farther_microphone_direct_sound_is_left_out_of_its_motion() {
         ref_channels: 1,
         mic_channels: 2,
     };
-    let mut tracker = MotionTracker::new(EngineConfig::default(), format).unwrap();
+    let mut tracker = MotionTracker::new(EngineConfig::specified(), format).unwrap();
     let (taps, pre) = (tracker.taps, tracker.config.pre_taps);
     // The second microphone's direct sound arrives 30 taps after the nearest one's.
     tracker.set_own_directs(&[Some(0.0), Some(30.0)]);
@@ -322,4 +322,40 @@ fn a_farther_microphone_direct_sound_is_left_out_of_its_motion() {
     assert!((feature.r_peak_cm.unwrap() - 21.46).abs() < 0.5);
     // Only the nearer microphone's unchanged baseline remains at that tap.
     assert!((tracker.normalized_motion()[pre + 32] - 1.0).abs() < 1e-3);
+}
+
+#[test]
+fn a_weak_slow_echo_does_not_raise_the_floor_below_the_learning_fraction() {
+    for (fraction, rises) in [(1.0, true), (0.5, false)] {
+        let mut tracker = MotionTracker::new(
+            EngineConfig {
+                floor_learn_fraction: fraction,
+                ..EngineConfig::specified()
+            },
+            StreamFormat {
+                sample_rate: 48000,
+                ref_channels: 1,
+                mic_channels: 1,
+            },
+        )
+        .unwrap();
+        let (taps, pre) = (tracker.taps, tracker.config.pre_taps);
+        let baseline = vec![Complex::new(0.001, 0.0); taps];
+        for hop in 0..30 {
+            process(&mut tracker, hop * 256, &baseline, true, false);
+        }
+        let k = pre + 60;
+        let floor = tracker.floor()[k];
+        // About z = 6: below the on threshold of 8, above half of it.
+        let mut weak = baseline.clone();
+        weak[k] = Complex::new(0.001 * 6.0_f32.sqrt(), 0.0);
+        for hop in 30..400 {
+            process(&mut tracker, hop * 256, &weak, false, false);
+        }
+        assert_eq!(
+            tracker.floor()[k] > floor * 1.5,
+            rises,
+            "fraction {fraction}"
+        );
+    }
 }

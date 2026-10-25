@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         pc_mode: args[0].starts_with("pc_"),
         fast_seconds: args[3].parse()?,
         floor_relative: args[4].parse()?,
-        ..EngineConfig::default()
+        ..EngineConfig::specified()
     };
     let rendered = scene::render(&scene)?;
     let mut engine = Engine::new(

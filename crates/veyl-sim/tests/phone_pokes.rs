@@ -15,7 +15,7 @@ fn run(
         pc_mode: pc,
         fast_seconds: 0.005,
         infer_single_path: true,
-        ..EngineConfig::default()
+        ..EngineConfig::specified()
     };
     let mut engine = Engine::new(
         config,

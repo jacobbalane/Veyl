@@ -176,6 +176,17 @@ impl SampleRing {
         }
         within_bounds.then_some(coverage)
     }
+    /// Marks each frame of `mask`, starting at `first`, that the ring does not hold.
+    pub(crate) fn mark_missing(&self, first: u64, mask: &mut [bool]) {
+        for (index, missing) in mask.iter_mut().enumerate() {
+            let held = first.checked_add(index as u64).is_some_and(|frame| {
+                self.tags[(frame % self.capacity as u64) as usize] == frame
+                    && frame >= self.oldest()
+                    && self.end.is_some_and(|end| frame < end)
+            });
+            *missing |= !held;
+        }
+    }
     pub fn capture_time(&self, frame: u64) -> Option<i64> {
         let anchor = self
             .anchors
