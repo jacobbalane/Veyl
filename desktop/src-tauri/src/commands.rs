@@ -204,17 +204,24 @@ pub fn delete_recording(state: tauri::State<'_, Runtime>, id: String) -> Result<
 }
 #[tauri::command]
 pub fn open_recordings_folder(state: tauri::State<'_, Runtime>) -> Result<(), String> {
+    open_folder(state.recorder.root())
+}
+#[tauri::command]
+pub fn open_logs_folder(state: tauri::State<'_, Runtime>) -> Result<(), String> {
+    open_folder(&state.logs)
+}
+fn open_folder(path: &std::path::Path) -> Result<(), String> {
     #[cfg(windows)]
     {
         std::process::Command::new("explorer.exe")
-            .arg(explorer_path(state.recorder.root()))
+            .arg(explorer_path(path))
             .spawn()
             .map_err(|_| "open_failed".to_string())?;
         Ok(())
     }
     #[cfg(not(windows))]
     {
-        let _ = state;
+        let _ = path;
         Err("open_failed".into())
     }
 }

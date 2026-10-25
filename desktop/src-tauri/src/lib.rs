@@ -29,6 +29,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 struct Runtime {
     settings: Arc<Mutex<Settings>>,
     settings_path: std::path::PathBuf,
+    logs: std::path::PathBuf,
     /// Serializes settings changes from the interface.
     settings_change: tokio::sync::Mutex<()>,
     actions: Arc<actions::ActionsGate>,
@@ -174,6 +175,7 @@ pub fn run() {
                 .filename_suffix("log")
                 .max_log_files(7)
                 .build(directory.join("logs"))?;
+            let logs = directory.join("logs");
             let (writer, guard) = tracing_appender::non_blocking(log);
             tracing_subscriber::fmt()
                 .with_ansi(false)
@@ -298,6 +300,7 @@ pub fn run() {
             app.manage(Runtime {
                 settings,
                 settings_path,
+                logs,
                 settings_change: tokio::sync::Mutex::new(()),
                 actions,
                 tray,
@@ -358,7 +361,8 @@ pub fn run() {
             commands::get_recording,
             commands::list_recordings,
             commands::delete_recording,
-            commands::open_recordings_folder
+            commands::open_recordings_folder,
+            commands::open_logs_folder
             ,commands::set_source,
             commands::set_pc_devices,
             commands::list_audio_devices
