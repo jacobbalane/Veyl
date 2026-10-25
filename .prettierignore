@@ -8,3 +8,4 @@ package-lock.json
 protocol/test-vectors
 .cache
 lab
+.claude
