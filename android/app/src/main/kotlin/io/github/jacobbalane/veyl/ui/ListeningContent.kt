@@ -3,6 +3,7 @@ package io.github.jacobbalane.veyl.ui
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,7 +19,12 @@ import io.github.jacobbalane.veyl.runtime.CaptureSnapshot
 import io.github.jacobbalane.veyl.runtime.PhoneLinkState
 
 @Composable
-fun ListeningContent(state: CaptureSnapshot, link: PhoneLinkState, onStop: () -> Unit) {
+fun ListeningContent(
+    state: CaptureSnapshot,
+    link: PhoneLinkState,
+    onHelp: () -> Unit,
+    onStop: () -> Unit,
+) {
     Text(stringResource(R.string.listening_channel), style = MaterialTheme.typography.headlineLarge)
     Text(
         if (link.pcName == null) stringResource(R.string.waiting_pc)
@@ -46,5 +52,6 @@ fun ListeningContent(state: CaptureSnapshot, link: PhoneLinkState, onStop: () ->
     if (state.micSilenced)
         Text(stringResource(R.string.mic_silenced), color = MaterialTheme.colorScheme.error)
     if (state.source == "test_sound") Text(stringResource(R.string.test_pause_others))
+    TextButton(onClick = onHelp) { Text(stringResource(R.string.troubleshooting_link)) }
     Button(onClick = onStop) { Text(stringResource(R.string.stop)) }
 }

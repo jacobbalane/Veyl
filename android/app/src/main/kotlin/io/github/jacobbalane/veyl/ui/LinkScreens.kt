@@ -22,6 +22,7 @@ fun PhoneHomeContent(
     settings: () -> Unit,
     allowNetwork: () -> Unit,
     appSettings: () -> Unit,
+    help: () -> Unit,
 ) {
     val link by runtime.link.state.collectAsStateWithLifecycle()
     val prefs by runtime.settings.state.collectAsStateWithLifecycle()
@@ -42,6 +43,7 @@ fun PhoneHomeContent(
     link.pairedName?.let { Text(stringResource(R.string.paired_with, it)) }
     ConnectionError(link.error)
     TextButton(onClick = placement) { Text(stringResource(R.string.placement_link)) }
+    TextButton(onClick = help) { Text(stringResource(R.string.troubleshooting_link)) }
     TextButton(onClick = settings) { Text(stringResource(R.string.settings)) }
 }
 

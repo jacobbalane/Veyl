@@ -205,6 +205,16 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /** The website's troubleshooting guide: one section per tip and error. */
+    private fun openTroubleshooting() {
+        startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                "https://jacobbalane.github.io/Veyl/docs/#troubleshooting".toUri(),
+            ),
+        )
+    }
+
     private fun requestMicrophone() {
         captureError = null
         if (
@@ -499,7 +509,7 @@ class MainActivity : ComponentActivity() {
                                         { folder.launch(null) },
                                     )
                                 active -> {
-                                    ListeningContent(capture, connection) {
+                                    ListeningContent(capture, connection, ::openTroubleshooting) {
                                         ListeningService.stop(this@MainActivity)
                                     }
                                     if (capture.source == "player")
@@ -588,6 +598,7 @@ class MainActivity : ComponentActivity() {
                                         { page = "settings" },
                                         ::allowNetwork,
                                         ::appSettings,
+                                        ::openTroubleshooting,
                                     )
                                 else -> {
                                     Image(
