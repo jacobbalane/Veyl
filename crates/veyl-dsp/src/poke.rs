@@ -125,31 +125,34 @@ impl PokeDetector {
         }
         let turn = turn?;
         let closest = turn.distance?;
+        // The approach begins where the hand closed in deeply and quickly enough. The farthest
+        // point alone would include a slow drift into position and dilute the approach speed.
         let mut approach = None;
         for entry in self
             .history
             .iter()
-            .take_while(|entry| entry.frame <= turn.frame)
+            .take_while(|entry| entry.frame < turn.frame)
         {
-            if let Some(value) = entry.distance {
-                if approach.is_none_or(|old: Entry| value >= old.distance.unwrap()) {
-                    approach = Some(*entry);
-                }
+            let Some(value) = entry.distance else {
+                continue;
+            };
+            let depth = value - closest;
+            let in_frames = turn.frame - entry.frame;
+            if depth >= self.thresholds.0
+                && depth * self.rate as f32 / in_frames as f32 >= self.thresholds.2
+                && (self.minimum..=self.maximum).contains(&(frame - entry.frame))
+                && approach.is_none_or(|(_, deepest)| depth > deepest)
+            {
+                approach = Some((*entry, depth));
             }
         }
-        let approach = approach?;
-        let depth = approach.distance? - closest;
+        let (approach, depth) = approach?;
         let rise = current - closest;
         let duration = frame - approach.frame;
-        let in_frames = turn.frame - approach.frame;
         let out_frames = frame - turn.frame;
-        if depth < self.thresholds.0
-            || rise < self.thresholds.1
+        if rise < self.thresholds.1
             || turn.z < self.z_on
-            || !(self.minimum..=self.maximum).contains(&duration)
-            || in_frames == 0
             || out_frames == 0
-            || depth * self.rate as f32 / (in_frames as f32) < self.thresholds.2
             || rise * self.rate as f32 / (out_frames as f32) < self.thresholds.2
             || !(self.range.0..=self.range.1).contains(&closest)
         {

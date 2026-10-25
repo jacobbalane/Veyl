@@ -2,7 +2,7 @@ use crate::{
     align::{Aligner, LockChange},
     background::Background,
     config::EngineConfig,
-    echo::{direct_peak_near, DirectPeak, EchoEstimator, EchoFrame},
+    echo::{direct_peak_near, nearest_direct, DirectPeak, EchoEstimator, EchoFrame},
     meter::{Meter, MeterReading, SourceStatus},
     motion::{MotionFeatures, MotionInput, MotionTracker},
     poke::{PokeDetector, PokeEvent},
@@ -103,6 +103,29 @@ pub struct Engine {
     jump_streak: u32,
     /// Per microphone: the tracked direct position and where it started.
     residual_direct: Vec<Option<(f64, f64)>>,
+    own_directs: Vec<Option<f64>>,
+}
+/// The strongest tap summed over a microphone's pairs, with a parabolic fraction.
+fn strongest_tap(maps: &[rustfft::num_complex::Complex<f32>], length: usize) -> Option<f64> {
+    let at = |i: usize| {
+        maps.chunks(length)
+            .map(|pair| pair[i].norm_sqr())
+            .sum::<f32>()
+    };
+    let index = (0..length).max_by(|a, b| at(*a).total_cmp(&at(*b)))?;
+    let centre = at(index);
+    if centre <= 1e-20 {
+        return None;
+    }
+    let left = at(index.saturating_sub(1));
+    let right = at((index + 1).min(length - 1));
+    let curvature = 2.0 * centre - left - right;
+    let fraction = if curvature > 1e-20 {
+        (0.5 * (right - left) / curvature).clamp(-0.5, 0.5)
+    } else {
+        0.0
+    };
+    Some(index as f64 + fraction as f64)
 }
 impl Engine {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -151,6 +174,7 @@ impl Engine {
             pending_hand_end: false,
             jump_streak: 0,
             residual_direct: vec![None; format.mic_channels as usize],
+            own_directs: vec![None; format.mic_channels as usize],
             config,
             format,
         })
@@ -561,11 +585,30 @@ impl Engine {
             } else if !held {
                 self.jump_streak = 0;
             }
+            let length =
+                (self.config.pre_taps + self.config.taps) * self.format.ref_channels as usize;
+            for (own, maps) in self
+                .own_directs
+                .iter_mut()
+                .zip(self.background.maps().chunks(length))
+            {
+                // Each microphone's strongest background tap is its own direct sound.
+                *own = strongest_tap(maps, self.config.pre_taps + self.config.taps)
+                    .map(|index| index - self.config.pre_taps as f64);
+            }
+            self.motion.set_own_directs(&self.own_directs);
+            let origin = nearest_direct(
+                self.background.maps(),
+                self.config.pre_taps,
+                self.config.taps,
+                self.config.align_peak_ratio,
+            )
+            .unwrap_or(background.direct.position);
             let features = self.motion.process(MotionInput {
                 frame,
                 dynamic: self.background.dynamic(),
                 normalized: Some(self.background.normalized_maps()),
-                direct_position: background.direct.position,
+                direct_position: origin,
                 direct_energy: background.direct_energy,
                 // Residual motion uses one matched filter against the mean reference.
                 reference_weights: if self.config.residual_motion {

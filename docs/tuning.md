@@ -3,6 +3,66 @@
 M4 is still in progress. These are synthetic PCM measurements, not device performance. No real
 recordings have been supplied, and the installed preview still uses the earlier level host.
 
+## Short-change candidate
+
+[Decision 0021](decisions/0021-short-change-and-steady-tracking.md) adds `change_window = 1024`,
+`change_smooth_bins = 8`, `track_gate_cm = 4` and `impulse_relative` to the residual candidate,
+and corrects the distance origin, each microphone's direct region and the poke's approach start
+for every configuration. Full-duration probe replays, seeds 1–3 (matched / truth, then extra
+detections and median truth-to-detect delay):
+
+| Scenario       | Seed 1        | Seed 2        | Seed 3        | Gate   | Residual (0020) |
+| -------------- | ------------- | ------------- | ------------- | ------ | --------------- |
+| Basic          | 10/10, 115 ms | 10/10, 115 ms | 10/10, 107 ms | fails  | 30/30           |
+| Varied         | 24/30         | 13/30         | 18/30         | fails  | 31/90           |
+| Typing + pokes | 4/10          | 3/10          | 5/10          | fails  | 18/30           |
+| Volume steps   | 6/10          | 6/10          | 6/10, 2 extra | fails  | 21/30           |
+| 50 ppm         | 10/10         | 10/10         | 10/10         | passes | 30/30           |
+| 200 ppm        | 10/10         | 10/10         | 10/10         | passes | 30/30           |
+| Dropouts       | 7/10          | 6/10          | 8/10          | fails  | 19/30           |
+| Compressed16k  | 10/10         | 10/10         | 10/10         | passes | 30/30           |
+| Stereo         | 10/10         | 10/10         | 10/10         | passes | 30/30           |
+| PC             | 9/10          | 10/10         | 10/10         | passes | 17/30           |
+| PC Bluetooth   | 8/10          | 9/10          | 7/10          | fails  | 21/30           |
+
+Still, hover, wave, walking, typing, blocked and gappy produce no detection. No run re-locks,
+raises a model jump or a drift warning, or leaves more than 0.031 taps of direct residual after
+five seconds. 17 of 54 cases fail, against 18. Basic fails only its 80 ms median delay: its
+200 ms retreat covers 4.57 cm of echo distance, so the 2 cm confirmation rise alone takes 87 ms.
+The residual candidate's 51–66 ms came from the vanishing hover echo, not the moving hand.
+
+Diagnostics behind the remaining failures:
+
+- **Varied.** 28, 25 and 22 truth pokes per seed meet Normal's depth and speed thresholds; 24,
+  12 and 15 of those match. Approaches above about 50 cm/s still blur within the 1024-sample
+  segment, and weak turns stay below the turn-strength guard.
+- **Typing with pokes.** Each click holds hops while it crosses the whole 2048-sample window.
+  In one traced poke, 18 of 62 hops were held and the valid fraction fell to 71%, below 80%,
+  although the track followed the hand. Gating on the segment itself is the next candidate.
+- **Volume steps.** The misses follow each ±6 dB step by one or two seconds.
+- **PC Bluetooth.** The relative gate removes the hi-hat holds, but hi-hat bursts at the 40 cm
+  monitor echo can still start a track ahead of the hand.
+
+A hand moving straight toward the phone and back, from `motion_speed` (share of moving hops whose
+strongest echo is within 2 cm of the hand):
+
+| Speed   | Residual (0020) | Short change (0021) |
+| ------- | --------------: | ------------------: |
+| 8 cm/s  |             88% |                100% |
+| 30 cm/s |             81% |                 97% |
+| 50 cm/s |             35% |                 43% |
+| 80 cm/s |              0% |                 17% |
+
+Earlier in the same pass, before own-power whitening and the gate, 512- and 768-sample segments
+kept 76% and 73% at 80 cm/s but lowered mean motion at 8 cm/s from 30 to 13 and 24; PC fell to
+0/10 at 512. With a 768-sample segment and no track gate, whitening by the long-term spectrum
+gave 9 false hover pokes on seed 1, own power over ±2 or ±8 bins 3, and ±24 bins 1. A 2 cm
+track gate lost basic pokes (4/10).
+
+`processing_cost` on the development desktop, ten seconds measured after ten of warm-up, five
+repetitions: defaults 15.6 ms, residual 42.3 ms and short change 57.6 ms per second of audio.
+M4.8's 30 ms budget is not met.
+
 ## Residual candidate
 
 [Decision 0020](decisions/0020-residual-motion.md) adds `residual_motion`. The candidate sets it

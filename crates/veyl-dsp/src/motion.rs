@@ -65,6 +65,8 @@ pub struct MotionTracker {
     distance: Option<f32>,
     row: [f32; 60],
     last: MotionFeatures,
+    /// Per microphone, its own direct sound's tap position, when known.
+    own_directs: Vec<Option<f64>>,
 }
 impl MotionTracker {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -110,8 +112,17 @@ impl MotionTracker {
             distance: None,
             row: [0.0; 60],
             last: MotionFeatures::default(),
+            own_directs: vec![None; format.mic_channels as usize],
             config,
         })
+    }
+    /// A microphone farther from the speaker hears its own direct sound later, inside the echo
+    /// range of the nearest pair. Model errors around that strong sound are not motion, so its
+    /// direct region is left out of that microphone's motion energy.
+    pub fn set_own_directs(&mut self, positions: &[Option<f64>]) {
+        for (own, position) in self.own_directs.iter_mut().zip(positions) {
+            *own = position.filter(|value| value.is_finite());
+        }
     }
     pub fn present(&self) -> bool {
         self.last.present
@@ -199,7 +210,17 @@ impl MotionTracker {
         }
         self.energy.fill(0.0);
         for c in 0..self.mics {
+            let excluded = self.own_directs[c].map(|position| {
+                let centre = position + self.config.pre_taps as f64;
+                (
+                    centre - self.config.direct_before as f64,
+                    centre + self.config.direct_after as f64,
+                )
+            });
             for k in 0..self.taps {
+                if excluded.is_some_and(|(first, last)| (first..=last).contains(&(k as f64))) {
+                    continue;
+                }
                 let mut change = [Complex::default(); 2];
                 for (s, weight) in reference_weights.iter().enumerate().take(self.refs) {
                     let i = (c * self.refs + s) * self.taps + k;
@@ -304,7 +325,15 @@ impl MotionTracker {
                 self.scratch[count] = self.smoothed[k];
                 count += 1;
                 sum += self.smoothed[k];
-                if best.is_none_or(|previous| self.smoothed[k] > self.smoothed[previous]) {
+                // A present hand moves only a few millimetres per hop, so its echo is sought
+                // near where it was; a brief burst elsewhere cannot capture the track.
+                let gated = match (self.last.present, self.distance) {
+                    (true, Some(track)) if self.config.track_gate_cm > 0.0 => {
+                        (distance - track).abs() <= self.config.track_gate_cm
+                    }
+                    _ => true,
+                };
+                if gated && best.is_none_or(|previous| self.smoothed[k] > self.smoothed[previous]) {
                     best = Some(k);
                 }
             }

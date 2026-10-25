@@ -5,7 +5,9 @@ use crate::{
     StreamFormat,
 };
 use rustfft::num_complex::Complex;
+use short::{ShortChange, ShortInputs};
 
+mod short;
 #[derive(Clone, Copy, Debug)]
 pub struct BackgroundFrame {
     pub direct: DirectPeak,
@@ -34,6 +36,7 @@ pub struct Background {
     settle_frames: u64,
     presence_frames: u64,
     residual: Residual,
+    short: Option<ShortChange>,
 }
 /// Buffers for measuring change from the microphone residual; see `Background::residual`.
 struct Residual {
@@ -51,6 +54,9 @@ struct Residual {
     errors: Vec<Complex<f32>>,
     delays: Vec<Option<f64>>,
     hops: u32,
+    /// Per microphone, for short change measurements.
+    fits: Vec<Option<(Complex<f64>, Complex<f64>)>>,
+    mean_gains: Vec<Complex<f32>>,
 }
 impl Residual {
     fn clear(&mut self) {
@@ -61,6 +67,8 @@ impl Residual {
         self.mean.fill(Complex::default());
         self.learn.fill(Complex::default());
         self.delays.fill(None);
+        self.fits.fill(None);
+        self.mean_gains.fill(Complex::new(1.0, 0.0));
         self.hops = 0;
     }
 }
@@ -88,6 +96,8 @@ impl Background {
             errors: vec![Complex::default(); bins],
             delays: vec![None; format.mic_channels as usize],
             hops: 0,
+            fits: vec![None; format.mic_channels as usize],
+            mean_gains: vec![Complex::new(1.0, 0.0); format.mic_channels as usize],
         };
         Ok(Self {
             rate: format.sample_rate,
@@ -109,6 +119,7 @@ impl Background {
             settle_frames: (config.settle_seconds * format.sample_rate as f32).ceil() as u64,
             presence_frames: 0,
             residual,
+            short: ShortChange::new(&config, format.ref_channels as usize),
             config,
         })
     }
@@ -295,11 +306,31 @@ impl Background {
         if let Some(echo) = echo {
             self.residual(echo);
             self.transform
-                .render(&self.residual.change, weights, &mut self.dynamic)?;
-            self.transform
-                .render(&self.residual.current, weights, &mut self.normalized_maps)?;
-            self.transform
                 .render(&self.residual.mean, weights, &mut self.mean_maps)?;
+            if let Some(short) = self.short.as_mut() {
+                short.process(
+                    echo,
+                    ShortInputs {
+                        transfer: &self.transfer,
+                        gains: &self.gains,
+                        mean_gains: &self.residual.mean_gains,
+                        fits: &self.residual.fits,
+                        refs: self.residual.refs,
+                        bins: self.bins,
+                    },
+                    &self.mean_maps,
+                    &mut self.dynamic,
+                    &mut self.normalized_maps,
+                );
+            } else {
+                self.transform
+                    .render(&self.residual.change, weights, &mut self.dynamic)?;
+                self.transform.render(
+                    &self.residual.current,
+                    weights,
+                    &mut self.normalized_maps,
+                )?;
+            }
         }
         self.previous_gains.copy_from_slice(&self.gains);
         self.presence_frames = if hand_present {
@@ -430,6 +461,7 @@ impl Background {
                 mean_gain += gain(first + s);
             }
             mean_gain /= channels as f32;
+            state.mean_gains[c] = mean_gain;
             for bin in 0..bins {
                 state.predicted[bin] = Complex::default();
                 state.errors[bin] = Complex::default();
@@ -444,6 +476,7 @@ impl Background {
                 state.errors[bin] = echo.microphone(c, bin) - state.predicted[bin];
             }
             let fit = whole_field_fit(&state.predicted, &state.errors, |bin| echo.band(bin));
+            state.fits[c] = fit;
             // errors ~ -j w delay (1 + a) P for a field arriving `delay` frames late. A
             // background that has just started cannot time the field yet.
             state.delays[c] = fit

@@ -55,7 +55,9 @@ FFT makes an analytic map, corrected for the Hann window's autocorrelation at ea
 The caller supplies the background transfer functions for microphone prediction. A bounded
 two-second residual history identifies impulses above six times its median. An impulse holds the
 averages/maps for that hop and the next two; the frame also reports the gated fraction for the
-later meter. Enable this gate only after one second of Running.
+later meter. Enable this gate only after one second of Running. With the opt-in
+`impulse_relative`, the history holds the residual divided by the predicted power instead: a
+louder moment of the music raises both, while a click raises only the residual.
 
 Construction plans FFTs and allocates working buffers. Processing reuses them, including the
 median scratch. `EngineConfig::from_toml` supplies defaults, rejects unknown fields and validates
@@ -74,6 +76,21 @@ every 100 ms even when the engine is waiting for sound. Snapshot includes the la
 
 Updating only media volume preserves a pending gesture: direct-path normalization handles that
 gain change. Changing source, route, capture or microphone state still clears pending gestures.
+
+Echo distances count from the earliest direct sound at least half as strong, in amplitude, as
+the strongest: the nearest speaker and microphone. A farther microphone hears its own direct
+sound inside that range, so its direct region (8 taps before, 6 after its strongest background
+tap) is left out of its motion energy. A poke's approach starts at the deepest earlier point
+that still meets the depth, approach-speed and duration rules, so a slow drift into position
+cannot dilute a fast approach.
+
+In residual mode, `change_window` measures change over that many microphone samples at the
+centre of the window. Each hop predicts those samples from the background by exact linear
+convolution, correlates what remains with the mean reference, and renders the change and
+current-field maps with an analytic inverse FFT of `EngineConfig::change_size()` points. With
+`change_smooth_bins`, change is whitened by the segment's own power smoothed across that many
+bins on each side. While a hand is present, `track_gate_cm` limits the peak search to that
+distance around its track. See [decision 0021](decisions/0021-short-change-and-steady-tracking.md).
 
 The physical-path inference experiment is opt-in through TOML. Coherence smoothing is independent
 of fast transfer smoothing. The default fast time remains 40 ms; a 5 ms candidate detects the

@@ -77,9 +77,28 @@ Use `--sensitivity=low`, `--sensitivity=normal` or `--sensitivity=high` after th
 an existing preset. One preset applies to every case in that run and is included in each JSON
 measurement. The default remains Normal. No preset is selected from truth labels.
 
-The probe runs the residual candidate of [decision 0020](decisions/0020-residual-motion.md).
-`--set=key=value` overrides one engine parameter for every case and rejects unknown names; for
-example, `--set=residual_motion=false --set=fast_seconds=0.005 --set=floor_relative=1e-6
---set=impulse_ratio=6` restores the earlier 5 ms candidate. `--explain` prints, for each missed
-truth poke, the derived turn, approach and retreat the detector saw. It reads features only and
-never prints audio.
+The probe runs the short-change candidate of
+[decision 0021](decisions/0021-short-change-and-steady-tracking.md). `--set=key=value` overrides
+one engine parameter for every case and rejects unknown names; for example,
+`--set=change_window=0 --set=change_smooth_bins=0 --set=track_gate_cm=0
+--set=impulse_relative=false` restores the residual candidate of
+[decision 0020](decisions/0020-residual-motion.md). `--explain` prints, for each missed truth
+poke, the derived turn, approach and retreat the detector saw. `--trace=START..END` prints each
+hop's features in that time span beside the simulator's true echo distance, marking held and
+suspended hops. Both read features only and never print audio.
+
+Each measurement also reports how many truth pokes are deep and fast enough for the selected
+sensitivity's own thresholds, and how many of those matched. That count is a diagnostic; the
+gesture checks keep the plan's recall over every truth poke.
+
+Two more probes measure the engine itself:
+
+```powershell
+cargo run --release -p veyl-lab --example motion_speed -- 8 30 50 80
+cargo run --release -p veyl-sim --example processing_cost
+```
+
+`motion_speed` moves a hand straight toward the phone and back at each speed in cm/s and reports
+how often the strongest echo sits on it. `processing_cost` times each candidate in milliseconds
+per second of audio on the development machine; it does not establish the target laptop's
+budget.

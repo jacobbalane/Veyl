@@ -289,3 +289,77 @@ fn residual_change_learns_correlated_stereo_paths_and_finds_a_new_echo() {
         "unchanged scene {quiet} against echo {size}"
     );
 }
+
+#[test]
+fn short_change_keeps_a_fast_moving_echo_that_the_whole_window_cancels() {
+    let format = StreamFormat {
+        sample_rate: 48000,
+        ref_channels: 1,
+        mic_channels: 1,
+    };
+    let length = 48000 * 3;
+    let reference = noise(length, 0x5eed_0fec_4012_3456);
+    let start = 48000 * 2;
+    // One tap closer every 256 samples: about 67 cm/s of echo distance, a quick poke.
+    let delay = |i: usize| 120 - ((i.saturating_sub(start)) / 256).min(80);
+    let microphone: Vec<_> = (0..length)
+        .map(|i| {
+            let at = |delay: usize| i.checked_sub(delay).map_or(0.0, |j| reference[j]);
+            let mut value = at(0) + 0.3 * at(10);
+            if i >= start {
+                value += 0.02 * at(delay(i));
+            }
+            value
+        })
+        .collect();
+    let mut peaks = vec![];
+    for change_window in [0, 1024] {
+        let config = EngineConfig {
+            residual_motion: true,
+            settle_seconds: 0.3,
+            change_window,
+            change_smooth_bins: 8,
+            ..EngineConfig::default()
+        };
+        let (n, hop, pre) = (config.window, config.hop, config.pre_taps);
+        let mut echo = EchoEstimator::new(config.clone(), format).unwrap();
+        let mut background = Background::new(config.clone(), format).unwrap();
+        let (mut sum, mut count, mut located) = (0.0, 0, 0);
+        let mut end = n;
+        while end <= length {
+            echo.process(
+                &reference[end - n..end],
+                &microphone[end - n..end],
+                0.0,
+                None,
+                false,
+            )
+            .unwrap();
+            background
+                .process_residual(&echo, echo.weights(), false, false)
+                .unwrap();
+            // The moving echo, while every sample of the window sees it move.
+            if end >= start + n && delay(end) > 50 {
+                let expected = delay(end - n / 2) + pre;
+                let taps = background.dynamic();
+                sum += (expected - 2..=expected + 2)
+                    .map(|k| taps[k].norm())
+                    .fold(0.0_f32, f32::max);
+                let strongest = (pre + 20..pre + config.taps)
+                    .max_by(|a, b| taps[*a].norm().total_cmp(&taps[*b].norm()))
+                    .unwrap();
+                located += usize::from(strongest.abs_diff(expected) <= 2);
+                count += 1;
+            }
+            end += hop;
+        }
+        peaks.push((sum / count as f32, located as f32 / count as f32));
+    }
+    let (whole, short) = (peaks[0], peaks[1]);
+    // The whole window spans eight taps of movement and mostly loses the echo; the segment
+    // spans four, keeps more of it and always finds where it is.
+    assert!(
+        short.0 > 1.5 * whole.0 && short.1 > 0.9 && whole.1 < 0.5,
+        "moving echo (size, located): short {short:?} against whole window {whole:?}"
+    );
+}

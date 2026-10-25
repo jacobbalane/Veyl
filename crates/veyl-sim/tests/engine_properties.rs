@@ -325,6 +325,21 @@ fn warmed_engine_allocates_nothing_and_replays_all_outputs_bit_identically() {
                 ..EngineConfig::default()
             },
         ),
+        (
+            "short",
+            EngineConfig {
+                infer_single_path: true,
+                resample_reference: true,
+                residual_motion: true,
+                floor_relative: 1e-8,
+                impulse_ratio: 12.0,
+                impulse_relative: true,
+                change_window: 1024,
+                change_smooth_bins: 8,
+                track_gate_cm: 4.0,
+                ..EngineConfig::default()
+            },
+        ),
     ];
     for (candidate, config) in candidates {
         assert_eq!(config.recheck_seconds, 5.0);

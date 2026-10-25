@@ -233,3 +233,93 @@ fn correlated_references_cancel_unobservable_opposite_transfer_changes() {
         }
     }
 }
+
+#[test]
+fn a_present_hand_keeps_its_track_through_a_stronger_burst_elsewhere() {
+    for gate in [0.0, 4.0] {
+        let mut tracker = MotionTracker::new(
+            EngineConfig {
+                track_gate_cm: gate,
+                ..EngineConfig::default()
+            },
+            StreamFormat {
+                sample_rate: 48000,
+                ref_channels: 1,
+                mic_channels: 1,
+            },
+        )
+        .unwrap();
+        let (taps, pre) = (tracker.taps, tracker.config.pre_taps);
+        let baseline = vec![Complex::new(0.001, 0.0); taps];
+        for hop in 0..30 {
+            process(&mut tracker, hop * 256, &baseline, true, false);
+        }
+        let mut hand = baseline.clone();
+        hand[pre + 60] = Complex::new(0.02, 0.0);
+        for hop in 30..40 {
+            let present = process(&mut tracker, hop * 256, &hand, false, false).present;
+            assert_eq!(present, hop >= 32);
+        }
+        // A brief, stronger burst 14 cm farther away, such as a transient at a static echo.
+        let mut burst = hand.clone();
+        burst[pre + 100] = Complex::new(0.05, 0.0);
+        let peak = process(&mut tracker, 40 * 256, &burst, false, false)
+            .r_peak_cm
+            .unwrap();
+        if gate > 0.0 {
+            assert!((peak - 21.46).abs() < 0.5, "gated peak at {peak} cm");
+        } else {
+            assert!((peak - 35.77).abs() < 0.5, "ungated peak at {peak} cm");
+        }
+    }
+}
+
+#[test]
+fn a_farther_microphone_direct_sound_is_left_out_of_its_motion() {
+    let format = StreamFormat {
+        sample_rate: 48000,
+        ref_channels: 1,
+        mic_channels: 2,
+    };
+    let mut tracker = MotionTracker::new(EngineConfig::default(), format).unwrap();
+    let (taps, pre) = (tracker.taps, tracker.config.pre_taps);
+    // The second microphone's direct sound arrives 30 taps after the nearest one's.
+    tracker.set_own_directs(&[Some(0.0), Some(30.0)]);
+    let mut maps = vec![Complex::new(0.001, 0.0); 2 * taps];
+    for hop in 0..30 {
+        tracker
+            .process(MotionInput {
+                frame: hop * 256,
+                dynamic: &maps,
+                normalized: None,
+                direct_position: 0.0,
+                direct_energy: 1.0,
+                reference_weights: [1.0, 0.0],
+                reference_cross: Complex::default(),
+                settling: true,
+                held: false,
+                energy_floor: false,
+            })
+            .unwrap();
+    }
+    // Model error around the farther microphone's own direct sound, and a hand farther out.
+    maps[taps + pre + 32] = Complex::new(0.05, 0.0);
+    maps[pre + 60] = Complex::new(0.02, 0.0);
+    let feature = tracker
+        .process(MotionInput {
+            frame: 30 * 256,
+            dynamic: &maps,
+            normalized: None,
+            direct_position: 0.0,
+            direct_energy: 1.0,
+            reference_weights: [1.0, 0.0],
+            reference_cross: Complex::default(),
+            settling: false,
+            held: false,
+            energy_floor: false,
+        })
+        .unwrap();
+    assert!((feature.r_peak_cm.unwrap() - 21.46).abs() < 0.5);
+    // Only the nearer microphone's unchanged baseline remains at that tap.
+    assert!((tracker.normalized_motion()[pre + 32] - 1.0).abs() < 1e-3);
+}

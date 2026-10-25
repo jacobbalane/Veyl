@@ -315,3 +315,72 @@ fn coherence_hysteresis_returns_to_mono_and_peak_continuity_does_not_hide_a_miss
     peaks[config.pre_taps] = Complex::new(0.1, 0.0);
     assert!((select(&peaks).position - 15.0).abs() < 0.01);
 }
+
+#[test]
+fn a_relative_impulse_gate_holds_a_click_but_not_a_louder_moment_of_the_music() {
+    for relative in [false, true] {
+        let config = EngineConfig {
+            impulse_relative: relative,
+            ..EngineConfig::default()
+        };
+        let n = config.window;
+        let mut estimator = EchoEstimator::new(config, format(48000, 1, 1)).unwrap();
+        let reference = noise(n, 29);
+        let microphone: Vec<_> = reference.iter().map(|v| v * 0.5).collect();
+        for _ in 0..64 {
+            estimator
+                .process(&reference, &microphone, 0.0, None, false)
+                .unwrap();
+        }
+        // A background that is 5% off leaves an error in proportion to the music.
+        let background: Vec<_> = estimator.transfer().iter().map(|v| v * 1.05).collect();
+        for _ in 0..96 {
+            estimator
+                .process(&reference, &microphone, 0.0, Some(&background), false)
+                .unwrap();
+        }
+        let louder: Vec<_> = reference.iter().map(|v| v * 8.0).collect();
+        let heard: Vec<_> = microphone.iter().map(|v| v * 8.0).collect();
+        let loud = estimator
+            .process(&louder, &heard, 0.0, Some(&background), true)
+            .unwrap();
+        assert_eq!(loud.impulse, !relative, "relative {relative}");
+        for _ in 0..3 {
+            estimator
+                .process(&reference, &microphone, 0.0, Some(&background), true)
+                .unwrap();
+        }
+        // Sound the reference did not cause, as loud as the music itself.
+        let click: Vec<_> = microphone
+            .iter()
+            .zip(noise(n, 31))
+            .map(|(m, c)| m + c)
+            .collect();
+        let held = estimator
+            .process(&reference, &click, 0.0, Some(&background), true)
+            .unwrap();
+        assert!(held.impulse, "relative {relative}");
+    }
+}
+
+#[test]
+fn echo_distances_count_from_the_nearest_strong_direct_sound() {
+    let config = EngineConfig::default();
+    let (pre, taps) = (config.pre_taps, config.taps);
+    // Two microphones' direct sounds, 12 taps apart; the later one is the strongest.
+    let maps = |nearer: f32| {
+        let mut maps = vec![Complex::default(); pre + taps];
+        for (centre, size) in [(pre + 2, nearer), (pre + 14, 1.0)] {
+            for offset in -2_i64..=2 {
+                let k = (centre as i64 + offset) as usize;
+                maps[k] += Complex::new(size * (1.0 - 0.3 * offset.abs() as f32), 0.0);
+            }
+        }
+        maps
+    };
+    let origin = |nearer| maps::nearest_direct(&maps(nearer), pre, taps, 0.5).unwrap();
+    assert!((origin(0.6) - 2.0).abs() < 0.01);
+    // Weaker than half the strongest amplitude, it is not a direct sound.
+    assert!((origin(0.4) - 14.0).abs() < 0.01);
+    assert!(maps::nearest_direct(&vec![Complex::default(); pre + taps], pre, taps, 0.5).is_none());
+}

@@ -113,3 +113,32 @@ fn a_jump_between_echoes_breaks_the_trajectory_and_a_later_real_poke_recovers() 
     assert_eq!(pokes.len(), 1);
     assert!(pokes[0].turn_frame > 48000);
 }
+
+#[test]
+fn a_slow_drift_into_position_does_not_dilute_a_fast_approach() {
+    // 4 cm/s for 0.6 s, then the basic poke. From the farthest point the average approach
+    // speed is below 10 cm/s; the poke's own approach is 33 cm/s.
+    let track = |seconds: f32| {
+        if seconds < 0.6 {
+            22.4 - 4.0 * seconds
+        } else {
+            distance(seconds - 0.5)
+        }
+    };
+    let mut detector = PokeDetector::new(EngineConfig::default(), 48000).unwrap();
+    let events: Vec<_> = (0..48000_u64)
+        .step_by(256)
+        .filter_map(|frame| {
+            detector.process(feature(frame, track(frame as f32 / 48000.0), true), true)
+        })
+        .collect();
+    assert_eq!(events.len(), 1);
+    assert!((events[0].turn_frame as f32 / 48000.0 - 0.78).abs() < 0.01);
+    // The deepest approach that still averages 10 cm/s starts 0.07 s into the drift: 7.1 cm,
+    // where the whole drift would have given 7.4 cm at 9.5 cm/s and no poke.
+    assert!(
+        (7.0..=7.3).contains(&events[0].depth_cm),
+        "{}",
+        events[0].depth_cm
+    );
+}

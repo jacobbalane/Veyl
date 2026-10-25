@@ -3,8 +3,8 @@ mod gate;
 mod maps;
 use crate::{config::EngineConfig, StreamFormat};
 use gate::ImpulseGate;
-pub(crate) use maps::direct_peak_near;
 pub use maps::{direct_peak, DirectPeak, MapTransform};
+pub(crate) use maps::{direct_peak_near, nearest_direct};
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::{f32::consts::TAU, sync::Arc};
 
@@ -68,6 +68,9 @@ pub struct EchoEstimator {
     power_hops: u32,
     mean_power: Vec<f32>,
     mean_hops: u32,
+    /// This hop's reference then microphone samples, kept only for short change measurements.
+    signals: Vec<f32>,
+    fraction: f64,
 }
 impl EchoEstimator {
     pub fn new(config: EngineConfig, format: StreamFormat) -> Result<Self, &'static str> {
@@ -142,6 +145,12 @@ impl EchoEstimator {
             power_hops: 0,
             mean_power: vec![0.0; bins],
             mean_hops: 0,
+            signals: if config.residual_motion && config.change_window > 0 {
+                vec![0.0; n * (refs + mics)]
+            } else {
+                vec![]
+            },
+            fraction: 0.0,
             config,
             format,
         })
@@ -240,6 +249,21 @@ impl EchoEstimator {
             self.mean_power[bin] += mean_alpha * (power - self.mean_power[bin]);
         }
     }
+    /// The window's samples of one reference input channel, before the analysis window.
+    pub(crate) fn reference_signal(&self, channel: usize) -> &[f32] {
+        &self.signals[channel * self.n..(channel + 1) * self.n]
+    }
+    pub(crate) fn microphone_signal(&self, channel: usize) -> &[f32] {
+        let start = (self.refs + channel) * self.n;
+        &self.signals[start..start + self.n]
+    }
+    pub(crate) fn reference_channels(&self) -> usize {
+        self.refs
+    }
+    /// The fractional reference delay applied to this hop's spectra, in frames.
+    pub(crate) fn fractional_delay(&self) -> f64 {
+        self.fraction
+    }
     pub(crate) fn reference(&self, channel: usize, bin: usize) -> Complex<f32> {
         if self.mode == ReferenceMode::Mono && self.refs == 2 {
             (self.x[bin] + self.x[self.n + bin]) * 0.5
@@ -269,6 +293,12 @@ impl EchoEstimator {
         {
             return Err("Invalid echo-estimation window.");
         }
+        if !self.signals.is_empty() {
+            let (references, microphones) = self.signals.split_at_mut(reference.len());
+            references.copy_from_slice(reference);
+            microphones.copy_from_slice(microphone);
+        }
+        self.fraction = fractional_delay;
         for (input, output) in [(reference, &mut self.x), (microphone, &mut self.y)] {
             for (signal, spectrum) in input.chunks(self.n).zip(output.chunks_mut(self.n)) {
                 for i in 0..self.n {
@@ -290,7 +320,16 @@ impl EchoEstimator {
             }
         }
         let (predicted_power, residual_power) = self.prediction(background);
-        let impulse = self.gate.observe(residual_power, impulse_enabled);
+        // A louder moment of the music raises the model's error with it; a click or knock is
+        // sound the reference did not cause, so it raises the residual relative to the prediction.
+        let impulse = self.gate.observe(
+            if self.config.impulse_relative {
+                residual_power / predicted_power.max(1e-30)
+            } else {
+                residual_power
+            },
+            impulse_enabled,
+        );
         let previous = self.mode;
         let coherence = if !impulse {
             self.update_coherence()

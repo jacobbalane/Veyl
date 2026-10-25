@@ -1,6 +1,7 @@
 //! Development probe for gesture gates. This is not the completed M4 acceptance suite.
 //! `--set=key=value` overrides an engine parameter; `--explain` describes each missed poke
-//! from the derived features only.
+//! from the derived features only; `--trace=START..END` prints each hop's features beside the
+//! simulator's true echo distance.
 use std::{env, error::Error};
 use veyl_dsp::{config::EngineConfig, Sensitivity};
 use veyl_lab::{analysis, recording::Input};
@@ -18,9 +19,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut cases = vec![];
     let mut overrides = vec![];
     let mut explain = false;
+    let mut trace = None;
     for argument in arguments.iter().skip(1) {
         if argument == "--explain" {
             explain = true;
+        } else if let Some(value) = argument.strip_prefix("--trace=") {
+            let (start, end) = value.split_once("..").ok_or("Use --trace=START..END.")?;
+            trace = Some((start.parse::<f64>()?, end.parse::<f64>()?));
         } else if let Some(value) = argument.strip_prefix("--set=") {
             let (key, value) = value.split_once('=').ok_or("Use --set=key=value.")?;
             overrides.push((key.to_owned(), value.to_owned()));
@@ -65,7 +70,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut failed = 0;
     for name in cases {
         let scene = scenarios::scene(name, seed, None)?;
-        let mut input = Input::generated(scene::render(&scene)?);
+        let rendered = scene::render(&scene)?;
+        // A diagnostic, not a gate: the truth pokes whose echo-distance depth and speeds meet
+        // the selected sensitivity's own thresholds. Truth geometry, never sensing output,
+        // decides.
+        let detectable: Vec<u64> = match &scene.movers.first() {
+            Some(scene::Mover::Pokes(gestures)) => gestures
+                .iter()
+                .zip(&rendered.labels)
+                .filter(|(gesture, label)| {
+                    label.depth_cm >= poke_in_cm
+                        && label.depth_cm as f64 * 1000.0 / gesture.approach_ms >= poke_v_min as f64
+                        && label.depth_cm as f64 * 1000.0 / gesture.retreat_ms >= poke_v_min as f64
+                })
+                .map(|(_, label)| label.turn_frame)
+                .collect(),
+            _ => vec![],
+        };
+        let truth = rendered.truth.clone();
+        let mut input = Input::generated(rendered);
         let pc = name.starts_with("pc_");
         input.meta.device["mode"] = if pc { "pc" } else { "phone" }.into();
         input.meta.device["sound_source"] = if name == "blocked" {
@@ -83,7 +106,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         .into();
         input.meta.device["media_volume"] = scene.volume.into();
-        // The residual candidate (decision 0020). The earlier 5 ms candidate is
+        // The short-change candidate (decision 0021). The residual candidate of decision 0020 is
+        // --set=change_window=0 --set=change_smooth_bins=0 --set=track_gate_cm=0
+        // --set=impulse_relative=false. The earlier 5 ms candidate additionally sets
         // --set=residual_motion=false --set=fast_seconds=0.005 --set=floor_relative=1e-6
         // --set=impulse_ratio=6.
         let mut config = serde_json::to_value(EngineConfig {
@@ -92,6 +117,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             residual_motion: true,
             floor_relative: 1e-8,
             impulse_ratio: 12.0,
+            impulse_relative: true,
+            change_window: 1024,
+            change_smooth_bins: 8,
+            track_gate_cm: 4.0,
             z_on: sensitivity.z_on(),
             poke_in_cm,
             poke_out_cm,
@@ -110,6 +139,47 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.validate()?;
         let run = analysis::evaluate(&input, config, true)?;
         let pokes = &run.report.pokes;
+        if let Some((start, end)) = trace {
+            // Derived features beside the simulator's true echo distance, one line per hop.
+            let rate = scene.fs as f64;
+            for row in &run.features {
+                let t = row.feature.frame as f64 / rate;
+                if t < start || t > end {
+                    continue;
+                }
+                let actual = truth
+                    .iter()
+                    .filter(|sample| sample.mover == 0)
+                    .min_by_key(|sample| sample.frame.abs_diff(row.feature.frame))
+                    .map(|sample| sample.echo_distance_m * 100.0);
+                let f = &row.feature;
+                println!(
+                    "{t:.3} truth {:>5.1} peak {:>5} track {:>5} z {:>6.1} peaky {:>5.1} present {} {}",
+                    actual.unwrap_or(f32::NAN),
+                    f.r_peak_cm.map_or("-".into(), |v| format!("{v:.1}")),
+                    f.distance_cm.map_or("-".into(), |v| format!("{v:.1}")),
+                    f.z_max,
+                    f.peakiness,
+                    u8::from(f.present),
+                    if !f.valid {
+                        "held"
+                    } else if row.suspended {
+                        "suspended"
+                    } else {
+                        ""
+                    },
+                );
+            }
+            for poke in &run.pokes {
+                let t = poke.turn_frame as f64 / rate;
+                if t >= start && t <= end {
+                    println!(
+                        "poke turn {t:.3} depth {:.1} at {:.1}",
+                        poke.depth_cm, poke.distance_cm
+                    );
+                }
+            }
+        }
         if explain {
             let rate = scene.fs as f64;
             for label in input
@@ -194,6 +264,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 );
             }
         }
+        // One-to-one matches within the simulator's 0.15 s truth window.
+        let window = (0.15 * scene.fs as f64) as u64;
+        let mut used = vec![false; run.pokes.len()];
+        let detectable_matched = detectable
+            .iter()
+            .filter(|&&truth| {
+                let found = (0..run.pokes.len())
+                    .filter(|&i| !used[i] && run.pokes[i].turn_frame.abs_diff(truth) <= window)
+                    .min_by_key(|&i| run.pokes[i].turn_frame.abs_diff(truth));
+                if let Some(i) = found {
+                    used[i] = true;
+                }
+                found.is_some()
+            })
+            .count();
         let mut failures = vec![];
         let mut require = |passes: bool, condition: &'static str| {
             if !passes {
@@ -272,7 +357,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!(
             "{}",
             serde_json::json!({"scenario":name,"seed":seed,"seconds":scene.seconds,"sensitivity":sensitivity,
-            "passed_gesture_checks":passed,"failures":failures,"pokes":pokes,"engine":run.report.engine})
+            "passed_gesture_checks":passed,"failures":failures,"pokes":pokes,"engine":run.report.engine,
+            "detectable":{"truth":detectable.len(),"matched":detectable_matched}})
         );
     }
     if failed > 0 {

@@ -20,11 +20,20 @@ pub struct EngineConfig {
     pub motion_seconds: f32,
     pub reference_power_seconds: f32,
     pub residual_settle_seconds: f32,
+    /// Residual mode: microphone samples per change measurement, centred in the window. Zero
+    /// measures change over the whole window.
+    pub change_window: usize,
+    /// Short change measurements: half-width in bins of the segment's own power used to
+    /// whiten change. Zero uses the long-term reference spectrum.
+    pub change_smooth_bins: usize,
     pub activity_db: f32,
     pub activity_bins: usize,
     pub mono_to_stereo: f32,
     pub stereo_to_mono: f32,
     pub impulse_ratio: f32,
+    /// Compare the residual relative to the predicted power with its median, rather than the
+    /// residual alone.
+    pub impulse_relative: bool,
     pub impulse_hold_hops: usize,
     pub settle_seconds: f32,
     pub reset_settle_seconds: f32,
@@ -45,6 +54,9 @@ pub struct EngineConfig {
     pub presence_on_hops: usize,
     pub presence_off_hops: usize,
     pub distance_smooth_seconds: f32,
+    /// While a hand is present, its echo is sought within this distance of the track. Zero
+    /// searches the whole range every hop.
+    pub track_gate_cm: f32,
     pub range_min_cm: f32,
     pub range_max_cm: f32,
     pub temperature_c: f32,
@@ -92,11 +104,14 @@ impl Default for EngineConfig {
             motion_seconds: 0.005,
             reference_power_seconds: 0.5,
             residual_settle_seconds: 0.05,
+            change_window: 0,
+            change_smooth_bins: 0,
             activity_db: 30.0,
             activity_bins: 9,
             mono_to_stereo: 0.95,
             stereo_to_mono: 0.98,
             impulse_ratio: 6.0,
+            impulse_relative: false,
             impulse_hold_hops: 2,
             settle_seconds: 1.5,
             reset_settle_seconds: 0.5,
@@ -117,6 +132,7 @@ impl Default for EngineConfig {
             presence_on_hops: 3,
             presence_off_hops: 6,
             distance_smooth_seconds: 0.015,
+            track_gate_cm: 0.0,
             range_min_cm: 4.0,
             range_max_cm: 40.0,
             temperature_c: 20.0,
@@ -147,6 +163,11 @@ impl Default for EngineConfig {
     }
 }
 impl EngineConfig {
+    /// The transform size for a short change measurement: the segment plus room for every tap
+    /// on both sides, so each correlation lag reads real reference samples.
+    pub fn change_size(&self) -> usize {
+        (self.change_window + 2 * self.pre_taps.max(self.taps)).next_power_of_two()
+    }
     pub fn from_toml(text: &str) -> Result<Self, &'static str> {
         if text.len() > 65536 {
             return Err("Engine configuration is too large.");
@@ -209,6 +230,10 @@ impl EngineConfig {
                 .is_none_or(|taps| taps > self.window / 2)
             || self.pre_taps == 0
             || self.taps == 0
+            || (self.change_window != 0
+                && (!self.change_window.is_multiple_of(32)
+                    || self.change_window < 128
+                    || self.change_size() > self.window))
             || !(4..=16).contains(&self.ring_seconds)
             || positive
                 .iter()
@@ -256,6 +281,8 @@ impl EngineConfig {
             || !(1..=1000).contains(&self.presence_on_hops)
             || !(1..=1000).contains(&self.presence_off_hops)
             || self.distance_smooth_seconds > 1.0
+            || !self.track_gate_cm.is_finite()
+            || !(0.0..=60.0).contains(&self.track_gate_cm)
             || self.range_min_cm >= self.range_max_cm
             || self.range_max_cm > 60.0
             || !self.temperature_c.is_finite()
@@ -326,6 +353,18 @@ mod tests {
             "align_max_missing_fraction = 0.0\nalign_max_gap_ms = 0.0"
         )
         .is_ok());
+        // A short change segment needs room for every tap inside the window.
+        for text in [
+            "change_window = 96",
+            "change_window = 1000",
+            "change_window = 2048",
+            "track_gate_cm = -1.0",
+            "track_gate_cm = nan",
+        ] {
+            assert!(EngineConfig::from_toml(text).is_err(), "{text}");
+        }
+        let short = EngineConfig::from_toml("change_window = 1024\ntrack_gate_cm = 4.0").unwrap();
+        assert_eq!(short.change_size(), 2048);
         let text = toml::to_string(&config).unwrap();
         assert_eq!(
             EngineConfig::from_toml(&text).unwrap().drift_rate_noise,

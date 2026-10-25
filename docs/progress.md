@@ -1,6 +1,6 @@
 # Implementation progress
 
-Last updated: 2026-10-24.
+Last updated: 2026-10-25.
 
 Section 0 followed: the full plan and the listed Glim references were read before writing source.
 Work remains in milestone order. M0's implementation, GitHub setup and preview publication are
@@ -967,6 +967,35 @@ model jump), and the residual candidate in the zero-allocation, bit-exact replay
 The probe gains `--set` and `--explain`. The candidate costs about 48 ms per second of audio
 against 31.6 ms for the earlier one on the development desktop; M4.8's 30 ms target is unmet.
 M4.5 and M4 acceptance remain open.
+
+**M4.5 short-change candidate.** Hop traces against simulator truth showed that the residual
+candidate rarely saw a moving hand: over the 43 ms window a fast approach's echo phases cancel,
+and basic pokes were confirmed from the vanished hover echo. The impulse gate also held most
+hops just before each turn, because hi-hats raise the model error with the music.
+[Decision 0021](decisions/0021-short-change-and-steady-tracking.md) adds opt-in
+`change_window` (change over the central 1024 samples by exact convolution),
+`change_smooth_bins` (whitening by the segment's own smoothed power), `track_gate_cm` and
+`impulse_relative`. For every configuration, distances now count from the nearest strong
+direct sound, a farther microphone's own direct region is left out of its motion, and a poke's
+approach starts at the deepest point that meets the depth and speed rules.
+
+Across the 54-case probe, PC now passes every seed (29/30); stereo, compressed and both clock
+cases keep every poke with no re-lock, jump or drift warning; negatives produce nothing. Varied
+rises from 31 to 55 of 90, PC Bluetooth from 21 to 24 and dropouts from 19 to 21. Typing with
+pokes falls from 18 to 12 and volume steps from 21 to 18. 17 cases fail, against 18; three are
+basic latency, whose 80 ms median gate is physically out of reach for a detector that follows
+the hand (87 ms minimum for the 2 cm rise). That gate is unchanged and awaits the maintainer's
+decision. The candidate costs 57.6 ms per second of audio (residual 42.3 ms); M4.8 stays open.
+Details are in [tuning](tuning.md).
+
+New tests: a moving echo that the whole window loses and the segment locates on every hop; the
+drift-then-poke approach; the track gate; a farther microphone's direct region; the nearest
+direct origin; the relative impulse gate; parameter validation; the candidate's stereo,
+compressed and PC regressions; and the candidate in the zero-allocation, bit-exact replay
+property test. `motion_speed` and `processing_cost` join the lab probes; `candidate_gestures`
+now runs this candidate and gains `--trace`, and reports pokes deep and fast enough for the
+sensitivity as a diagnostic only. All DSP/simulator/lab release tests, whole-workspace clippy
+and Rust formatting pass. Defaults, gates and the published preview are unchanged.
 
 ## Dependency follow-up
 

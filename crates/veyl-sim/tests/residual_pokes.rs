@@ -1,25 +1,31 @@
-//! Residual-motion candidate regressions (decision 0020). These are narrower than the complete
-//! M4 gesture acceptance gates.
+//! Short-change candidate regressions (decisions 0020 and 0021). These are narrower than the
+//! complete M4 gesture acceptance gates.
 use veyl_dsp::{
     config::EngineConfig, BlockFlags, BlockIn, Engine, EngineEvent, PokeEvent, SoundSource,
     SourceStatus, Stream, StreamFormat,
 };
 use veyl_sim::{basic::quantize, scenarios, scene, Rendered};
 
-fn candidate() -> EngineConfig {
+fn candidate(pc: bool) -> EngineConfig {
     EngineConfig {
+        pc_mode: pc,
+        range_max_cm: if pc { 55.0 } else { 40.0 },
         infer_single_path: true,
         resample_reference: true,
         residual_motion: true,
         floor_relative: 1e-8,
         impulse_ratio: 12.0,
+        impulse_relative: true,
+        change_window: 1024,
+        change_smooth_bins: 8,
+        track_gate_cm: 4.0,
         ..EngineConfig::default()
     }
 }
 
-fn run(rendered: &Rendered) -> (Vec<PokeEvent>, u64) {
+fn run(rendered: &Rendered, pc: bool) -> (Vec<PokeEvent>, u64) {
     let mut engine = Engine::new(
-        candidate(),
+        candidate(pc),
         StreamFormat {
             sample_rate: rendered.sample_rate,
             ref_channels: rendered.ref_channels,
@@ -30,7 +36,11 @@ fn run(rendered: &Rendered) -> (Vec<PokeEvent>, u64) {
     engine
         .set_source_status(SourceStatus {
             capture_running: true,
-            source: SoundSource::TestSound,
+            source: if pc {
+                SoundSource::Pc
+            } else {
+                SoundSource::TestSound
+            },
             ..SourceStatus::default()
         })
         .unwrap();
@@ -92,15 +102,21 @@ fn matches(rendered: &Rendered, pokes: &[PokeEvent]) -> (usize, usize) {
 }
 
 #[test]
-fn residual_candidate_recovers_stereo_and_compressed_pokes_for_each_seed_with_no_extras() {
-    for name in ["stereo_speakers", "compressed16k"] {
+fn short_change_candidate_recovers_stereo_compressed_and_pc_pokes_for_each_seed() {
+    for name in ["stereo_speakers", "compressed16k", "pc_mode"] {
+        let pc = name.starts_with("pc_");
         for seed in 1..=3 {
             let rendered = scene::render(&scenarios::scene(name, seed, None).unwrap()).unwrap();
-            let (pokes, jumps) = run(&rendered);
+            let (pokes, jumps) = run(&rendered, pc);
             let (matched, extra) = matches(&rendered, &pokes);
-            assert_eq!(
-                (matched, extra),
-                (rendered.labels.len(), 0),
+            // PC's own gate allows one miss in ten; the phone scenes match every poke.
+            let required = if pc {
+                rendered.labels.len() * 9 / 10
+            } else {
+                rendered.labels.len()
+            };
+            assert!(
+                matched >= required && extra == 0,
                 "{name} seed {seed}: {matched} matched, {extra} extra"
             );
             assert_eq!(jumps, 0, "{name} seed {seed}: {jumps} model jumps");

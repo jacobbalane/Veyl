@@ -85,6 +85,43 @@ pub struct DirectPeak {
 pub fn direct_peak(maps: &[Complex<f32>], pre: usize, taps: usize) -> DirectPeak {
     direct_peak_near(maps, pre, taps, None, 2.0, 0.5)
 }
+/// The earliest direct sound at least `peak_ratio` (in amplitude) as strong as the strongest:
+/// the nearest speaker and microphone. Echo distances count from it, so a hand reads the same
+/// distance whichever microphone's direct sound happens to be strongest.
+pub(crate) fn nearest_direct(
+    maps: &[Complex<f32>],
+    pre: usize,
+    taps: usize,
+    peak_ratio: f32,
+) -> Option<f64> {
+    let length = pre.checked_add(taps).filter(|length| *length >= 3)?;
+    if maps.is_empty() || !maps.len().is_multiple_of(length) || pre >= length - 1 {
+        return None;
+    }
+    let at = |i: usize| {
+        maps.chunks(length)
+            .map(|pair| pair[i].norm_sqr())
+            .sum::<f32>()
+    };
+    let last = pre.saturating_add(16).min(length - 2);
+    let strongest = (0..=last).map(at).fold(0.0_f32, f32::max);
+    if strongest <= 1e-20 {
+        return None;
+    }
+    let index = (1..=last).find(|&index| {
+        at(index) >= at(index - 1)
+            && at(index) >= at(index + 1)
+            && at(index) >= strongest * peak_ratio * peak_ratio
+    })?;
+    let (left, centre, right) = (at(index - 1), at(index), at(index + 1));
+    let curvature = 2.0 * centre - left - right;
+    let fraction = if curvature > 1e-20 {
+        (0.5 * (right - left) / curvature).clamp(-0.5, 0.5)
+    } else {
+        0.0
+    };
+    Some(index as f64 - pre as f64 + fraction as f64)
+}
 pub(crate) fn direct_peak_near(
     maps: &[Complex<f32>],
     pre: usize,
