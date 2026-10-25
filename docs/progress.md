@@ -9,7 +9,7 @@ placeholder and Android shows the waiting-for-PC placeholder. M0's listed accept
 the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
 checks are complete; hardware acceptance remains pending. M3's connection and recording implementation
 is complete. M3P's PC-mode implementation and automated checks are complete; its device checks
-remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. M5 is in progress: the desktop engine host runs the echo engine live. The published 0.0.1 preview still contains the
+remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. M5 is implemented except the device tuning and target-laptop timing; M6 and M7 are in progress. The published 0.0.1 preview still contains the
 M0 interface skeleton. The maintainer authorized continuing non-destructive implementation while
 away and limited all GitHub work to this repository. Physical review remains deferred.
 
@@ -1049,10 +1049,12 @@ tuned on real recordings.
 
 - [x] **M5.1** `engine_host` (§7.6): engine thread, live frames at 30 Hz, `meter` to the phone at
       5 Hz, engine state events, source status into the engine — in both modes.
-- [ ] **M5.2** Live tab: meter card, echo view, hand line, engine states and tips (Appendix C).
-- [ ] **M5.3** Browser preview (`fake-native.ts`) covering every state.
+- [x] **M5.2** Live tab: meter card, echo view, hand line, engine states and tips (Appendix C).
+      The phone's listening screen shows score, label and tip.
+- [x] **M5.3** Browser preview (`fake-native.ts`) covering every state.
 - [ ] **M5.4 [device]** Tuning loop on R1–R14, meter calibration, placement, gate G2.
-- [ ] **M5.5** Performance (desktop CPU) and latency statistics in Diagnostics.
+- [ ] **M5.5** Performance (desktop CPU) and latency statistics in Diagnostics. Latency statistics
+      are shown; performance on the target laptop needs the maintainer's measurement.
 
 **M5.1 implemented and verified.** The engine thread now owns a `veyl_dsp::Engine` with the tuned
 defaults for each audio configuration, in phone and PC mode alike, beside the existing transport
@@ -1077,7 +1079,23 @@ disconnect. Capture states map to the engine's source status, and the latency wi
 pokes. Interface fixtures now cover the engine view, a live frame and a gesture.
 
 Verified locally: `cargo test -p veyl-desktop` (39 tests), clippy for the desktop crate with
-`-D warnings`, Rust formatting, `npm run -w desktop typecheck` and `test`.
+`-D warnings`, Rust formatting, `npm run -w desktop typecheck` and `test`. M4 and M5.1 then
+passed full CI ([M4](https://github.com/jacobbalane/Veyl/actions/runs/40179973446),
+[M5.1](https://github.com/jacobbalane/Veyl/actions/runs/40180855501)).
+
+**M5.2, M5.3 and the Diagnostics part of M5.5 implemented and verified.** The Live tab shows the
+meter card (score ring with number and label, the four bars, "Detail ≈ x cm" and the tip), the echo
+view canvas (the last 5 s in 150 columns, 0–59 cm, grid every 10 cm, the hand dot and a "poke"
+line per gesture; 10 Hz without sliding under reduced motion), the hand line, the engine state,
+suspension or warning in words, and the last 10 gestures. "Record a test" opens the existing
+recording dialog. Without Tauri, `native.ts` loads `preview/fake-native.ts`, which connects,
+starts the engine and shows a hovering hand with a poke every 3 s; address options choose any
+state, suspension, warning, tip, score, mode, connection state or an empty hand for screenshots.
+Diagnostics show the poke delay median and 95th percentile. New wording is in `docs/ui-copy.md`
+C.10. Tests cover the tip texts, the reducer and gesture log, the pure motion-to-cell function,
+meter and latency formatting, the Live tab, Diagnostics and the preview's frames. Verified locally:
+`npm run -w desktop typecheck`, `test` (40 tests), `build`, repository formatting and the script
+tests; the preview was inspected in light and dark themes and at phone width.
 
 ## M6 — Poke to click
 
