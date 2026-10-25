@@ -197,3 +197,15 @@ wording; change it only through a decision record.
 | PC sound-check notice      | Veyl plays a test sound for five seconds at your current volume.                                                                                                      |
 | Interrupted PC sound check | The sound check didn't finish. Check your devices and try again.                                                                                                      |
 | PC sound-check diagnostics | High-band coherence · High-band width                                                                                                                                 |
+
+### C.10 Live engine feedback (M5)
+
+| Where                            | Text                                                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engine: no usable sound          | Waiting for sound Veyl can use                                                                                                                                      |
+| Engine: running                  | Watching for pokes                                                                                                                                                  |
+| Engine warnings                  | The echo moved. Veyl found it again. · The room changed. Veyl is learning it again. · The sound and the microphone keep slightly different time. Veyl is adjusting. |
+| Engine warning: sudden noise     | Uses the `noisy_room` tip for the current mode.                                                                                                                     |
+| Echo view poke line              | poke                                                                                                                                                                |
+| Test pokes, before the poke test | The poke test is coming soon.                                                                                                                                       |
+| Diagnostics                      | Pokes measured · — (no poke delay measured yet)                                                                                                                     |

@@ -55,6 +55,12 @@ Set-Location android
 .\gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
+In a browser, `npm run -w desktop dev` shows sample data from `desktop/src/preview/fake-native.ts`:
+it connects, starts the engine and then shows a hovering hand with a poke every 3 s. For
+screenshots, address options pick a state from the start, for example `?state=aligning`,
+`?suspended=sound`, `?warning=drift`, `?tip=volume_low`, `?score=40`, `?mode=pc`,
+`?connection=reconnecting` or `?hand=none`; they combine with `&`.
+
 Use a Visual Studio Developer PowerShell if the MSVC linker is missing. Git's `link.exe` is not
 the Microsoft linker. Linux CI tests the portable crates without compiling the Tauri app.
 DSP scenario tests run in release mode once M4 supplies the scenarios.

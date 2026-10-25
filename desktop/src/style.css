@@ -9,6 +9,10 @@
   --text: #e8eef5;
   --muted: #94a3b8;
   --aqua: #4fd8c4;
+  --good: #5bd68a;
+  --fair: #f5b94a;
+  --poor: #f06a6a;
+  --accent-text: #4fd8c4;
 }
 * {
   box-sizing: border-box;
@@ -365,18 +369,45 @@ p {
   color: var(--muted);
 }
 .score {
-  border: 6px solid var(--line);
+  position: relative;
   width: 128px;
   height: 128px;
-  border-radius: 50%;
   display: grid;
   place-items: center;
   margin: 20px auto 24px;
   text-align: center;
 }
+.score svg {
+  position: absolute;
+  inset: 0;
+  fill: none;
+  stroke-width: 6;
+}
+.score-track {
+  stroke: var(--line);
+}
+.score-value {
+  stroke: var(--good);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+.score[data-label='fair'] .score-value {
+  stroke: var(--fair);
+}
+.score[data-label='poor'] .score-value {
+  stroke: var(--poor);
+}
+.score[data-label='none'] .score-value {
+  stroke: transparent;
+}
 .score span {
+  position: relative;
   font-size: 36px;
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.score strong {
+  font-weight: inherit;
 }
 .score small {
   display: block;
@@ -385,15 +416,34 @@ p {
   font-weight: 400;
 }
 .meter-factor {
+  display: grid;
+  grid-template-columns: 1fr auto;
   margin-top: 15px;
   font-size: 11px;
   color: var(--muted);
 }
+.meter-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 .meter-factor div {
+  grid-column: 1 / -1;
   height: 4px;
   border-radius: 10px;
   background: var(--line);
   margin-top: 7px;
+  overflow: hidden;
+}
+.meter-factor i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--aqua);
+  transition: width 0.4s ease;
+}
+.meter-detail {
+  margin: 16px 0 0;
+  font-size: 11px;
 }
 .tip {
   border-top: 1px solid var(--line);
@@ -415,18 +465,42 @@ p {
   position: relative;
   display: grid;
   place-items: center;
+  /* A grid line every 10 cm of the 60 cm shown. */
   background: repeating-linear-gradient(
     to top,
     transparent 0,
-    transparent calc(33.333% - 1px),
-    var(--line) 33.333%
+    transparent calc(16.667% - 1px),
+    var(--line) 16.667%
   );
   margin: 0 0 16px 40px;
   border-bottom: 1px solid var(--line);
 }
+.echo-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
 .echo-empty {
+  position: relative;
   text-align: center;
   max-width: 230px;
+  color: var(--muted);
+}
+.hand-line {
+  font-variant-numeric: tabular-nums;
+}
+.engine-status {
+  margin-top: 36px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+}
+.engine-status strong {
+  font-weight: 600;
+}
+.engine-status span {
   color: var(--muted);
 }
 .echo-empty svg {
@@ -453,13 +527,61 @@ p {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: 1fr auto;
+  gap: 0 16px;
 }
 .poke-log h2 {
   margin-bottom: 4px;
 }
-.poke-log p {
+.poke-log ol {
   grid-column: 1;
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.poke-log li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-variant-numeric: tabular-nums;
+}
+.poke-log li.empty {
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+}
+.poke-log li.fresh {
+  animation: poke-flash 0.6s ease-out;
+}
+.poke-log li small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.poke-log .note {
+  grid-column: 2;
+  margin: 6px 0 0;
+  font-size: 11px;
+}
+@keyframes poke-flash {
+  from {
+    border-color: var(--aqua);
+    background: color-mix(in srgb, var(--aqua) 18%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .score-value,
+  .meter-factor i {
+    transition: none;
+  }
+  .poke-log li.fresh {
+    animation: none;
+  }
 }
 .button-row {
   grid-column: 2;
@@ -619,6 +741,10 @@ footer {
     --text: #0b0f14;
     --muted: #5b6b7c;
     --aqua: #0e9c8a;
+    --good: #1e9e57;
+    --fair: #b7791f;
+    --poor: #c53030;
+    --accent-text: #087668;
   }
 }
 @media (max-width: 700px) {
@@ -650,9 +776,6 @@ footer {
   }
   .live-grid {
     grid-template-columns: 1fr;
-  }
-  .meter {
-    display: none;
   }
   .poke-log {
     display: block;

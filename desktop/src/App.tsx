@@ -10,12 +10,12 @@ import {
   type AppState,
 } from './api/native';
 import { emptyLink, type LinkSnapshot, type LinkUpdate } from './api/types';
-import { copy, connectionError, linkCopy, pcCopy, pcTip } from './copy';
+import { copy, connectionError, linkCopy, pcCopy, pcTip, tipText } from './copy';
 import { SourceChoice, SourceSettings, useSources } from './ui/Sources';
 import { Phones, PairingDialog, connectionLabel } from './ui/Connection';
 import { Diagnostics } from './ui/Diagnostics';
 import { RecordingStatus, RecordingDialogs, SavedRecordings, useRecordings } from './ui/Recordings';
-import { recordingCopy } from './copy';
+import { Live, useLive } from './ui/Live';
 
 const tabs = [
   { name: 'Live', icon: Radio },
@@ -32,6 +32,7 @@ export function App() {
   const link = app?.link ?? emptyLink;
   const recordings = useRecordings();
   const sources = useSources(app?.source);
+  const live = useLive(app?.engine);
   const pc = sources.source.mode === 'pc';
   const canRecord =
     !browserPreview &&
@@ -147,69 +148,26 @@ export function App() {
           <p role="alert">{connectionError(link.connection.error)}</p>
         )}
         {tab === 'Live' && (
-          <div className="live-grid">
-            <section className="panel meter">
-              <div className="eyebrow">Sound quality</div>
-              <div className="score">
-                <span>
-                  0<small>{copy.noSound}</small>
-                </span>
-              </div>
-              {['High sounds', 'Volume', 'Steady', 'Clear echo'].map((name) => (
-                <div className="meter-factor" key={name}>
-                  <span>{name}</span>
-                  <div />
-                </div>
-              ))}
-              <p className="tip">
-                {pc ? pcTip(sources.source.tip) : 'Tap Start in Veyl on your phone.'}
-              </p>
-              {!pc &&
-                link.connection.state === 'connected' &&
-                link.connection.capture?.state !== 'running' && (
-                  <button
-                    disabled={browserPreview}
-                    onClick={() =>
-                      void requestPhoneStart().catch(() => setError(linkCopy.failedRequest))
-                    }
-                  >
-                    {linkCopy.askPhoneToStart}
-                  </button>
-                )}
-            </section>
-            <section className="panel echo">
-              <div className="section-title">
-                <h1>{copy.echoTitle}</h1>
-                <span>{copy.noHand}</span>
-              </div>
-              <div className="echo-map">
-                <span className="axis">{pc ? pcCopy.axis : copy.echoAxis}</span>
-                <div className="distance-labels">
-                  <span>60 cm</span>
-                  <span>40</span>
-                  <span>20</span>
-                  <span>0</span>
-                </div>
-                <div className="echo-empty">
-                  <AudioLines size={35} />
-                  <p>{pc ? pcCopy.empty : copy.echoEmpty}</p>
-                </div>
-              </div>
-            </section>
-            <section className="panel poke-log" aria-live="polite">
-              <h2>{copy.pokesTitle}</h2>
-              <p>{copy.pokesEmpty}</p>
-              <div className="button-row">
-                <button disabled>Test pokes</button>
+          <Live
+            live={live}
+            pc={pc}
+            tip={pc ? pcTip(sources.source.tip) : tipText('capture_off', false)}
+            canRecord={canRecord && recordings.info?.state !== 'recording'}
+            onRecord={() => recordings.setDialog(true)}
+          >
+            {!pc &&
+              link.connection.state === 'connected' &&
+              link.connection.capture?.state !== 'running' && (
                 <button
-                  disabled={!canRecord || recordings.info?.state === 'recording'}
-                  onClick={() => recordings.setDialog(true)}
+                  disabled={browserPreview}
+                  onClick={() =>
+                    void requestPhoneStart().catch(() => setError(linkCopy.failedRequest))
+                  }
                 >
-                  {recordingCopy.title}
+                  {linkCopy.askPhoneToStart}
                 </button>
-              </div>
-            </section>
-          </div>
+              )}
+          </Live>
         )}
         {tab === 'Phones' &&
           (pc ? (

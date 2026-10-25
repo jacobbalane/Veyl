@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { getDiagnostics, copyDiagnostics } from '../api/native';
 import type { Diagnostics as DiagnosticsValue, StreamLevels, CaptureDetails } from '../api/types';
 import { connectionLabel } from './Connection';
-import { linkCopy, pcCopy } from '../copy';
+import { linkCopy, liveCopy, pcCopy } from '../copy';
+import { formatLatency } from './live-model';
 
 function PcFormat({ name, details }: { name: string; details: CaptureDetails | null }) {
   return (
@@ -120,6 +121,10 @@ export function Diagnostics() {
             <dd>{number(value.levels.sampleRate, 'Hz', 0)}</dd>
             <dt>{linkCopy.battery}</dt>
             <dd>{number(pc ? null : value.link.phoneStats.batteryPct, '%', 0)}</dd>
+            <dt>{liveCopy.pokeDelay}</dt>
+            <dd>{formatLatency(value.levels.latency)}</dd>
+            <dt>{liveCopy.pokesMeasured}</dt>
+            <dd>{value.levels.latency.pokes}</dd>
           </dl>
           {pc && value.source && (
             <>

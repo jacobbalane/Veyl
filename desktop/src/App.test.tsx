@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { App } from './App';
-import { emptyLink, emptyLevels, emptySource } from './api/types';
+import { emptyEngine, emptyLink, emptyLevels, emptySource } from './api/types';
 
 vi.mock('./api/native', () => ({
   browserPreview: true,
@@ -11,10 +11,14 @@ vi.mock('./api/native', () => ({
     actionsEnabled: false,
     link: structuredClone(emptyLink),
     source: structuredClone(emptySource),
+    engine: structuredClone(emptyEngine),
   }),
   uiReady: async () => {},
   watchLink: async () => () => {},
   watchSource: async () => () => {},
+  watchEngine: async () => () => {},
+  watchGestures: async () => () => {},
+  subscribeLive: async () => {},
   getDiagnostics: async () => ({
     link: structuredClone(emptyLink),
     levels: structuredClone(emptyLevels),
@@ -30,6 +34,8 @@ test('preview keeps actions unavailable and allows navigating every foundation v
   expect(actions.getAttribute('aria-checked')).toBe('false');
   expect(actions.hasAttribute('disabled')).toBe(true);
   expect(screen.getByText('Preview — sample data')).toBeDefined();
+  expect(screen.getByText('What Veyl hears')).toBeDefined();
+  expect(screen.getByRole('status').textContent).toBe('Waiting for sound…');
   fireEvent.click(screen.getByRole('button', { name: 'Phones' }));
   expect(screen.getByText('Your phones')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));

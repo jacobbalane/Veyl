@@ -1,4 +1,6 @@
 // Wording comes from docs/ui-copy.md; the connection preview is recorded in decision 0006.
+import type { EngineView, EngineWarning, Meter, TipId } from './api/types';
+
 export const copy = {
   status: 'Looking for your phone…',
   preview: 'Preview — sample data',
@@ -75,6 +77,148 @@ export function pcTip(code: string | null | undefined): string {
       return "Veyl couldn't open these audio devices. Check them in Settings.";
     default:
       return 'Play some music or a video on this PC.';
+  }
+}
+
+// Tips from C.1. A tip that exists in only one mode uses that mode's text in both.
+const tips: Record<TipId, { phone: string; pc: string }> = {
+  capture_off: {
+    phone: 'Tap Start in Veyl on your phone.',
+    pc: "Veyl isn't listening. Choose your speakers and microphone in Settings.",
+  },
+  not_speaker: {
+    phone: "Sound is going to headphones or Bluetooth. Veyl needs your phone's speaker.",
+    pc: "Your PC's sound is going to headphones. Veyl needs speakers.",
+  },
+  pc_headphones: {
+    phone: "Your PC's sound is going to headphones. Veyl needs speakers.",
+    pc: "Your PC's sound is going to headphones. Veyl needs speakers.",
+  },
+  pc_no_mic: {
+    phone: 'Choose a microphone in Settings.',
+    pc: 'Choose a microphone in Settings.',
+  },
+  capture_blocked: {
+    phone:
+      "This app doesn't share its sound with Veyl. Try YouTube, YouTube Music, the Veyl player or the test sound.",
+    pc: "Veyl can't copy this sound. Protected videos don't share it. Try music or another video.",
+  },
+  nothing_playing: {
+    phone: 'Play some music or a video on your phone.',
+    pc: 'Play some music or a video on this PC.',
+  },
+  mic_silenced: {
+    phone: "Another app is using your phone's microphone.",
+    pc: 'Another app is using the microphone. Close it, or choose another microphone.',
+  },
+  clipping: {
+    phone: 'Turn the volume down a little. The sound is distorting.',
+    pc: 'Turn the volume down a little. The sound is distorting.',
+  },
+  volume_low: { phone: "Turn your phone's volume up.", pc: "Turn your PC's volume up." },
+  few_high_sounds: {
+    phone: 'This track has few high sounds. A brighter song works better.',
+    pc: 'This track has few high sounds. A brighter song works better.',
+  },
+  gaps: {
+    phone: 'This track has many quiet moments.',
+    pc: 'This track has many quiet moments.',
+  },
+  other_sounds: {
+    phone: 'Pause other sounds while the test sound plays.',
+    pc: 'Pause other sounds while the sound check runs.',
+  },
+  unclear_echo: {
+    phone: "The echo is unclear. Keep the phone's speaker and microphones uncovered.",
+    pc: 'The echo is unclear. Move the microphone closer to where you poke.',
+  },
+  noisy_room: {
+    phone: 'Sudden noises near the phone make the echo hard to read.',
+    pc: 'Sudden noises near the microphone make the echo hard to read.',
+  },
+  pc_bluetooth: {
+    phone: 'Bluetooth speakers add delay. Built-in or wired speakers work better.',
+    pc: 'Bluetooth speakers add delay. Built-in or wired speakers work better.',
+  },
+  ready: { phone: 'Ready. Poke toward your phone.', pc: 'Ready. Poke toward your microphone.' },
+};
+export const tipIds = Object.keys(tips) as TipId[];
+export function tipText(tip: TipId, pc: boolean): string {
+  const text = tips[tip] as (typeof tips)[TipId] | undefined;
+  return text ? text[pc ? 'pc' : 'phone'] : '';
+}
+
+// C.2 for the Live tab, plus C.10 for engine feedback the plan leaves unnamed.
+export const liveCopy = {
+  soundQuality: 'Sound quality',
+  labels: {
+    great: 'Great',
+    good: 'Good',
+    fair: 'Fair',
+    poor: 'Poor',
+    none: 'No sound',
+  } satisfies Record<Meter['label'], string>,
+  high: 'High sounds',
+  volume: 'Volume',
+  steady: 'Steady',
+  clarity: 'Clear echo',
+  detail: (cm: string) => `Detail ≈ ${cm} cm`,
+  handSeen: (cm: number | string) => `Hand seen at ${cm} cm`,
+  poke: (cm: number | string) => `Poke · ${cm} cm`,
+  test: 'test',
+  marker: 'poke',
+  testPokes: 'Test pokes',
+  pokeTestSoon: 'The poke test is coming soon.',
+  waiting: 'Waiting for sound…',
+  aligning: 'Finding the echo…',
+  settling: 'Learning the room…',
+  weak: 'Sound too weak to detect pokes',
+  paused: 'Paused',
+  source: 'Waiting for sound Veyl can use',
+  running: 'Watching for pokes',
+  relocked: 'The echo moved. Veyl found it again.',
+  modelJump: 'The room changed. Veyl is learning it again.',
+  drift: 'The sound and the microphone keep slightly different time. Veyl is adjusting.',
+  pokeDelay: 'Poke delay (median / p95)',
+  pokesMeasured: 'Pokes measured',
+  missing: '—',
+} as const;
+
+/** What the engine is doing, in words: a suspension reason first, then the state. */
+export function engineStatus(engine: Pick<EngineView, 'state' | 'suspended'>): string {
+  switch (engine.suspended) {
+    case 'paused':
+      return liveCopy.paused;
+    case 'source':
+      return liveCopy.source;
+    case 'sound':
+      return liveCopy.weak;
+    case 'settling':
+      return liveCopy.settling;
+  }
+  switch (engine.state) {
+    case 'aligning':
+      return liveCopy.aligning;
+    case 'settling':
+      return liveCopy.settling;
+    case 'running':
+      return liveCopy.running;
+    default:
+      return liveCopy.waiting;
+  }
+}
+export function warningText(warning: EngineWarning | null, pc: boolean): string {
+  switch (warning) {
+    case 'relocked':
+      return liveCopy.relocked;
+    case 'model_jump':
+      return liveCopy.modelJump;
+    case 'impulsive_noise':
+      return tipText('noisy_room', pc);
+    case 'drift':
+      return liveCopy.drift;
+    default:
+      return '';
   }
 }
 
