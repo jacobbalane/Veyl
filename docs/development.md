@@ -59,7 +59,11 @@ In a browser, `npm run -w desktop dev` shows sample data from `desktop/src/previ
 it connects, starts the engine and then shows a hovering hand with a poke every 3 s. For
 screenshots, address options pick a state from the start, for example `?state=aligning`,
 `?suspended=sound`, `?warning=drift`, `?tip=volume_low`, `?score=40`, `?mode=pc`,
-`?connection=reconnecting` or `?hand=none`; they combine with `&`.
+`?connection=reconnecting` or `?hand=none`; they combine with `&`. Screens open with
+`?tab=phones|settings|help`, `?dialog=poke-test`, `?onboarding` or `?onboarding=<step>` (`choose`,
+`phone-app`, `pair`, `place`, `phone-play`, `pc-devices`, `pc-play`, `practice`, `actions`; the
+`pc-` steps pick PC mode), and `?actions=on` or `?actions=blocked` (Windows blocks the click).
+Settings, the actions switch and the poke test work on sample data in memory until a reload.
 
 Use a Visual Studio Developer PowerShell if the MSVC linker is missing. Git's `link.exe` is not
 the Microsoft linker. Linux CI tests the portable crates without compiling the Tauri app.

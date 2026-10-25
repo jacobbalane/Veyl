@@ -41,13 +41,25 @@ const gesture = gestureJson as GestureEvent;
 const emit = <T,>(set: Set<(value: T) => void>, value: T) =>
   act(() => set.forEach((listener) => listener(value)));
 
-function Harness({ pc = false, onRecord = () => {} }: { pc?: boolean; onRecord?: () => void }) {
+function Harness({
+  pc = false,
+  canTest = false,
+  onTest = () => {},
+  onRecord = () => {},
+}: {
+  pc?: boolean;
+  canTest?: boolean;
+  onTest?: () => void;
+  onRecord?: () => void;
+}) {
   const live = useLive();
   return (
     <Live
       live={live}
       pc={pc}
       tip="Tap Start in Veyl on your phone."
+      canTest={canTest}
+      onTest={onTest}
       canRecord
       onRecord={onRecord}
     />
@@ -66,10 +78,16 @@ test('before the engine reports, the Live tab says what to do in words', async (
   expect(screen.getByText('No sound')).toBeDefined();
   expect(screen.getByText('Tap Start in Veyl on your phone.')).toBeDefined();
   expect(screen.getByText('Pokes appear here.')).toBeDefined();
-  const test = screen.getByRole('button', { name: 'Test pokes' });
-  expect(test.hasAttribute('disabled')).toBe(true);
-  expect(test.getAttribute('aria-describedby')).toBe('poke-test-note');
-  expect(screen.getByText('The poke test is coming soon.')).toBeDefined();
+  // Without a listening source there is nothing to test yet.
+  expect(screen.getByRole('button', { name: 'Test pokes' }).hasAttribute('disabled')).toBe(true);
+});
+
+test('Test pokes opens the poke test once Veyl listens', async () => {
+  const onTest = vi.fn();
+  render(<Harness canTest onTest={onTest} />);
+  await waitFor(() => expect(listeners.engine.size).toBe(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Test pokes' }));
+  expect(onTest).toHaveBeenCalledOnce();
 });
 
 test('engine events and frames fill the meter, status, warning and hand line', async () => {
@@ -109,14 +127,18 @@ test('the gesture log shows the last ten pokes, marks test pokes and announces t
       at: 1000 + index,
       distanceCm: 10 + index,
       testOnly: index !== 11,
+      acted: index === 11,
     });
   const log = screen.getByRole('list', { name: 'Recent pokes' });
   expect(log.getAttribute('aria-live')).toBe('polite');
   const items = within(log).getAllByRole('listitem');
   expect(items).toHaveLength(10);
+  // The newest poke acted, so it is not marked as a test.
   expect(items[0].textContent).toBe('Poke · 21 cm');
   expect(items[1].textContent).toBe('Poke · 20 cmtest');
   expect(items[9].textContent).toBe('Poke · 12 cmtest');
+  expect(items[0].getAttribute('data-acted')).toBe('true');
+  expect(items[1].getAttribute('data-acted')).toBe('false');
   fireEvent.click(screen.getByRole('button', { name: 'Record a test' }));
   expect(onRecord).toHaveBeenCalledOnce();
 });

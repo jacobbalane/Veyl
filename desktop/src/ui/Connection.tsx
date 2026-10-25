@@ -10,6 +10,7 @@ import {
 } from '../api/native';
 import type { LinkSnapshot, ConnectionState, PairingEvent, SavedPhone } from '../api/types';
 import { copy, connectionError, linkCopy } from '../copy';
+import { keepFocusInside } from './focus';
 
 export function connectionLabel(state: ConnectionState, nearby: number): string {
   const phone = state.phoneName ?? '…';
@@ -32,14 +33,17 @@ export function connectionLabel(state: ConnectionState, nearby: number): string 
   }
 }
 
+/** A modal dialog: it keeps focus inside, and Escape calls `onCancel`. */
 export function Modal({
   title,
   children,
   onCancel,
+  className,
 }: {
   title: string;
   children: ReactNode;
   onCancel: () => void;
+  className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -50,8 +54,9 @@ export function Modal({
   return (
     <dialog
       ref={dialog}
-      className="connection-dialog"
+      className={className ? `connection-dialog ${className}` : 'connection-dialog'}
       aria-label={title}
+      onKeyDown={keepFocusInside}
       onCancel={(event) => {
         event.preventDefault();
         onCancel();

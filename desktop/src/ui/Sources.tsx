@@ -37,13 +37,19 @@ export function useSources(initial?: SourceView) {
       stop?.();
     };
   }, []);
-  async function change(action: () => Promise<void>, failure: string = pcCopy.saveFailed) {
+  /** Runs a change and says whether it worked; a failure shows in words. */
+  async function change(
+    action: () => Promise<void>,
+    failure: string = pcCopy.saveFailed,
+  ): Promise<boolean> {
     setBusy(true);
     setError('');
     try {
       await action();
+      return true;
     } catch {
       setError(failure);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -59,26 +65,46 @@ export function useSources(initial?: SourceView) {
     cancelCheck: () => change(cancelPcSoundCheck, pcCopy.checkFailed),
   };
 }
-type Controls = ReturnType<typeof useSources>;
+export type SourceControls = ReturnType<typeof useSources>;
+type Controls = SourceControls;
+/**
+ * The two ways to use Veyl, with the recommended one marked (§7.14). Choosing one saves it; the
+ * user always decides. The browser preview switches its sample data instead.
+ */
+export function SourceOptions({
+  controls,
+  onChosen,
+}: {
+  controls: Controls;
+  onChosen?: (mode: 'pc' | 'phone') => void;
+}) {
+  const { source } = controls;
+  return (
+    <div className="source-options">
+      {(['pc', 'phone'] as const).map((mode) => (
+        <button
+          key={mode}
+          disabled={controls.busy}
+          aria-pressed={source.choiceDone ? source.mode === mode : undefined}
+          onClick={() =>
+            void controls.mode(mode).then((chosen) => {
+              if (chosen) onChosen?.(mode);
+            })
+          }
+        >
+          <strong>{pcCopy[mode]}</strong>
+          {source.devices.recommendedSource === mode && <small>{pcCopy.recommended}</small>}
+          <span>{mode === 'pc' ? pcCopy.pcDetail : pcCopy.phoneDetail}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 export function SourceChoice({ controls }: { controls: Controls }) {
   return (
     <section className="panel source-choice">
       <h2>{pcCopy.choose}</h2>
-      <div className="source-options">
-        {(['pc', 'phone'] as const).map((mode) => (
-          <button
-            key={mode}
-            disabled={browserPreview || controls.busy}
-            onClick={() => void controls.mode(mode)}
-          >
-            <strong>{pcCopy[mode]}</strong>
-            {controls.source.devices.recommendedSource === mode && (
-              <small>{pcCopy.recommended}</small>
-            )}
-            <span>{mode === 'pc' ? pcCopy.pcDetail : pcCopy.phoneDetail}</span>
-          </button>
-        ))}
-      </div>
+      <SourceOptions controls={controls} />
     </section>
   );
 }
@@ -116,6 +142,66 @@ function Devices({
     </label>
   );
 }
+/** Speakers, microphone and the optional sound check for PC mode. */
+export function PcDevices({
+  controls,
+  placement = true,
+}: {
+  controls: Controls;
+  placement?: boolean;
+}) {
+  const { source, busy } = controls;
+  return (
+    <>
+      <Devices
+        label={pcCopy.speakers}
+        devices={source.devices.speakers}
+        value={source.speakerId}
+        disabled={browserPreview || busy}
+        onChange={(id) => void controls.devices(id, source.microphoneId)}
+      />
+      <Devices
+        label={pcCopy.microphone}
+        devices={source.devices.microphones}
+        value={source.microphoneId}
+        disabled={browserPreview || busy}
+        onChange={(id) => void controls.devices(source.speakerId, id)}
+      />
+      <p role="status">{pcTip(source.tip)}</p>
+      {placement && <p>{pcCopy.placement}</p>}
+      <p>{pcCopy.checkNotice}</p>
+      <div className="button-row">
+        <button
+          disabled={
+            browserPreview ||
+            busy ||
+            source.state !== 'running' ||
+            source.check.state === 'checking'
+          }
+          onClick={() => void controls.check()}
+        >
+          {pcCopy.check}
+        </button>
+        {source.check.state === 'checking' && (
+          <button disabled={busy} onClick={() => void controls.cancelCheck()}>
+            {pcCopy.cancel}
+          </button>
+        )}
+      </div>
+      {source.check.state !== 'idle' && (
+        <p role="status">
+          {source.check.state === 'checking'
+            ? pcCopy.checking
+            : source.check.state === 'good'
+              ? pcCopy.checkGood
+              : source.check.state === 'poor'
+                ? pcCopy.checkPoor
+                : pcCopy.checkFailed}
+        </p>
+      )}
+    </>
+  );
+}
 export function SourceSettings({ controls }: { controls: Controls }) {
   const { source, busy, error } = controls;
   return (
@@ -123,7 +209,7 @@ export function SourceSettings({ controls }: { controls: Controls }) {
       <label>
         {pcCopy.source}
         <select
-          disabled={browserPreview || busy}
+          disabled={busy}
           value={source.mode}
           onChange={(event) => void controls.mode(event.target.value)}
         >
@@ -131,56 +217,7 @@ export function SourceSettings({ controls }: { controls: Controls }) {
           <option value="pc">{pcCopy.pc}</option>
         </select>
       </label>
-      {source.mode === 'pc' && (
-        <>
-          <Devices
-            label={pcCopy.speakers}
-            devices={source.devices.speakers}
-            value={source.speakerId}
-            disabled={browserPreview || busy}
-            onChange={(id) => void controls.devices(id, source.microphoneId)}
-          />
-          <Devices
-            label={pcCopy.microphone}
-            devices={source.devices.microphones}
-            value={source.microphoneId}
-            disabled={browserPreview || busy}
-            onChange={(id) => void controls.devices(source.speakerId, id)}
-          />
-          <p role="status">{pcTip(source.tip)}</p>
-          <p>{pcCopy.placement}</p>
-          <p>{pcCopy.checkNotice}</p>
-          <div className="button-row">
-            <button
-              disabled={
-                browserPreview ||
-                busy ||
-                source.state !== 'running' ||
-                source.check.state === 'checking'
-              }
-              onClick={() => void controls.check()}
-            >
-              {pcCopy.check}
-            </button>
-            {source.check.state === 'checking' && (
-              <button disabled={busy} onClick={() => void controls.cancelCheck()}>
-                {pcCopy.cancel}
-              </button>
-            )}
-          </div>
-          {source.check.state !== 'idle' && (
-            <p role="status">
-              {source.check.state === 'checking'
-                ? pcCopy.checking
-                : source.check.state === 'good'
-                  ? pcCopy.checkGood
-                  : source.check.state === 'poor'
-                    ? pcCopy.checkPoor
-                    : pcCopy.checkFailed}
-            </p>
-          )}
-        </>
-      )}
+      {source.mode === 'pc' && <PcDevices controls={controls} />}
       {error && <p role="alert">{error}</p>}
     </>
   );

@@ -1,11 +1,14 @@
 // The browser preview: without the Windows app, `api/native.ts` reads its state and events from
 // here. Everything is sample data computed from the time since the page opened, so the same
-// options and time always give the same values. Nothing here opens a device or the network.
+// options and time always give the same values. Settings, the actions switch and the poke test
+// live in memory and follow the Windows app's rules. Nothing here opens a device or the network.
 import metadata from '../../package.json';
 import {
+  defaultSettings,
   emptyLevels,
   emptyLink,
   emptySource,
+  type ActionsEvent,
   type AppState,
   type AudioDevice,
   type ConnectionState,
@@ -19,12 +22,18 @@ import {
   type LinkUpdate,
   type LiveFrame,
   type Meter,
+  type PokeAction,
+  type PokeTestResult,
+  type SettingsPatch,
+  type SettingsView,
   type SourceView,
   type StreamLevels,
   type Suspension,
   type TipId,
 } from '../api/types';
 import { tipIds } from '../copy';
+import { isHotkey } from '../ui/hotkey';
+import { onboardingSteps, type OnboardingStep } from '../ui/onboarding-steps';
 
 const engineStates = Object.keys({
   no_audio: 0,
@@ -57,6 +66,10 @@ const connections = [
   'unreachable',
 ] as const;
 type PreviewConnection = (typeof connections)[number];
+const tabs = ['Live', 'Phones', 'Settings', 'Help'] as const;
+export type PreviewTab = (typeof tabs)[number];
+const actionModes = ['off', 'on', 'blocked'] as const;
+const dialogs = ['poke-test'] as const;
 /** The values each URL parameter accepts, for docs and tests. */
 export const previewChoices = {
   connection: connections,
@@ -64,6 +77,10 @@ export const previewChoices = {
   suspended: suspensions,
   warning: warnings,
   tip: tipIds,
+  tab: tabs.map((tab) => tab.toLowerCase()),
+  dialog: dialogs,
+  actions: actionModes,
+  onboarding: onboardingSteps,
 } as const;
 
 export interface PreviewOptions {
@@ -84,11 +101,20 @@ export interface PreviewOptions {
   /** Null lets the score drift between Good and Great. */
   score: number | null;
   hand: boolean;
+  /** `on` starts with actions on; `blocked` also shows Windows blocking the click. */
+  actions: (typeof actionModes)[number];
+  /** The onboarding step to open; null means onboarding is done. */
+  onboarding: OnboardingStep | null;
+  /** The tab to open; null opens Live. */
+  tab: PreviewTab | null;
+  dialog: (typeof dialogs)[number] | null;
 }
 /**
  * Reads options from the page address, for example `?state=aligning`, `?suspended=sound`,
- * `?warning=drift`, `?tip=volume_low`, `?score=40`, `?mode=pc`, `?connection=reconnecting` or
- * `?hand=none`. Unknown values fall back to the default.
+ * `?warning=drift`, `?tip=volume_low`, `?score=40`, `?mode=pc`, `?connection=reconnecting`,
+ * `?hand=none`, `?tab=settings`, `?dialog=poke-test`, `?actions=on`, `?actions=blocked`,
+ * `?onboarding` or `?onboarding=practice`. Unknown values fall back to the default. An onboarding
+ * step of the PC path also picks PC mode.
  */
 export function previewOptions(search: string): PreviewOptions {
   const params = new URLSearchParams(search);
@@ -97,8 +123,14 @@ export function previewOptions(search: string): PreviewOptions {
     return value != null && (values as readonly string[]).includes(value) ? (value as T) : null;
   };
   const score = Number(params.get('score'));
+  const onboarding =
+    params.get('onboarding') === '' ? 'welcome' : pick('onboarding', onboardingSteps);
+  const tab = tabs.find((name) => name.toLowerCase() === params.get('tab')?.toLowerCase());
   const options = {
-    mode: params.get('mode') === 'pc' ? ('pc' as const) : ('phone' as const),
+    mode:
+      params.get('mode') === 'pc' || onboarding?.startsWith('pc-')
+        ? ('pc' as const)
+        : ('phone' as const),
     connection: pick('connection', connections),
     state: pick('state', engineStates),
     suspended: pick('suspended', suspensions),
@@ -109,10 +141,21 @@ export function previewOptions(search: string): PreviewOptions {
         ? Math.round(Math.min(Math.max(score, 0), 100))
         : null,
     hand: params.get('hand') !== 'none',
+    actions: pick('actions', actionModes) ?? 'off',
+    onboarding,
+    tab: tab ?? null,
+    dialog: pick('dialog', dialogs),
   };
-  const { connection, state, suspended, warning, tip } = options;
-  const chosen = [connection, state, suspended, warning, tip, options.score];
-  return { ...options, walkthrough: options.hand && chosen.every((value) => value == null) };
+  const { connection, state, suspended, warning, tip, dialog } = options;
+  const chosen = [connection, state, suspended, warning, tip, options.score, onboarding, dialog];
+  return {
+    ...options,
+    walkthrough:
+      options.hand &&
+      options.actions === 'off' &&
+      options.tab == null &&
+      chosen.every((value) => value == null),
+  };
 }
 
 /** A poke turns every 3 s, 1.5 s into each period, and is detected 180 ms later. */
@@ -269,25 +312,121 @@ export function previewEngine(t: number, options: PreviewOptions): EngineView {
   };
 }
 
-/** Pokes detected after `from` and up to `to`; only a running, unsuspended engine reports them. */
-export function previewPokes(from: number, to: number, options: PreviewOptions): GestureEvent[] {
+/** What decides whether a poke runs its action, as in the Windows app. */
+export interface PokeFlags {
+  actions: boolean;
+  pokeAction: PokeAction;
+  /** When the running poke test started, or null. */
+  testFrom: number | null;
+}
+const noActions: PokeFlags = { actions: false, pokeAction: 'click', testFrom: null };
+
+/**
+ * Pokes detected after `from` and up to `to`; only a running, unsuspended engine reports them. A
+ * poke acts when actions are on, no poke test runs and the action isn't "Nothing"; it is a test
+ * poke when actions are off or a poke test runs.
+ */
+export function previewPokes(
+  from: number,
+  to: number,
+  options: PreviewOptions,
+  flags: PokeFlags = noActions,
+): GestureEvent[] {
   const pokes: GestureEvent[] = [];
   for (let k = Math.max(0, Math.floor((from - pokeTurn - pokeDelay) / pokeEvery)); ; k += 1) {
     const turn = k * pokeEvery + pokeTurn;
     const at = turn + pokeDelay;
     if (at > to) break;
     if (at <= from || !tracking(turn, options) || suspension(turn, options) != null) continue;
+    const testing = flags.testFrom != null && at > flags.testFrom;
     pokes.push({
       kind: 'poke',
       at,
       distanceCm: round1(hover(turn) - pokeDepth),
       depthCm: pokeDepth,
       confidence: 0.9,
-      acted: false,
-      testOnly: true,
+      acted: flags.actions && !testing && flags.pokeAction !== 'none',
+      testOnly: testing || !flags.actions,
     });
   }
   return pokes;
+}
+
+/** The Windows app counts at most 10 test pokes within 20 s of the start. */
+export function previewTestResult(from: number, to: number, options: PreviewOptions) {
+  const pokes = previewPokes(from, Math.min(to, from + 20_000), options);
+  return { seen: Math.min(pokes.length, 10), of: 10 } satisfies PokeTestResult;
+}
+
+const pokeActions: readonly PokeAction[] = ['click', 'play_pause', 'next_track', 'space', 'none'];
+const switches = [
+  'actionsOnAtStart',
+  'startWithWindows',
+  'closeToTray',
+  'detailedLogs',
+  'onboardingDone',
+] as const;
+/**
+ * A settings change checked like `set_settings` in the Windows app: the first invalid value
+ * throws its error code, and unknown fields are refused. Windows keeps Ctrl+Alt+Delete for
+ * itself, so the preview reports that hotkey as taken.
+ */
+export function applySettings(current: SettingsView, patch: SettingsPatch): SettingsView {
+  const value = patch as Record<string, unknown>;
+  const unknown = Object.keys(value).find((field) => !(field in defaultSettings));
+  if (unknown)
+    throw `invalid args \`patch\` for command \`set_settings\`: unknown field ${unknown}`;
+  const next = { ...current };
+  if (value.pcName !== undefined) {
+    const name = typeof value.pcName === 'string' ? value.pcName.trim() : '';
+    // Rust counts bytes and refuses control characters.
+    if (
+      !name ||
+      new TextEncoder().encode(name).length > 40 ||
+      /[\u0000-\u001f\u007f-\u009f]/.test(name)
+    )
+      throw 'invalid_pc_name';
+    next.pcName = name;
+  }
+  const oneOf = <T extends string>(field: string, values: readonly T[], code: string): T | null => {
+    if (value[field] === undefined) return null;
+    if (!(values as readonly unknown[]).includes(value[field])) throw code;
+    return value[field] as T;
+  };
+  next.pokeAction = oneOf('pokeAction', pokeActions, 'invalid_poke_action') ?? next.pokeAction;
+  next.sensitivity =
+    oneOf('sensitivity', ['low', 'normal', 'high'] as const, 'invalid_sensitivity') ??
+    next.sensitivity;
+  next.range = oneOf('range', ['near', 'normal', 'far'] as const, 'invalid_range') ?? next.range;
+  if (value.hotkey !== undefined) {
+    const hotkey = typeof value.hotkey === 'string' ? value.hotkey.trim() : '';
+    if (!hotkey || hotkey.length > 40) throw 'invalid_hotkey';
+    next.hotkey = hotkey;
+  }
+  if (value.keepRecordingsDays !== undefined) {
+    const days = value.keepRecordingsDays;
+    if (typeof days !== 'number' || !Number.isInteger(days) || days < 0 || days > 365)
+      throw 'invalid_keep_days';
+    next.keepRecordingsDays = days;
+  }
+  if (value.temperatureC !== undefined) {
+    const temperature = value.temperatureC;
+    if (typeof temperature !== 'number' || !(temperature >= -10 && temperature <= 45))
+      throw 'invalid_temperature';
+    next.temperatureC = temperature;
+  }
+  for (const field of switches) {
+    if (value[field] === undefined) continue;
+    if (typeof value[field] !== 'boolean')
+      throw `invalid args \`patch\` for command \`set_settings\`: ${field}`;
+    next[field] = value[field] as boolean;
+  }
+  // The Windows app registers a new hotkey after checking every value.
+  if (next.hotkey !== current.hotkey) {
+    if (!isHotkey(next.hotkey)) throw 'invalid_hotkey';
+    if (next.hotkey === 'Ctrl+Alt+Delete') throw 'hotkey_unavailable';
+  }
+  return next;
 }
 
 export function previewLink(t: number, options: PreviewOptions): LinkSnapshot {
@@ -413,6 +552,19 @@ export function previewDiagnostics(t: number, options: PreviewOptions): Diagnost
 const origin = performance.now();
 const clock = () => performance.now() - origin;
 const options = previewOptions(globalThis.location?.search ?? '');
+// What the preview's commands change, kept in memory until the page reloads.
+const memory = {
+  settings: { ...defaultSettings, onboardingDone: options.onboarding == null },
+  actions: options.actions !== 'off',
+  testFrom: null as number | null,
+};
+const actionListeners = new Set<(event: ActionsEvent) => void>();
+const sourceListeners = new Set<() => void>();
+const pokeFlags = (): PokeFlags => ({
+  actions: memory.actions,
+  pokeAction: memory.settings.pokeAction,
+  testFrom: memory.testFrom,
+});
 
 /** Calls `tick` every `ms` until stopped; `tick` decides itself whether anything changed. */
 function every(ms: number, tick: () => void): () => void {
@@ -420,19 +572,70 @@ function every(ms: number, tick: () => void): () => void {
   return () => clearInterval(timer);
 }
 
+export interface PreviewView {
+  tab: PreviewTab | null;
+  pokeTest: boolean;
+  onboarding: OnboardingStep | null;
+}
+/** Where the interface opens, from `?tab=`, `?dialog=` and `?onboarding=`. */
+export function previewView(): PreviewView {
+  return {
+    tab: options.tab,
+    pokeTest: options.dialog === 'poke-test',
+    onboarding: options.onboarding,
+  };
+}
+
 export async function getAppState(): Promise<AppState> {
   const t = clock();
   return {
     version: metadata.version,
-    pcName: 'Windows PC',
-    actionsEnabled: false,
+    pcName: memory.settings.pcName,
+    actionsEnabled: memory.actions,
     link: previewLink(t, options),
     source: previewSource(t, options),
     engine: previewEngine(t, options),
+    settings: { ...memory.settings },
   };
 }
 export async function getDiagnostics(): Promise<Diagnostics> {
   return previewDiagnostics(clock(), options);
+}
+export async function setActionsEnabled(enabled: boolean): Promise<void> {
+  memory.actions = enabled;
+  actionListeners.forEach((update) => update({ enabled, error: null }));
+}
+export async function watchActions(update: (event: ActionsEvent) => void): Promise<() => void> {
+  actionListeners.add(update);
+  // `?actions=blocked` shows Windows' block from the start, ready for a screenshot.
+  const timer =
+    options.actions === 'blocked'
+      ? setTimeout(() => update({ enabled: memory.actions, error: 'blocked_elevated' }), 0)
+      : undefined;
+  return () => {
+    clearTimeout(timer);
+    actionListeners.delete(update);
+  };
+}
+export async function setSettings(patch: SettingsPatch): Promise<SettingsView> {
+  memory.settings = applySettings(memory.settings, patch);
+  return { ...memory.settings };
+}
+export async function startPokeTest(): Promise<void> {
+  memory.testFrom = clock();
+}
+export async function stopPokeTest(): Promise<PokeTestResult> {
+  const from = memory.testFrom;
+  memory.testFrom = null;
+  return from == null ? { seen: 0, of: 10 } : previewTestResult(from, clock(), options);
+}
+/** The preview keeps no logs, so there is nothing to open. */
+export async function openLogsFolder(): Promise<void> {}
+/** Switches the sample data between phone and PC mode. */
+export async function setSource(source: string): Promise<void> {
+  if (source !== 'phone' && source !== 'pc') throw 'invalid_source';
+  options.mode = source;
+  sourceListeners.forEach((tick) => tick());
 }
 export async function watchLink(update: (value: LinkUpdate) => void): Promise<() => void> {
   let last = JSON.stringify(previewLink(clock(), options));
@@ -446,16 +649,23 @@ export async function watchLink(update: (value: LinkUpdate) => void): Promise<()
   });
 }
 export async function watchSource(update: (source: SourceView) => void): Promise<() => void> {
-  let last = previewSource(clock(), options).state;
+  const key = (source: SourceView) => `${source.mode} ${source.state}`;
+  let last = key(previewSource(clock(), options));
   let revision = 1;
-  return every(250, () => {
+  const tick = () => {
     const source = previewSource(clock(), options);
-    if (source.state === last) return;
-    last = source.state;
+    if (key(source) === last) return;
+    last = key(source);
     revision += 1;
     source.revision = revision;
     update(source);
-  });
+  };
+  sourceListeners.add(tick);
+  const stop = every(250, tick);
+  return () => {
+    stop();
+    sourceListeners.delete(tick);
+  };
 }
 let stopLive: (() => void) | undefined;
 export async function subscribeLive(update: (frame: LiveFrame) => void): Promise<void> {
@@ -486,7 +696,13 @@ export async function watchGestures(update: (gesture: GestureEvent) => void): Pr
   let from = clock();
   return every(100, () => {
     const to = clock();
-    previewPokes(from, to, options).forEach(update);
+    for (const poke of previewPokes(from, to, options, pokeFlags())) {
+      update(poke);
+      if (poke.acted && options.actions === 'blocked')
+        actionListeners.forEach((listener) =>
+          listener({ enabled: memory.actions, error: 'blocked_elevated' }),
+        );
+    }
     from = to;
   });
 }

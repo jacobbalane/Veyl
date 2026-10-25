@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getDiagnostics, copyDiagnostics } from '../api/native';
+import { getDiagnostics, copyDiagnostics, openLogsFolder } from '../api/native';
 import type { Diagnostics as DiagnosticsValue, StreamLevels, CaptureDetails } from '../api/types';
 import { connectionLabel } from './Connection';
-import { linkCopy, liveCopy, pcCopy } from '../copy';
+import { helpCopy, linkCopy, liveCopy, pcCopy } from '../copy';
 import { formatLatency } from './live-model';
 
 function PcFormat({ name, details }: { name: string; details: CaptureDetails | null }) {
@@ -85,6 +85,13 @@ export function Diagnostics() {
       setMessage(linkCopy.copyFailed);
     }
   };
+  const openLogs = async () => {
+    try {
+      await openLogsFolder();
+    } catch {
+      setMessage(helpCopy.logsFailed);
+    }
+  };
   const number = (value: number | null | undefined, suffix: string, digits = 1) =>
     value == null ? linkCopy.unavailable : `${value.toFixed(digits)} ${suffix}`;
   const pc = value?.source?.mode === 'pc';
@@ -155,7 +162,10 @@ export function Diagnostics() {
           )}
         </>
       )}
-      <button onClick={() => void copy()}>{linkCopy.copyDiagnostics}</button>
+      <div className="diagnostic-buttons">
+        <button onClick={() => void openLogs()}>{helpCopy.openLogs}</button>
+        <button onClick={() => void copy()}>{linkCopy.copyDiagnostics}</button>
+      </div>
       {message && <p role="status">{message}</p>}
     </section>
   );
