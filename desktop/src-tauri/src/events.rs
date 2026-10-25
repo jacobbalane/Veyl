@@ -149,6 +149,14 @@ pub struct GestureEvent {
     pub acted: bool,
     pub test_only: bool,
 }
+/// 'veyl://actions': the switch changed, or Windows blocked an action.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionsEvent {
+    pub enabled: bool,
+    /// `blocked_elevated` when the target app runs as administrator.
+    pub error: Option<String>,
+}
 pub enum Notice {
     Connection(ConnectionState),
     Phones(PhonesView),
@@ -171,6 +179,20 @@ mod fixtures {
             link: LinkSnapshot::default(),
             source: crate::sources::SourceView::default(),
             engine: EngineView::default(),
+            settings: crate::settings::SettingsView {
+                pc_name: "Test PC".into(),
+                poke_action: "click".into(),
+                sensitivity: "normal".into(),
+                range: "normal".into(),
+                hotkey: "Ctrl+Alt+V".into(),
+                actions_on_at_start: false,
+                start_with_windows: false,
+                close_to_tray: true,
+                detailed_logs: false,
+                keep_recordings_days: 7,
+                temperature_c: 20.0,
+                onboarding_done: false,
+            },
         };
         let diagnostics = Diagnostics {
             link: LinkSnapshot::default(),
@@ -228,6 +250,19 @@ mod fixtures {
             ("engine.json", serde_json::to_value(engine).unwrap()),
             ("live-frame.json", serde_json::to_value(live).unwrap()),
             ("gesture.json", serde_json::to_value(gesture).unwrap()),
+            (
+                "actions.json",
+                serde_json::to_value(ActionsEvent {
+                    enabled: true,
+                    error: Some("blocked_elevated".into()),
+                })
+                .unwrap(),
+            ),
+            (
+                "poke-test.json",
+                serde_json::to_value(crate::engine_host::PokeTestResult { seen: 8, of: 10 })
+                    .unwrap(),
+            ),
             (
                 "pc-check.json",
                 serde_json::to_value(crate::pc_testsound::CheckResult {

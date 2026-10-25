@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod address;
 mod commands;
 pub mod connection;
@@ -19,13 +20,20 @@ use std::sync::{
     Arc, Mutex,
 };
 use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 struct Runtime {
     settings: Arc<Mutex<Settings>>,
+    settings_path: std::path::PathBuf,
+    /// Serializes settings changes from the interface.
+    settings_change: tokio::sync::Mutex<()>,
+    actions: Arc<actions::ActionsGate>,
+    tray: TrayIcon,
+    tray_actions: CheckMenuItem<tauri::Wry>,
     connection: connection::ConnectionManager,
     recorder: recorder::Recorder,
     sources: sources::Sources,
@@ -44,18 +52,73 @@ struct AppState {
     link: events::LinkSnapshot,
     source: sources::SourceView,
     engine: events::EngineView,
+    settings: settings::SettingsView,
 }
 
 #[tauri::command]
 fn get_app_state(state: tauri::State<'_, Runtime>) -> AppState {
+    let settings = settings::SettingsView::from(&*state.settings.lock().unwrap());
     AppState {
         version: env!("CARGO_PKG_VERSION"),
-        pc_name: state.settings.lock().unwrap().pc_name.clone(),
-        actions_enabled: false,
+        pc_name: settings.pc_name.clone(),
+        actions_enabled: state.actions.enabled(),
         link: state.connection.snapshot(),
         source: state.sources.snapshot(),
         engine: state.connection.engine().engine(),
+        settings,
     }
+}
+
+/// Turns actions on or off from the header, the tray or the hotkey, and shows it everywhere.
+fn set_actions(app: &tauri::AppHandle, enabled: bool) {
+    let Some(runtime) = app.try_state::<Runtime>() else {
+        return;
+    };
+    let changed = runtime.actions.set_enabled(enabled);
+    let _ = runtime.tray_actions.set_checked(enabled);
+    let _ = runtime.tray.set_tooltip(Some(tray_tooltip(enabled)));
+    let _ = app.emit(
+        "veyl://actions",
+        events::ActionsEvent {
+            enabled,
+            error: None,
+        },
+    );
+    if changed {
+        tracing::info!("Actions {}.", if enabled { "on" } else { "off" });
+    }
+}
+fn toggle_actions(app: &tauri::AppHandle) {
+    let enabled = app
+        .try_state::<Runtime>()
+        .is_some_and(|runtime| runtime.actions.enabled());
+    set_actions(app, !enabled);
+}
+fn tray_tooltip(actions: bool) -> &'static str {
+    if actions {
+        "Veyl · Actions on"
+    } else {
+        "Veyl · Actions off"
+    }
+}
+fn parse_hotkey(hotkey: &str) -> Result<Shortcut, String> {
+    hotkey.parse().map_err(|_| "invalid_hotkey".to_string())
+}
+/// Moves the actions hotkey; on failure the previous one stays registered.
+fn replace_hotkey(app: &tauri::AppHandle, previous: &str, next: &str) -> Result<(), String> {
+    let next = parse_hotkey(next)?;
+    let shortcuts = app.global_shortcut();
+    let previous = parse_hotkey(previous).ok();
+    if let Some(previous) = previous {
+        let _ = shortcuts.unregister(previous);
+    }
+    if shortcuts.register(next).is_err() {
+        if let Some(previous) = previous {
+            let _ = shortcuts.register(previous);
+        }
+        return Err("hotkey_unavailable".into());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -82,6 +145,19 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             show_window(app)
         }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        toggle_actions(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             let directory = if cfg!(debug_assertions) {
                 std::env::var_os("VEYL_DATA_DIR").map(std::path::PathBuf::from)
@@ -90,6 +166,8 @@ pub fn run() {
             }
             .unwrap_or(app.path().app_local_data_dir()?);
             std::fs::create_dir_all(&directory)?;
+            let settings_path = directory.join("settings.json");
+            let settings = Arc::new(Mutex::new(Settings::load_or_create(&settings_path)?));
             let log = tracing_appender::rolling::Builder::new()
                 .rotation(tracing_appender::rolling::Rotation::DAILY)
                 .filename_prefix("veyl")
@@ -99,13 +177,15 @@ pub fn run() {
             let (writer, guard) = tracing_appender::non_blocking(log);
             tracing_subscriber::fmt()
                 .with_ansi(false)
-                .with_max_level(tracing::Level::INFO)
+                // Detailed logs apply from the next start.
+                .with_max_level(if settings.lock().unwrap().detailed_logs {
+                    tracing::Level::DEBUG
+                } else {
+                    tracing::Level::INFO
+                })
                 .with_writer(writer)
                 .try_init()
                 .map_err(|error| std::io::Error::other(error.to_string()))?;
-            let settings = Arc::new(Mutex::new(Settings::load_or_create(
-                &directory.join("settings.json"),
-            )?));
             let handle = app.handle().clone();
             let recorder = recorder::Recorder::new(
                 &directory.join("recordings"),
@@ -125,6 +205,34 @@ pub fn run() {
                     let _ = recording_events.emit("veyl://recording", info);
                 }
             });
+            let (actions_on, poke_action, hotkey) = {
+                let saved = settings.lock().unwrap();
+                (
+                    saved.actions_on_at_start,
+                    actions::PokeAction::parse(&saved.poke_action).unwrap_or_default(),
+                    saved.hotkey.clone(),
+                )
+            };
+            let blocked = app.handle().clone();
+            let actions = actions::ActionsGate::new(
+                actions_on,
+                poke_action,
+                Arc::new(actions::SystemActions),
+                Arc::new(move |_, result| {
+                    if result == Err(actions::ActionError::Blocked) {
+                        let enabled = blocked
+                            .try_state::<Runtime>()
+                            .is_some_and(|runtime| runtime.actions.enabled());
+                        let _ = blocked.emit(
+                            "veyl://actions",
+                            events::ActionsEvent {
+                                enabled,
+                                error: Some("blocked_elevated".into()),
+                            },
+                        );
+                    }
+                }),
+            );
             let connection = connection::ConnectionManager::start(
                 settings.clone(),
                 &directory,
@@ -149,33 +257,28 @@ pub fn run() {
                     }
                 }),
                 recorder.clone(),
+                actions.clone(),
             )?;
             let source_events = app.handle().clone();
             let sources = sources::Sources::start(settings.clone(), &directory, connection.clone(), pc_devices::DeviceMonitor::start()?, Arc::new(move |source| { let _ = source_events.emit("veyl://source", source); }));
-            app.manage(Runtime {
-                settings,
-                connection,
-                recorder,
-                sources,
-                recording_events_stop,
-                exiting: AtomicBool::new(false),
-                hidden: std::env::args().any(|arg| arg == "--hidden"),
-                _logging: guard,
-            });
             let open = MenuItem::with_id(app, "open", "Open Veyl", true, None::<&str>)?;
+            let tray_actions =
+                CheckMenuItem::with_id(app, "actions", "Actions", true, actions_on, None::<&str>)?;
+            let separator = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Veyl", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let menu = Menu::with_items(app, &[&open, &tray_actions, &separator, &quit])?;
             let icon = app
                 .default_window_icon()
                 .ok_or("Veyl's icon is missing.")?
                 .clone();
-            TrayIconBuilder::new()
+            let tray = TrayIconBuilder::new()
                 .icon(icon)
                 .menu(&menu)
-                .tooltip("Veyl · Paused")
+                .tooltip(tray_tooltip(actions_on))
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_window(app),
+                    "actions" => toggle_actions(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -192,7 +295,30 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
-            tracing::info!("Veyl started with actions off.");
+            app.manage(Runtime {
+                settings,
+                settings_path,
+                settings_change: tokio::sync::Mutex::new(()),
+                actions,
+                tray,
+                tray_actions,
+                connection,
+                recorder,
+                sources,
+                recording_events_stop,
+                exiting: AtomicBool::new(false),
+                hidden: std::env::args().any(|arg| arg == "--hidden"),
+                _logging: guard,
+            });
+            // Another app may own the hotkey; the switch and the tray still work.
+            match parse_hotkey(&hotkey) {
+                Ok(shortcut) if app.global_shortcut().register(shortcut).is_ok() => {}
+                _ => tracing::warn!("The actions hotkey is unavailable."),
+            }
+            tracing::info!(
+                "Veyl started with actions {}.",
+                if actions_on { "on" } else { "off" }
+            );
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -221,6 +347,10 @@ pub fn run() {
             commands::request_phone_start,
             commands::get_diagnostics,
             commands::subscribe_live,
+            commands::set_actions_enabled,
+            commands::set_settings,
+            commands::start_poke_test,
+            commands::stop_poke_test,
             commands::copy_diagnostics,
             commands::start_recording,
             commands::stop_recording,
@@ -257,4 +387,16 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_default_and_typical_hotkeys_parse() {
+        for hotkey in ["Ctrl+Alt+V", "Ctrl+Shift+F9", "Alt+Space"] {
+            assert!(super::parse_hotkey(hotkey).is_ok(), "{hotkey}");
+        }
+        assert_eq!(super::parse_hotkey("Ctrl+").unwrap_err(), "invalid_hotkey");
+        assert_eq!(super::tray_tooltip(false), "Veyl · Actions off");
+    }
 }

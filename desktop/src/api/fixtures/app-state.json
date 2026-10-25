@@ -37,6 +37,20 @@
     }
   },
   "pcName": "Test PC",
+  "settings": {
+    "actionsOnAtStart": false,
+    "closeToTray": true,
+    "detailedLogs": false,
+    "hotkey": "Ctrl+Alt+V",
+    "keepRecordingsDays": 7,
+    "onboardingDone": false,
+    "pcName": "Test PC",
+    "pokeAction": "click",
+    "range": "normal",
+    "sensitivity": "normal",
+    "startWithWindows": false,
+    "temperatureC": 20.0
+  },
   "source": {
     "capture": null,
     "check": {

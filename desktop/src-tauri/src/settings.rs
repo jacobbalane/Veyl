@@ -101,6 +101,113 @@ impl Settings {
     }
 }
 
+/// The settings the interface shows and changes.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsView {
+    pub pc_name: String,
+    pub poke_action: String,
+    pub sensitivity: String,
+    pub range: String,
+    pub hotkey: String,
+    pub actions_on_at_start: bool,
+    pub start_with_windows: bool,
+    pub close_to_tray: bool,
+    pub detailed_logs: bool,
+    pub keep_recordings_days: u32,
+    pub temperature_c: f32,
+    pub onboarding_done: bool,
+}
+impl From<&Settings> for SettingsView {
+    fn from(settings: &Settings) -> Self {
+        Self {
+            pc_name: settings.pc_name.clone(),
+            poke_action: settings.poke_action.clone(),
+            sensitivity: settings.sensitivity.clone(),
+            range: settings.range.clone(),
+            hotkey: settings.hotkey.clone(),
+            actions_on_at_start: settings.actions_on_at_start,
+            start_with_windows: settings.start_with_windows,
+            close_to_tray: settings.close_to_tray,
+            detailed_logs: settings.detailed_logs,
+            keep_recordings_days: settings.keep_recordings_days,
+            temperature_c: settings.temperature_c,
+            onboarding_done: settings.onboarding_done,
+        }
+    }
+}
+/// A change from the interface; missing fields stay as they are.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SettingsPatch {
+    pub pc_name: Option<String>,
+    pub poke_action: Option<String>,
+    pub sensitivity: Option<String>,
+    pub range: Option<String>,
+    pub hotkey: Option<String>,
+    pub actions_on_at_start: Option<bool>,
+    pub start_with_windows: Option<bool>,
+    pub close_to_tray: Option<bool>,
+    pub detailed_logs: Option<bool>,
+    pub keep_recordings_days: Option<u32>,
+    pub temperature_c: Option<f32>,
+    pub onboarding_done: Option<bool>,
+}
+impl SettingsPatch {
+    /// The settings with this change, or the code of the first invalid value.
+    pub fn apply(self, settings: &Settings) -> Result<Settings, &'static str> {
+        let mut next = settings.clone();
+        if let Some(name) = self.pc_name {
+            let name = name.trim();
+            if name.is_empty() || name.len() > 40 || name.chars().any(char::is_control) {
+                return Err("invalid_pc_name");
+            }
+            next.pc_name = name.into();
+        }
+        if let Some(action) = self.poke_action {
+            crate::actions::PokeAction::parse(&action).ok_or("invalid_poke_action")?;
+            next.poke_action = action;
+        }
+        if let Some(sensitivity) = self.sensitivity {
+            if !matches!(sensitivity.as_str(), "low" | "normal" | "high") {
+                return Err("invalid_sensitivity");
+            }
+            next.sensitivity = sensitivity;
+        }
+        if let Some(range) = self.range {
+            if !matches!(range.as_str(), "near" | "normal" | "far") {
+                return Err("invalid_range");
+            }
+            next.range = range;
+        }
+        if let Some(hotkey) = self.hotkey {
+            if hotkey.trim().is_empty() || hotkey.len() > 40 {
+                return Err("invalid_hotkey");
+            }
+            next.hotkey = hotkey.trim().into();
+        }
+        if let Some(days) = self.keep_recordings_days {
+            // Zero keeps recordings until the user deletes them.
+            if days > 365 {
+                return Err("invalid_keep_days");
+            }
+            next.keep_recordings_days = days;
+        }
+        if let Some(temperature) = self.temperature_c {
+            if !temperature.is_finite() || !(-10.0..=45.0).contains(&temperature) {
+                return Err("invalid_temperature");
+            }
+            next.temperature_c = temperature;
+        }
+        next.actions_on_at_start = self.actions_on_at_start.unwrap_or(next.actions_on_at_start);
+        next.start_with_windows = self.start_with_windows.unwrap_or(next.start_with_windows);
+        next.close_to_tray = self.close_to_tray.unwrap_or(next.close_to_tray);
+        next.detailed_logs = self.detailed_logs.unwrap_or(next.detailed_logs);
+        next.onboarding_done = self.onboarding_done.unwrap_or(next.onboarding_done);
+        Ok(next)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +228,48 @@ mod tests {
         fs::write(&path, b"invalid").unwrap();
         assert!(Settings::load_or_create(&path).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"invalid");
+    }
+    #[test]
+    fn patches_validate_each_value_and_keep_the_rest() {
+        let folder = tempfile::tempdir().unwrap();
+        let settings = Settings::load_or_create(&folder.path().join("settings.json")).unwrap();
+        let patch: SettingsPatch = serde_json::from_value(serde_json::json!({
+            "pokeAction": "play_pause",
+            "sensitivity": "high",
+            "temperatureC": 26.5,
+            "pcName": "  Desk PC ",
+        }))
+        .unwrap();
+        let next = patch.apply(&settings).unwrap();
+        assert_eq!(next.poke_action, "play_pause");
+        assert_eq!(next.sensitivity, "high");
+        assert_eq!(next.temperature_c, 26.5);
+        assert_eq!(next.pc_name, "Desk PC");
+        assert_eq!(next.range, settings.range);
+        assert_eq!(next.pc_id, settings.pc_id);
+        for (patch, code) in [
+            (
+                serde_json::json!({"pokeAction": "jump"}),
+                "invalid_poke_action",
+            ),
+            (serde_json::json!({"range": "huge"}), "invalid_range"),
+            (
+                serde_json::json!({"temperatureC": 80.0}),
+                "invalid_temperature",
+            ),
+            (serde_json::json!({"pcName": " "}), "invalid_pc_name"),
+            (
+                serde_json::json!({"keepRecordingsDays": 999}),
+                "invalid_keep_days",
+            ),
+        ] {
+            let patch: SettingsPatch = serde_json::from_value(patch).unwrap();
+            assert_eq!(patch.apply(&settings).unwrap_err(), code);
+        }
+        assert!(serde_json::from_value::<SettingsPatch>(serde_json::json!({"pcId": "x"})).is_err());
+        let view = SettingsView::from(&next);
+        let json = serde_json::to_value(view).unwrap();
+        assert_eq!(json["pokeAction"], "play_pause");
+        assert!(json.get("pcId").is_none());
     }
 }

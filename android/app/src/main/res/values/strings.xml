@@ -24,6 +24,7 @@
     <string name="not_speaker">Sound is going to headphones or Bluetooth. Veyl needs your phone\'s speaker.</string>
     <string name="mic_silenced">Another app is using the microphone.</string>
     <string name="no_pc_meter">No PC meter yet</string>
+    <string name="poke_seen">Poke</string>
     <string name="listening_reminder">Keep this screen on. Veyl stops if your phone locks.</string>
     <string name="one_more_step">One more step</string>
     <string name="continue_label">Continue</string>

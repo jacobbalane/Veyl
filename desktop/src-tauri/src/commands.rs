@@ -45,6 +45,67 @@ pub fn get_diagnostics(state: tauri::State<'_, Runtime>) -> Diagnostics {
     diagnostics.source = Some(state.sources.snapshot());
     diagnostics
 }
+#[tauri::command]
+pub fn set_actions_enabled(app: tauri::AppHandle, enabled: bool) {
+    crate::set_actions(&app, enabled);
+}
+/// Validates and saves a settings change, then applies it to the engine, the actions, the hotkey
+/// and starting with Windows. Detailed logs apply from the next start.
+#[tauri::command]
+pub async fn set_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Runtime>,
+    patch: crate::settings::SettingsPatch,
+) -> Result<crate::settings::SettingsView, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let _change = state.settings_change.lock().await;
+    let current = state.settings.lock().unwrap().clone();
+    let preview = patch.clone().apply(&current)?;
+    if preview.hotkey != current.hotkey {
+        crate::replace_hotkey(&app, &current.hotkey, &preview.hotkey)?;
+    }
+    if preview.start_with_windows != current.start_with_windows {
+        let autostart = app.autolaunch();
+        let result = if preview.start_with_windows {
+            autostart.enable()
+        } else {
+            autostart.disable()
+        };
+        if result.is_err() {
+            if preview.hotkey != current.hotkey {
+                let _ = crate::replace_hotkey(&app, &preview.hotkey, &current.hotkey);
+            }
+            return Err("autostart_failed".into());
+        }
+    }
+    // Other parts of Veyl save the source and devices; apply the patch to the latest settings.
+    let next = {
+        let mut saved = state.settings.lock().unwrap();
+        let next = patch.apply(&saved)?;
+        next.save(&state.settings_path)
+            .map_err(|_| "settings_save_failed")?;
+        *saved = next.clone();
+        next
+    };
+    state
+        .actions
+        .set_action(crate::actions::PokeAction::parse(&next.poke_action).unwrap_or_default());
+    state
+        .connection
+        .engine()
+        .apply(crate::engine_host::EngineSettings::from_settings(&next))
+        .await?;
+    Ok(crate::settings::SettingsView::from(&next))
+}
+/// The poke test and the onboarding practice: pokes are counted and actions never run.
+#[tauri::command]
+pub fn start_poke_test(state: tauri::State<'_, Runtime>) {
+    state.connection.engine().start_test();
+}
+#[tauri::command]
+pub fn stop_poke_test(state: tauri::State<'_, Runtime>) -> crate::engine_host::PokeTestResult {
+    state.connection.engine().stop_test()
+}
 /// The interface's echo view; a reloaded window replaces the previous channel.
 #[tauri::command]
 pub fn subscribe_live(

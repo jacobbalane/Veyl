@@ -1,6 +1,7 @@
 //! The engine thread (§7.6): transport levels for Diagnostics, and the echo engine for the
 //! interface and the phone. It stays thin so the lab's end-to-end test can make the same calls.
 use crate::{
+    actions::ActionsGate,
     connection::Observer,
     events::{EngineView, GestureEvent, HandView, LiveFrame, MeterView, Notice},
     source::PhoneSource,
@@ -123,11 +124,27 @@ pub struct HostOptions {
     pub observer: Option<Observer>,
     /// CONTROL messages for the connected phone: the meter and gestures.
     pub phone: Option<mpsc::Sender<Control>>,
+    pub actions: Option<Arc<ActionsGate>>,
 }
+/// The poke test counts up to 10 pokes within 20 s; actions never run meanwhile.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PokeTestResult {
+    pub seen: u32,
+    pub of: u32,
+}
+struct PokeTest {
+    started: Instant,
+    seen: u32,
+}
+const POKE_TEST_POKES: u32 = 10;
+const POKE_TEST_TIME: Duration = Duration::from_secs(20);
 pub struct EngineHost {
     view: Arc<Mutex<LevelsView>>,
     engine: Arc<Mutex<EngineView>>,
     live: Arc<Mutex<Option<LiveSink>>>,
+    test: Arc<Mutex<Option<PokeTest>>>,
+    actions: Option<Arc<ActionsGate>>,
     dropped: Arc<AtomicU64>,
     sender: mpsc::Sender<EngineInput>,
 }
@@ -154,6 +171,8 @@ impl EngineHost {
             view: Arc::default(),
             engine: Arc::default(),
             live: Arc::default(),
+            test: Arc::default(),
+            actions: options.actions.clone(),
             dropped,
             sender,
         };
@@ -161,6 +180,8 @@ impl EngineHost {
             levels: host.view.clone(),
             shared: host.engine.clone(),
             live: host.live.clone(),
+            test: host.test.clone(),
+            actions: options.actions,
             observer: options.observer,
             phone: options.phone,
             settings: options.settings,
@@ -205,6 +226,30 @@ impl EngineHost {
     pub fn subscribe(&self, sink: LiveSink) {
         *self.live.lock().unwrap_or_else(|error| error.into_inner()) = Some(sink);
     }
+    /// Starts the poke test or the onboarding practice; actions stay off until it stops.
+    pub fn start_test(&self) {
+        if let Some(actions) = &self.actions {
+            actions.set_testing(true);
+        }
+        *self.test.lock().unwrap_or_else(|error| error.into_inner()) = Some(PokeTest {
+            started: Instant::now(),
+            seen: 0,
+        });
+    }
+    pub fn stop_test(&self) -> PokeTestResult {
+        let test = self
+            .test
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        if let Some(actions) = &self.actions {
+            actions.set_testing(false);
+        }
+        PokeTestResult {
+            seen: test.map_or(0, |test| test.seen),
+            of: POKE_TEST_POKES,
+        }
+    }
     pub async fn apply(&self, settings: EngineSettings) -> Result<(), String> {
         tokio::time::timeout(
             Duration::from_secs(1),
@@ -237,6 +282,8 @@ struct Worker {
     levels: Arc<Mutex<LevelsView>>,
     shared: Arc<Mutex<EngineView>>,
     live: Arc<Mutex<Option<LiveSink>>>,
+    test: Arc<Mutex<Option<PokeTest>>>,
+    actions: Option<Arc<ActionsGate>>,
     observer: Option<Observer>,
     phone: Option<mpsc::Sender<Control>>,
     settings: EngineSettings,
@@ -558,12 +605,28 @@ impl Worker {
                         self.lock_levels().latency = latency_view(&self.latency);
                     }
                 }
+                let testing = {
+                    let mut test = self.test.lock().unwrap_or_else(|error| error.into_inner());
+                    if let Some(test) = test.as_mut() {
+                        if test.seen < POKE_TEST_POKES && test.started.elapsed() <= POKE_TEST_TIME {
+                            test.seen += 1;
+                        }
+                    }
+                    test.is_some()
+                };
+                // A poke is a test when actions are off or a poke test runs; with the action
+                // "Nothing" it is neither acted on nor a test.
+                let acted = !testing && self.actions.as_ref().is_some_and(|gate| gate.poke());
+                let test_only = testing
+                    || self
+                        .actions
+                        .as_ref()
+                        .is_none_or(|gate| !gate.enabled() || gate.testing());
                 tracing::info!(
-                    "Poke at {:.0} cm, depth {:.1} cm.",
+                    "Poke at {:.0} cm, depth {:.1} cm, acted: {acted}.",
                     poke.distance_cm,
                     poke.depth_cm
                 );
-                // Actions arrive in M6; until then every poke is shown only, as with actions off.
                 if let Some(observer) = &self.observer {
                     observer(Notice::Gesture(GestureEvent {
                         kind: "poke".into(),
@@ -571,14 +634,14 @@ impl Worker {
                         distance_cm: poke.distance_cm,
                         depth_cm: poke.depth_cm,
                         confidence: poke.confidence,
-                        acted: false,
-                        test_only: true,
+                        acted,
+                        test_only,
                     }));
                 }
                 if !pc {
                     self.send_phone(Control::Gesture {
                         kind: "poke".into(),
-                        acted: false,
+                        acted,
                     });
                 }
                 false

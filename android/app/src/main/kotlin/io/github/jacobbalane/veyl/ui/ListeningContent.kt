@@ -4,7 +4,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.delay
 import io.github.jacobbalane.veyl.R
 import io.github.jacobbalane.veyl.runtime.CaptureSnapshot
 import io.github.jacobbalane.veyl.runtime.PhoneLinkState
@@ -17,6 +25,21 @@ fun ListeningContent(state: CaptureSnapshot, link: PhoneLinkState, onStop: () ->
         else stringResource(R.string.connected_to, link.pcName),
     )
     PhoneScore(link.meter)
+    // A short flash for each poke the PC saw; the space stays reserved so nothing jumps.
+    var flash by remember { mutableStateOf(false) }
+    LaunchedEffect(link.pokes) {
+        if (link.pokes > 0) {
+            flash = true
+            delay(600)
+            flash = false
+        }
+    }
+    Text(
+        stringResource(R.string.poke_seen),
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.alpha(if (flash) 1f else 0f),
+    )
     Text(stringResource(R.string.listening_reminder))
     if (state.route == "external")
         Text(stringResource(R.string.not_speaker), color = MaterialTheme.colorScheme.error)

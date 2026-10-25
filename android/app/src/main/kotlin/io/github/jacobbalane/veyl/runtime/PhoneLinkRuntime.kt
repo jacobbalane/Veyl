@@ -30,6 +30,8 @@ data class PhoneLinkState(
     val pairing: PairingPrompt? = null,
     val pcs: List<SavedPc> = emptyList(),
     val meter: PhoneMeter? = null,
+    /** Pokes the connected PC reported; each one flashes the listening screen. */
+    val pokes: Int = 0,
     val pairedName: String? = null,
     val error: String? = null,
 )
@@ -159,7 +161,13 @@ class PhoneLinkRuntime(private val context: Context, private val runtime: VeylRu
                 runtime.pcConnected = true
                 captureChanged()
                 mutable.update {
-                    it.copy(pcName = peer.name, pairedName = null, error = null, meter = null)
+                    it.copy(
+                        pcName = peer.name,
+                        pairedName = null,
+                        error = null,
+                        meter = null,
+                        pokes = 0,
+                    )
                 }
                 runtime.noteLink("link_connected")
                 if (service.get()) Notifications.updateConnected(context, peer.name)
@@ -169,7 +177,7 @@ class PhoneLinkRuntime(private val context: Context, private val runtime: VeylRu
             override fun closed(session: LinkSession) {
                 if (connected.compareAndSet(session, null)) {
                     runtime.pcConnected = false
-                    mutable.update { it.copy(pcName = null, meter = null) }
+                    mutable.update { it.copy(pcName = null, meter = null, pokes = 0) }
                     runtime.noteLink("link_disconnected")
                     if (service.get()) Notifications.updateConnected(context, null)
                     startGate.revoke(session)
@@ -187,6 +195,11 @@ class PhoneLinkRuntime(private val context: Context, private val runtime: VeylRu
                             ),
                     )
                 }
+            }
+
+            override fun gesture(value: JsonObject) {
+                if (runCatching { value.text("kind") }.getOrNull() == "poke")
+                    mutable.update { it.copy(pokes = it.pokes + 1) }
             }
 
             override fun requestStart() {

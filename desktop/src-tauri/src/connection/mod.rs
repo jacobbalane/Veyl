@@ -62,6 +62,7 @@ impl ConnectionManager {
         directory: &Path,
         observer: Observer,
         recorder: crate::recorder::Recorder,
+        actions: Arc<crate::actions::ActionsGate>,
     ) -> io::Result<Self> {
         let pc_id = pairings::id_bytes(&settings.lock().unwrap().pc_id)?;
         let store = PairingStore::load(&directory.join("pairings.json"), pc_id)?;
@@ -74,6 +75,7 @@ impl ConnectionManager {
             settings: engine_settings,
             observer: Some(observer.clone()),
             phone: Some(outgoing),
+            actions: Some(actions),
         });
         let engine = Arc::new(engine);
         let active = settings.lock().unwrap().source == "phone";

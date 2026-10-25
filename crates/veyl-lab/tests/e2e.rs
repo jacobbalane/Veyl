@@ -5,10 +5,14 @@ use tokio::{
     sync::mpsc,
     time::{self, Instant},
 };
+use veyl_dsp::{
+    config::EngineConfig, BlockFlags, BlockIn, Engine, EngineEvent, SoundRoute, SoundSource,
+    SourceStatus, Stream, StreamFormat,
+};
 use veyl_lab::{fake_phone::FakePhone, recording::Input};
 use veyl_link::{
     audio::{AudioBlock, Ping, Pong},
-    messages::{Control, Pc, Ready, Want},
+    messages::{AudioConfig, Capture, Control, Pc, Ready, Want},
     pairing::{Identity, PairedPeer},
     transport::{self, Connection},
     AUDIO, CONTROL, PING, PONG,
@@ -64,8 +68,77 @@ async fn pair(phone: &FakePhone, mut phone_codes: mpsc::Receiver<String>) -> Pai
     paired
 }
 
+/// The engine calls of the desktop's engine host (desktop/src-tauri/src/engine_host.rs), without
+/// Tauri: a new engine per audio configuration, the capture state as source status, then push and
+/// process for each block. Pokes go to a fake action list while actions are on.
+struct Host {
+    engine: Option<Engine>,
+    events: Vec<EngineEvent>,
+    actions_on: bool,
+    actions: Vec<u64>,
+    pokes: usize,
+}
+impl Host {
+    fn configure(&mut self, config: &AudioConfig) {
+        let pc = config.source == "pc";
+        let engine_config = EngineConfig {
+            pc_mode: pc,
+            f_lo: config.hp_cutoff_hz as f32,
+            range_max_cm: if pc { 55.0 } else { 40.0 },
+            ..EngineConfig::default()
+        };
+        let format = StreamFormat {
+            sample_rate: config.sample_rate,
+            ref_channels: config.ref_channels,
+            mic_channels: config.mic_channels,
+        };
+        self.engine = Some(Engine::new(engine_config, format).unwrap());
+    }
+    fn status(&mut self, capture: &Capture) {
+        let status = SourceStatus {
+            capture_running: capture.state == "running",
+            source: SoundSource::TestSound,
+            route: SoundRoute::Speaker,
+            ..SourceStatus::default()
+        };
+        self.engine
+            .as_mut()
+            .unwrap()
+            .set_source_status(status)
+            .unwrap();
+    }
+    fn audio(&mut self, block: &AudioBlock) {
+        let engine = self.engine.as_mut().unwrap();
+        engine
+            .push(BlockIn {
+                stream: if block.stream == 0 {
+                    Stream::Reference
+                } else {
+                    Stream::Microphone
+                },
+                first_frame: block.first_frame,
+                capture_ns: (block.capture_ns != i64::MIN).then_some(block.capture_ns),
+                flags: BlockFlags(block.flags),
+                pre_rms_dbfs: block.pre_rms_dbfs,
+                pre_peak: block.pre_peak,
+                samples: &block.samples,
+            })
+            .unwrap();
+        self.events.clear();
+        engine.process(&mut self.events).unwrap();
+        for event in &self.events {
+            if let EngineEvent::Poke(poke) = event {
+                self.pokes += 1;
+                if self.actions_on {
+                    self.actions.push(poke.turn_frame);
+                }
+            }
+        }
+    }
+}
+
 #[tokio::test]
-async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousand_blocks() {
+async fn forty_second_scenario_delivers_all_eight_thousand_blocks_and_its_pokes_act() {
     time::timeout(Duration::from_secs(30), async {
         let input = Input::generated(veyl_sim::poke_basic(1, 40.0).unwrap());
         let expected: Vec<_> = (0..input.blocks.len())
@@ -93,6 +166,13 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
         let mut capture_start = None;
         let mut total = 0;
         let mut ended = false;
+        let mut host = Host {
+            engine: None,
+            events: Vec::new(),
+            actions_on: true,
+            actions: Vec::new(),
+            pokes: 0,
+        };
         loop {
             let frame = connection.receive().await.unwrap();
             // A counter skip, reordering or bad tag fails here before accepting a block.
@@ -110,9 +190,11 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
                             ),
                             (48000, 480, 2, 2, 8000)
                         );
+                        host.configure(&config);
                         configured = true;
                     }
                     Control::CaptureState { capture } if capture.state == "running" => {
+                        host.status(&capture);
                         running = true
                     }
                     Control::CaptureState { capture } if capture.state == "idle" => ended = true,
@@ -149,6 +231,7 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
                     assert_eq!(block.pre_peak, expected.pre_peak);
                     let start = *capture_start.get_or_insert(block.capture_ns);
                     assert_eq!(block.capture_ns - start, expected.capture_ns);
+                    host.audio(&block);
                     counts[block.stream as usize] += 1;
                     total += 1;
                     if total % 400 == 0 {
@@ -175,6 +258,13 @@ async fn forty_second_scenario_pairs_authenticates_and_delivers_all_eight_thousa
         }
         assert_eq!(counts, [4000, 4000]);
         assert!(stats && pongs == 20);
+        // The scene's ten pokes reach the actions through the live engine (§12 M6.5).
+        assert!(
+            host.actions.len() >= 9,
+            "{} pokes acted",
+            host.actions.len()
+        );
+        assert!(host.pokes <= 11, "{} pokes", host.pokes);
         connection
             .send(
                 &authenticated

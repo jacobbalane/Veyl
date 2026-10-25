@@ -155,9 +155,17 @@ struct Seen {
     gestures: Vec<GestureEvent>,
     frames: Vec<LiveFrame>,
 }
-/// A simulated phone scene through the host, as the connection worker delivers it.
+async fn drain(host: &EngineHost, microphone_blocks: u64) {
+    let deadline = Instant::now() + Duration::from_secs(120);
+    while host.levels().microphone.blocks < microphone_blocks {
+        assert!(Instant::now() < deadline, "Engine did not drain its queue.");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+/// A simulated phone scene through the host, as the connection worker delivers it: actions run
+/// for pokes until a poke test starts, which counts the rest without acting.
 #[tokio::test(flavor = "multi_thread")]
-async fn simulated_pokes_reach_the_interface_and_the_phone() {
+async fn simulated_pokes_reach_the_interface_the_phone_and_the_actions() {
     let seconds = 16.0;
     let input = veyl_lab::recording::Input::generated(veyl_sim::poke_basic(1, seconds).unwrap());
     let seen = Arc::new(Mutex::new(Seen::default()));
@@ -170,9 +178,17 @@ async fn simulated_pokes_reach_the_interface_and_the_phone() {
             _ => {}
         })
     };
+    let fake = Arc::new(crate::actions::tests::FakeActions::default());
+    let actions = ActionsGate::new(
+        true,
+        crate::actions::PokeAction::Click,
+        fake.clone(),
+        Arc::new(|_, _| {}),
+    );
     let (host, source) = EngineHost::launch(HostOptions {
         observer: Some(observer),
         phone: Some(phone),
+        actions: Some(actions.clone()),
         ..Default::default()
     });
     {
@@ -191,8 +207,18 @@ async fn simulated_pokes_reach_the_interface_and_the_phone() {
     source.status(generation, running()).await.unwrap();
     source.volume(generation, 0.7);
     let started = Instant::now();
+    // The poke test starts after 11 s of audio, once the queue has drained.
+    let split = input.blocks.len() * 11 / 16;
+    let mut microphone_blocks = 0;
+    let mut acted_pokes = None;
     for index in 0..input.blocks.len() {
+        if index == split {
+            drain(&host, microphone_blocks).await;
+            acted_pokes = Some(seen.lock().unwrap().gestures.len());
+            host.start_test();
+        }
         let block = input.block(index, 0).unwrap();
+        microphone_blocks += u64::from(block.stream == 1);
         host.sender
             .send(EngineInput::Audio(
                 generation,
@@ -204,11 +230,8 @@ async fn simulated_pokes_reach_the_interface_and_the_phone() {
             .unwrap();
     }
     host.apply(EngineSettings::default()).await.unwrap();
-    let deadline = Instant::now() + Duration::from_secs(120);
-    while host.levels().microphone.blocks < input.blocks.len() as u64 / 2 {
-        assert!(Instant::now() < deadline, "Engine did not drain its queue.");
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    drain(&host, microphone_blocks).await;
+    let test = host.stop_test();
     eprintln!(
         "{seconds} s of audio took {:.1} s",
         started.elapsed().as_secs_f64()
@@ -240,13 +263,37 @@ async fn simulated_pokes_reach_the_interface_and_the_phone() {
     assert!(states.contains(&EngineState::Running), "{states:?}");
     assert_eq!(host.engine().state, EngineState::Running);
     assert!(host.engine().meter.is_some_and(|meter| meter.score > 0));
-    // Pokes reach the interface with sensible values and as messages to the phone.
-    assert!(!seen.gestures.is_empty(), "no pokes");
-    assert!(seen.gestures.iter().all(|gesture| gesture.kind == "poke"
-        && gesture.test_only
-        && !gesture.acted
-        && (4.0..=40.0).contains(&gesture.distance_cm)));
-    let (mut meters_sent, mut gestures_sent) = (0, 0);
+    // Pokes act until the poke test, which counts the rest as tests.
+    let acted_pokes = acted_pokes.unwrap();
+    let (acted, tested) = seen.gestures.split_at(acted_pokes);
+    assert!(
+        !acted.is_empty() && !tested.is_empty(),
+        "{acted_pokes} of {}",
+        seen.gestures.len()
+    );
+    assert!(seen
+        .gestures
+        .iter()
+        .all(|gesture| gesture.kind == "poke" && (4.0..=40.0).contains(&gesture.distance_cm)));
+    assert!(acted
+        .iter()
+        .all(|gesture| gesture.acted && !gesture.test_only));
+    assert!(tested
+        .iter()
+        .all(|gesture| !gesture.acted && gesture.test_only));
+    assert_eq!(test.seen as usize, tested.len().min(10));
+    assert!(!actions.testing());
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while fake.performed.lock().unwrap().len() < acted.len() {
+        assert!(Instant::now() < deadline, "Actions did not run.");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(
+        *fake.performed.lock().unwrap(),
+        vec![crate::actions::PokeAction::Click; acted.len()]
+    );
+    // The phone hears each gesture with the same outcome and a limited meter.
+    let (mut meters_sent, mut gestures_sent) = (0, Vec::new());
     while let Ok(message) = phone_rx.try_recv() {
         match message {
             Control::Meter { label, tip, .. } => {
@@ -254,17 +301,22 @@ async fn simulated_pokes_reach_the_interface_and_the_phone() {
                 meters_sent += 1;
             }
             Control::Gesture { kind, acted } => {
-                assert!(kind == "poke" && !acted);
-                gestures_sent += 1;
+                assert_eq!(kind, "poke");
+                gestures_sent.push(acted);
             }
             _ => panic!("unexpected message"),
         }
     }
-    assert_eq!(gestures_sent, seen.gestures.len());
+    assert_eq!(
+        gestures_sent,
+        seen.gestures
+            .iter()
+            .map(|gesture| gesture.acted)
+            .collect::<Vec<_>>()
+    );
     // The audio arrived faster than real time, so the 5 Hz limit sends fewer meters than frames.
     assert!(meters_sent >= 1 && meters_sent as f32 <= meters);
-    let latency = host.levels().latency;
-    assert_eq!(latency.pokes as usize, seen.gestures.len());
+    assert_eq!(host.levels().latency.pokes as usize, seen.gestures.len());
     source.disconnected(generation).await.unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     while host.engine().state != EngineState::NoAudio {

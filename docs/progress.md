@@ -1079,6 +1079,49 @@ pokes. Interface fixtures now cover the engine view, a live frame and a gesture.
 Verified locally: `cargo test -p veyl-desktop` (39 tests), clippy for the desktop crate with
 `-D warnings`, Rust formatting, `npm run -w desktop typecheck` and `test`.
 
+## M6 — Poke to click
+
+**Goal:** pokes trigger the chosen action safely and reliably. The Rust and phone parts run ahead
+of M5's interface work, which proceeds in parallel; the interface parts follow it.
+
+- [ ] **M6.1** Live detection, `veyl://gesture` events, the gesture log, `gesture` messages to the
+      phone (a short flash on the listening screen). The gesture log waits for the Live tab.
+- [ ] **M6.2** Actions behind the `Actions` trait, UIPI detection, the actions switch (header and
+      tray), "actions start off", the setting, the hotkey. The header switch waits for the interface.
+- [ ] **M6.3** Settings applied to the engine live. The Settings tab waits for the interface.
+- [ ] **M6.4** Poke test dialog and the onboarding practice step. Commands only so far.
+- [x] **M6.5** End-to-end test: fake phone `poke_basic` → at least 9 pokes reach the fake actions.
+- [ ] **M6.6 [device]** D8, D9, D12, P3, P6 and the latency target; gate G3.
+
+**Rust and phone parts implemented and verified.** [Decision 0025](decisions/0025-live-host-and-actions.md)
+records the choices. `actions.rs` maps Click, Play or pause, Next track, Space bar and Nothing to
+`SendInput` behind the `Actions` trait, and checks the target window's integrity level first,
+because Windows drops input to an administrator app without reporting it; a blocked action emits
+`veyl://actions` with `blocked_elevated`. An actions worker runs them off the engine thread. A poke
+acts only while actions are on, no poke test runs and the action is not Nothing; its gesture event
+and the phone's `gesture` message say whether it acted. Actions start off unless "Turn actions on
+when Veyl starts" is set. The tray menu gains an Actions check item and its tooltip shows the
+state; the hotkey (default Ctrl+Alt+V, through the global-shortcut plugin) toggles them, and all
+three stay in sync through `set_actions_enabled` and `veyl://actions`. `set_settings` validates a
+change, moves the hotkey or the autostart entry (the autostart plugin starts Veyl with `--hidden`),
+saves atomically on top of the latest settings and applies the poke action, sensitivity, range
+and temperature live; detailed logs apply from the next start. `start_poke_test` and
+`stop_poke_test` count up to 10 pokes within 20 s while actions never run. The app state now
+includes the settings. The phone flashes "Poke" on the listening screen for each poke the PC
+reports.
+
+New tests: the actions gate acts only when on, outside tests and with an action, and reports a
+blocked action; settings patches validate every value and never expose the PC's ID; typical
+hotkeys parse; the host test now runs actions for pokes until a poke test starts, then counts the
+rest without acting, and checks the phone receives each outcome. The end-to-end test runs the
+fake phone's 40-second `poke_basic` stream through the same engine calls as the host and requires
+at least 9 pokes to reach the fake actions; it passes.
+
+Verified locally: `cargo test -p veyl-desktop` (42 tests), `cargo test --release -p veyl-lab --test
+e2e`, whole-workspace clippy with `-D warnings`, Rust formatting, and from `android/`
+`./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`. Real input,
+the tray, the hotkey and autostart need the maintainer's Windows checks (D8, D9, D12).
+
 ## Dependency follow-up
 
 [Dependabot alert 1](https://github.com/jacobbalane/Veyl/security/dependabot/1) concerns the
