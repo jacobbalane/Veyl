@@ -1060,7 +1060,9 @@ tuned on real recordings.
 - [x] **M5.3** Browser preview (`fake-native.ts`) covering every state.
 - [ ] **M5.4 [device]** Tuning loop on R1–R14, meter calibration, placement, gate G2.
 - [ ] **M5.5** Performance (desktop CPU) and latency statistics in Diagnostics. Latency statistics
-      are shown; performance on the target laptop needs the maintainer's measurement.
+      are shown. [Decision 0027](decisions/0027-resample-reuse-tolerance.md) cut PC mode from 47 to
+      40 ms per second of audio on the development desktop (60 s in 2.40 s; phone 1.81 s); PC still
+      misses the 2-second test here, and the target laptop needs the maintainer's measurement.
 
 **M5.1 implemented and verified.** The engine thread now owns a `veyl_dsp::Engine` with the tuned
 defaults for each audio configuration, in phone and PC mode alike, beside the existing transport
@@ -1169,9 +1171,9 @@ cover it.
 - [x] **M7.1** Desktop: onboarding (phone path and PC path), Help tab (placement, a troubleshooting
       entry for every tip and error, privacy, diagnostics, about), every error state with Appendix
       C text, accessibility pass (keyboard, labels, contrast, reduced motion).
-- [ ] **M7.2** Phone: onboarding polish, troubleshooting links, About and Licenses, "Copy
-      diagnostics". Links, About, Licenses and Copy diagnostics are in place; onboarding is
-      unchanged since M2 and waits for device feedback (P1).
+- [x] **M7.2** Phone: onboarding polish, troubleshooting links, About and Licenses, "Copy
+      diagnostics". The onboarding flow (Welcome, Microphone, Notifications on Android 13+, Home)
+      and its text were checked against §5.4 and Appendix C; how it looks on a phone is part of D1.
 - [ ] **M7.3** Docs complete, final README, THIRD_PARTY_NOTICES, CHANGELOG entry and the first
       `docs/compatibility.md` rows. Everything but the compatibility rows (the maintainer's
       devices) is written.

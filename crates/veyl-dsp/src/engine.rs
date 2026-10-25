@@ -114,8 +114,9 @@ pub struct Engine {
 /// Below this many frames of rate difference across a window, the sampler is skipped.
 const RESAMPLE_MIN_FRAMES: f64 = 0.01;
 /// Resampled samples are reused while the delay model moved less than this many frames: a
-/// phase error of about 2e-4 radians at 20 kHz.
-const RESAMPLE_REUSE_FRAMES: f64 = 1e-4;
+/// phase error of about 3e-3 radians at 20 kHz. A drift estimate that is still settling moves
+/// more than 1e-4 frames between hops, which made PC mode resample every hop.
+const RESAMPLE_REUSE_FRAMES: f64 = 1e-3;
 /// The strongest tap summed over a microphone's pairs, with a parabolic fraction.
 fn strongest_tap(maps: &[rustfft::num_complex::Complex<f32>], length: usize) -> Option<f64> {
     let at = |i: usize| {

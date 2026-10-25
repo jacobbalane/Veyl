@@ -23,10 +23,13 @@ Against the plan's specified thresholds, the probe measures:
 Still, hover, wave, walking, typing, gappy and blocked stay within their limits; stereo,
 compressed and both clock cases match every poke. 10 of 54 cases fail the specified thresholds.
 
-Processing cost on the development desktop ([decision 0024](decisions/0024-processing-cost.md)):
-31.4 ms per second of audio for a phone scene and about 47 ms for the stereo PC scene; the
-specified configuration costs 14.6 ms. The ignored 60-second performance test passes for the
-phone scene (1.84 s) and fails for PC (2.82 s). The older laptop of §6.10 is not measured yet.
+Processing cost on the development desktop (decisions [0024](decisions/0024-processing-cost.md)
+and [0027](decisions/0027-resample-reuse-tolerance.md)): 31.1 ms per second of audio for a phone
+scene and 40 ms for the stereo PC scene; the specified configuration costs 14.7 ms. The ignored
+60-second performance test passes for the phone scene (1.81 s) and fails for PC (2.40 s). Per
+second of PC audio, the short change segment takes about 14 ms, the background residual 7 ms, the
+fast stereo estimate 8 ms and the reference window 4 ms. The older laptop of §6.10 is not
+measured yet.
 
 ## Segment clicks, gaps and deferred pokes
 
