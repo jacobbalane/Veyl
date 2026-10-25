@@ -1,0 +1,9 @@
+{
+  "acted": false,
+  "at": 1300.25,
+  "confidence": 0.875,
+  "depthCm": 4.25,
+  "distanceCm": 14.5,
+  "kind": "poke",
+  "testOnly": true
+}

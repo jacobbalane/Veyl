@@ -2,6 +2,11 @@
   "levels": {
     "arrivalMs": null,
     "engineDrops": 0,
+    "latency": {
+      "medianMs": null,
+      "p95Ms": null,
+      "pokes": 0
+    },
     "microphone": {
       "blocks": 0,
       "blocksPerSecond": 0.0,

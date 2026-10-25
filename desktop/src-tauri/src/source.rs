@@ -144,6 +144,14 @@ impl PhoneSource {
             recorder.source_info(device, versions);
         }
     }
+    /// The phone's media volume from its stats; a full queue skips one.
+    pub(crate) fn volume(&self, generation: u64, volume: f32) {
+        if generation == self.generation.load(Ordering::Acquire) {
+            let _ = self
+                .sender
+                .try_send(EngineInput::Volume(generation, volume));
+        }
+    }
     async fn control(&self, message: EngineInput) -> io::Result<()> {
         timeout(Duration::from_secs(1), self.sender.send(message))
             .await
@@ -215,10 +223,12 @@ impl SoundSource for PhoneSource {
         if gap.swap(false, Ordering::AcqRel) {
             block.flags |= 1;
         }
-        match self
-            .sender
-            .try_send(EngineInput::Audio(generation, block, arrival_ms))
-        {
+        match self.sender.try_send(EngineInput::Audio(
+            generation,
+            block,
+            arrival_ms,
+            std::time::Instant::now(),
+        )) {
             Ok(()) => Ok(true),
             Err(mpsc::error::TrySendError::Full(_)) => {
                 gap.store(true, Ordering::Release);
@@ -264,7 +274,7 @@ mod tests {
         rx.try_recv().unwrap();
         rx.try_recv().unwrap();
         assert!(source.audio(1, block(4), None).unwrap());
-        let EngineInput::Audio(_, next, _) = rx.try_recv().unwrap() else {
+        let EngineInput::Audio(_, next, _, _) = rx.try_recv().unwrap() else {
             panic!("Expected audio.")
         };
         assert_eq!(next.seq, 4);

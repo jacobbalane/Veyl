@@ -3,7 +3,7 @@ mod worker;
 use crate::{
     address,
     discovery::{DiscoveryEvent, NearbyTable},
-    engine_host::EngineHost,
+    engine_host::{EngineHost, EngineSettings, HostOptions},
     events::*,
     pairings::{self, PairingStore},
     settings::Settings,
@@ -67,7 +67,14 @@ impl ConnectionManager {
         let store = PairingStore::load(&directory.join("pairings.json"), pc_id)?;
         let (commands, receiver) = mpsc::channel(32);
         let view = Arc::new(Mutex::new(LinkSnapshot::default()));
-        let (engine, source) = EngineHost::with_recorder(Some(recorder));
+        let (outgoing, outgoing_rx) = mpsc::channel(8);
+        let engine_settings = EngineSettings::from_settings(&settings.lock().unwrap());
+        let (engine, source) = EngineHost::launch(HostOptions {
+            recorder: Some(recorder),
+            settings: engine_settings,
+            observer: Some(observer.clone()),
+            phone: Some(outgoing),
+        });
         let engine = Arc::new(engine);
         let active = settings.lock().unwrap().source == "phone";
         let actor = Actor {
@@ -87,7 +94,7 @@ impl ConnectionManager {
             retry_at: None,
             origin: Instant::now(),
         };
-        tauri::async_runtime::spawn(actor.run(receiver));
+        tauri::async_runtime::spawn(actor.run(receiver, outgoing_rx));
         Ok(Self {
             commands,
             view,
@@ -97,6 +104,9 @@ impl ConnectionManager {
     }
     pub(crate) fn source(&self) -> PhoneSource {
         self.source.clone()
+    }
+    pub(crate) fn engine(&self) -> &EngineHost {
+        &self.engine
     }
     pub async fn set_active(&self, active: bool) -> Result<(), String> {
         let (done, wait) = oneshot::channel();
@@ -162,7 +172,11 @@ struct Actor {
     origin: Instant,
 }
 impl Actor {
-    async fn run(mut self, mut commands: mpsc::Receiver<Command>) {
+    async fn run(
+        mut self,
+        mut commands: mpsc::Receiver<Command>,
+        mut outgoing: mpsc::Receiver<Control>,
+    ) {
         let (events, event_rx) = mpsc::channel(256);
         let mut event_rx = event_rx;
         let (dns, dns_rx) = mpsc::channel(128);
@@ -179,6 +193,7 @@ impl Actor {
         let mut last_browse = Instant::now();
         let mut ticks = tokio::time::interval(Duration::from_millis(250));
         let mut shutdown = None;
+        let mut engine_open = true;
         self.publish_phones();
         loop {
             tokio::select! {
@@ -203,6 +218,8 @@ impl Actor {
                     self.command(command,&events).await;
                 },
                 event=event_rx.recv()=> {if let Some(event)=event {self.event(event).await;}},
+                // The engine's meter and gestures go to the phone of the live session only.
+                message=outgoing.recv(),if engine_open=> {match (message,&self.worker) {(None,_)=>engine_open=false,(Some(message),Some(worker)) if self.view.lock().unwrap().connection.state=="connected"=> {let _=worker.controls.try_send(message);},_=>{}}},
                 event=dns_rx.recv()=> {
                     if !self.active { continue; }
                     match event {

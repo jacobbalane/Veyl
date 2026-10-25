@@ -1,10 +1,14 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { Channel, invoke, isTauri } from '@tauri-apps/api/core';
 import metadata from '../../package.json';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   emptyLink,
   emptyLevels,
   emptySource,
+  emptyEngine,
+  type EngineView,
+  type GestureEvent,
+  type LiveFrame,
   type SourceView,
   type AppState,
   type Diagnostics,
@@ -28,6 +32,7 @@ export async function getAppState(): Promise<AppState> {
         actionsEnabled: false,
         link: structuredClone(emptyLink),
         source: structuredClone(emptySource),
+        engine: structuredClone(emptyEngine),
       }
     : invoke<AppState>('get_app_state');
 }
@@ -101,3 +106,18 @@ export async function watchLink(update: (value: LinkUpdate) => void): Promise<Un
   }
   return stop;
 }
+/** Live echo-view frames, about 30 per second; a new subscription replaces the previous one. */
+export async function subscribeLive(update: (frame: LiveFrame) => void): Promise<void> {
+  if (browserPreview) return;
+  const channel = new Channel<LiveFrame>();
+  channel.onmessage = update;
+  await invoke('subscribe_live', { channel });
+}
+export const watchEngine = async (update: (engine: EngineView) => void): Promise<UnlistenFn> =>
+  browserPreview ? () => {} : listen<EngineView>('veyl://engine', ({ payload }) => update(payload));
+export const watchGestures = async (
+  update: (gesture: GestureEvent) => void,
+): Promise<UnlistenFn> =>
+  browserPreview
+    ? () => {}
+    : listen<GestureEvent>('veyl://gesture', ({ payload }) => update(payload));

@@ -45,6 +45,17 @@ pub fn get_diagnostics(state: tauri::State<'_, Runtime>) -> Diagnostics {
     diagnostics.source = Some(state.sources.snapshot());
     diagnostics
 }
+/// The interface's echo view; a reloaded window replaces the previous channel.
+#[tauri::command]
+pub fn subscribe_live(
+    state: tauri::State<'_, Runtime>,
+    channel: tauri::ipc::Channel<crate::events::LiveFrame>,
+) {
+    state
+        .connection
+        .engine()
+        .subscribe(Box::new(move |frame| channel.send(frame.clone()).is_ok()));
+}
 #[tauri::command]
 pub fn copy_diagnostics(state: tauri::State<'_, Runtime>) -> Result<String, String> {
     serde_json::to_string_pretty(&get_diagnostics(state))
@@ -53,7 +64,11 @@ pub fn copy_diagnostics(state: tauri::State<'_, Runtime>) -> Result<String, Stri
 
 #[tauri::command]
 pub async fn set_source(state: tauri::State<'_, Runtime>, source: String) -> Result<(), String> {
-    state.sources.set_source(source).await
+    state.sources.set_source(source).await?;
+    // Switching to the PC may widen the distance range.
+    let settings =
+        crate::engine_host::EngineSettings::from_settings(&state.settings.lock().unwrap());
+    state.connection.engine().apply(settings).await
 }
 #[tauri::command]
 pub async fn set_pc_devices(

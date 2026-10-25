@@ -1,5 +1,15 @@
 {
   "actionsEnabled": false,
+  "engine": {
+    "hand": {
+      "distanceCm": null,
+      "present": false
+    },
+    "meter": null,
+    "state": "no_audio",
+    "suspended": null,
+    "warning": null
+  },
   "link": {
     "connection": {
       "address": null,

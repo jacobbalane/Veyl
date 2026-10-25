@@ -1,0 +1,20 @@
+{
+  "hand": {
+    "distanceCm": 18.5,
+    "present": true
+  },
+  "meter": {
+    "clarity": 0.625,
+    "detail": 0.5,
+    "detailCm": 1.75,
+    "high": 0.75,
+    "label": "good",
+    "score": 68,
+    "steady": 0.875,
+    "tip": "few_high_sounds",
+    "volume": 1.0
+  },
+  "state": "running",
+  "suspended": "settling",
+  "warning": "relocked"
+}

@@ -83,11 +83,79 @@ pub struct Diagnostics {
     pub levels: LevelsView,
     pub source: Option<crate::sources::SourceView>,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandView {
+    pub present: bool,
+    pub distance_cm: Option<f32>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeterView {
+    pub score: u8,
+    pub label: veyl_dsp::MeterLabel,
+    pub high: f32,
+    pub detail: f32,
+    pub volume: f32,
+    pub steady: f32,
+    pub clarity: f32,
+    pub detail_cm: Option<f32>,
+    pub tip: veyl_dsp::Tip,
+}
+impl From<&veyl_dsp::MeterReading> for MeterView {
+    fn from(reading: &veyl_dsp::MeterReading) -> Self {
+        Self {
+            score: reading.score,
+            label: reading.label,
+            high: reading.factors.high,
+            detail: reading.factors.detail,
+            volume: reading.factors.volume,
+            steady: reading.factors.steady,
+            clarity: reading.factors.clarity,
+            detail_cm: reading.detail_cm,
+            tip: reading.tip,
+        }
+    }
+}
+/// One column of the echo view, about 30 per second; the meter rides along about 10 times a second.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveFrame {
+    pub t: f64,
+    pub state: veyl_dsp::EngineState,
+    pub motion: Vec<f32>,
+    pub hand: HandView,
+    pub meter: Option<MeterView>,
+}
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineView {
+    pub state: veyl_dsp::EngineState,
+    /// Why pokes are not detected right now: `paused`, `source`, `starting`, `sound` or `settling`.
+    pub suspended: Option<String>,
+    /// A recent engine warning: `relocked`, `model_jump`, `impulsive_noise` or `drift`.
+    pub warning: Option<String>,
+    pub hand: HandView,
+    pub meter: Option<MeterView>,
+}
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestureEvent {
+    pub kind: String,
+    pub at: f64,
+    pub distance_cm: f32,
+    pub depth_cm: f32,
+    pub confidence: f32,
+    pub acted: bool,
+    pub test_only: bool,
+}
 pub enum Notice {
     Connection(ConnectionState),
     Phones(PhonesView),
     Pairing(PairingEvent),
     Capture(Capture),
+    Engine(EngineView),
+    Gesture(GestureEvent),
 }
 
 #[cfg(test)]
@@ -102,6 +170,7 @@ mod fixtures {
             actions_enabled: false,
             link: LinkSnapshot::default(),
             source: crate::sources::SourceView::default(),
+            engine: EngineView::default(),
         };
         let diagnostics = Diagnostics {
             link: LinkSnapshot::default(),
@@ -115,7 +184,50 @@ mod fixtures {
             stage: "compare".into(),
             error: None,
         };
+        let meter = MeterView {
+            score: 68,
+            label: veyl_dsp::MeterLabel::Good,
+            high: 0.75,
+            detail: 0.5,
+            volume: 1.0,
+            steady: 0.875,
+            clarity: 0.625,
+            detail_cm: Some(1.75),
+            tip: veyl_dsp::Tip::FewHighSounds,
+        };
+        let hand = HandView {
+            present: true,
+            distance_cm: Some(18.5),
+        };
+        let engine = EngineView {
+            state: veyl_dsp::EngineState::Running,
+            suspended: Some("settling".into()),
+            warning: Some("relocked".into()),
+            hand,
+            meter: Some(meter),
+        };
+        let mut motion = vec![0.0; 60];
+        motion[18] = 24.5;
+        let live = LiveFrame {
+            t: 1250.5,
+            state: veyl_dsp::EngineState::Running,
+            motion,
+            hand,
+            meter: Some(meter),
+        };
+        let gesture = GestureEvent {
+            kind: "poke".into(),
+            at: 1300.25,
+            distance_cm: 14.5,
+            depth_cm: 4.25,
+            confidence: 0.875,
+            acted: false,
+            test_only: true,
+        };
         for (name, value) in [
+            ("engine.json", serde_json::to_value(engine).unwrap()),
+            ("live-frame.json", serde_json::to_value(live).unwrap()),
+            ("gesture.json", serde_json::to_value(gesture).unwrap()),
             (
                 "pc-check.json",
                 serde_json::to_value(crate::pc_testsound::CheckResult {

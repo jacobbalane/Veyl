@@ -71,6 +71,13 @@ export interface LevelsView {
   engineDrops: number;
   arrivalMs: number | null;
   running: boolean;
+  latency: LatencyView;
+}
+/** Time from a poke's turning point to its detection on the PC, over the last 50 pokes. */
+export interface LatencyView {
+  pokes: number;
+  medianMs: number | null;
+  p95Ms: number | null;
 }
 export interface Diagnostics {
   link: LinkSnapshot;
@@ -83,6 +90,7 @@ export interface AppState {
   actionsEnabled: boolean;
   link: LinkSnapshot;
   source: SourceView;
+  engine: EngineView;
 }
 export interface AudioDevice {
   id: string;
@@ -212,4 +220,74 @@ export const emptyLevels: LevelsView = {
   engineDrops: 0,
   arrivalMs: null,
   running: false,
+  latency: { pokes: 0, medianMs: null, p95Ms: null },
+};
+export type EngineState = 'no_audio' | 'waiting_for_sound' | 'aligning' | 'settling' | 'running';
+export type TipId =
+  | 'capture_off'
+  | 'not_speaker'
+  | 'pc_headphones'
+  | 'pc_no_mic'
+  | 'capture_blocked'
+  | 'nothing_playing'
+  | 'mic_silenced'
+  | 'clipping'
+  | 'volume_low'
+  | 'few_high_sounds'
+  | 'gaps'
+  | 'other_sounds'
+  | 'unclear_echo'
+  | 'noisy_room'
+  | 'pc_bluetooth'
+  | 'ready';
+export interface HandView {
+  present: boolean;
+  distanceCm: number | null;
+}
+export interface Meter {
+  score: number;
+  label: 'great' | 'good' | 'fair' | 'poor' | 'none';
+  high: number;
+  detail: number;
+  volume: number;
+  steady: number;
+  clarity: number;
+  detailCm: number | null;
+  tip: TipId;
+}
+/** About 30 per second through `subscribeLive`; the meter rides along about 10 times a second. */
+export interface LiveFrame {
+  t: number;
+  state: EngineState;
+  motion: number[];
+  hand: HandView;
+  meter: Meter | null;
+}
+/** Why pokes are not detected right now. */
+export type Suspension = 'paused' | 'source' | 'starting' | 'sound' | 'settling';
+export type EngineWarning = 'relocked' | 'model_jump' | 'impulsive_noise' | 'drift';
+/** 'veyl://engine' and the engine part of the app state. */
+export interface EngineView {
+  state: EngineState;
+  suspended: Suspension | null;
+  warning: EngineWarning | null;
+  hand: HandView;
+  meter: Meter | null;
+}
+/** 'veyl://gesture' */
+export interface GestureEvent {
+  kind: 'poke';
+  at: number;
+  distanceCm: number;
+  depthCm: number;
+  confidence: number;
+  acted: boolean;
+  testOnly: boolean;
+}
+export const emptyEngine: EngineView = {
+  state: 'no_audio',
+  suspended: null,
+  warning: null,
+  hand: { present: false, distanceCm: null },
+  meter: null,
 };

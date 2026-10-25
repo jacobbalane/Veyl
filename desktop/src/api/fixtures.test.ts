@@ -4,14 +4,37 @@ import diagnosticsJson from './fixtures/diagnostics.json';
 import pairingJson from './fixtures/pairing.json';
 import recordingJson from './fixtures/recording.json';
 import checkJson from './fixtures/pc-check.json';
-import type { AppState, Diagnostics, PairingEvent, RecordingInfo, CheckResult } from './types';
+import engineJson from './fixtures/engine.json';
+import liveJson from './fixtures/live-frame.json';
+import gestureJson from './fixtures/gesture.json';
+import type {
+  AppState,
+  Diagnostics,
+  PairingEvent,
+  RecordingInfo,
+  CheckResult,
+  EngineView,
+  LiveFrame,
+  GestureEvent,
+} from './types';
 
 test('Rust fixtures fit the typed desktop API and contain metadata only', () => {
-  const app: AppState = appJson;
+  const app = appJson as AppState;
   const diagnostics: Diagnostics = diagnosticsJson;
   const pairing: PairingEvent = pairingJson;
   const recording: RecordingInfo = recordingJson;
   const check: CheckResult = checkJson;
+  // JSON imports widen string unions, so the engine payloads are checked through their values.
+  const engine = engineJson as EngineView;
+  const live = liveJson as LiveFrame;
+  const gesture = gestureJson as GestureEvent;
+  expect(app.engine.state).toBe('no_audio');
+  expect(engine.meter?.tip).toBe('few_high_sounds');
+  expect(engine.hand.distanceCm).toBe(18.5);
+  expect(live.motion).toHaveLength(60);
+  expect(live.meter?.detailCm).toBe(1.75);
+  expect(gesture.testOnly).toBe(true);
+  expect(diagnostics.levels.latency.medianMs).toBeNull();
   expect(check.bandwidthHz).toBe(10000);
   expect(check.meanCoherence).toBe(0.75);
   expect(app.actionsEnabled).toBe(false);

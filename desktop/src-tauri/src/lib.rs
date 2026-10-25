@@ -43,6 +43,7 @@ struct AppState {
     actions_enabled: bool,
     link: events::LinkSnapshot,
     source: sources::SourceView,
+    engine: events::EngineView,
 }
 
 #[tauri::command]
@@ -53,6 +54,7 @@ fn get_app_state(state: tauri::State<'_, Runtime>) -> AppState {
         actions_enabled: false,
         link: state.connection.snapshot(),
         source: state.sources.snapshot(),
+        engine: state.connection.engine().engine(),
     }
 }
 
@@ -139,6 +141,12 @@ pub fn run() {
                     events::Notice::Capture(value) => {
                         let _ = handle.emit("veyl://capture", value);
                     }
+                    events::Notice::Engine(value) => {
+                        let _ = handle.emit("veyl://engine", value);
+                    }
+                    events::Notice::Gesture(value) => {
+                        let _ = handle.emit("veyl://gesture", value);
+                    }
                 }),
                 recorder.clone(),
             )?;
@@ -212,6 +220,7 @@ pub fn run() {
             commands::forget_phone,
             commands::request_phone_start,
             commands::get_diagnostics,
+            commands::subscribe_live,
             commands::copy_diagnostics,
             commands::start_recording,
             commands::stop_recording,

@@ -9,7 +9,7 @@ placeholder and Android shows the waiting-for-PC placeholder. M0's listed accept
 the additional device checks below remain unreported. M1 is complete. M2's implementation and automated
 checks are complete; hardware acceptance remains pending. M3's connection and recording implementation
 is complete. M3P's PC-mode implementation and automated checks are complete; its device checks
-remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. The published 0.0.1 preview still contains the
+remain pending under §0.1.2. M4's offline engine is complete: its scenario gates run in CI with decision 0023's thresholds. M5 is in progress: the desktop engine host runs the echo engine live. The published 0.0.1 preview still contains the
 M0 interface skeleton. The maintainer authorized continuing non-destructive implementation while
 away and limited all GitHub work to this repository. Physical review remains deferred.
 
@@ -1041,6 +1041,43 @@ real-recording tuning and device gates G2 and G3 follow in M5 and M6.
 Verified locally on 2026-10-25: `cargo test --release -p veyl-dsp -p veyl-sim -p veyl-lab
 --no-fail-fast` (all suites pass, 327 s, including the scenario gates), whole-workspace clippy with
 `-D warnings`, Rust formatting and repository formatting. CI on Linux is checked after the push.
+
+## M5 — Live engine, echo view and meter
+
+**Goal:** the engine runs in real time in the desktop app; the echo view and the meter work and are
+tuned on real recordings.
+
+- [x] **M5.1** `engine_host` (§7.6): engine thread, live frames at 30 Hz, `meter` to the phone at
+      5 Hz, engine state events, source status into the engine — in both modes.
+- [ ] **M5.2** Live tab: meter card, echo view, hand line, engine states and tips (Appendix C).
+- [ ] **M5.3** Browser preview (`fake-native.ts`) covering every state.
+- [ ] **M5.4 [device]** Tuning loop on R1–R14, meter calibration, placement, gate G2.
+- [ ] **M5.5** Performance (desktop CPU) and latency statistics in Diagnostics.
+
+**M5.1 implemented and verified.** The engine thread now owns a `veyl_dsp::Engine` with the tuned
+defaults for each audio configuration, in phone and PC mode alike, beside the existing transport
+levels. Capture state, route and the phone's media volume become the engine's source status; the
+PC reports its speaker type (headphones, Bluetooth or speaker) as the route. Sensitivity, range
+and temperature come from the settings; a temperature change restarts the engine because the
+speed of sound fixes its distance scale. Every 1/30 s of microphone audio it sends a live frame
+(60 motion values, state, hand and, about 10 times a second, the meter) to the channel the
+interface registers with `subscribe_live`. `veyl://engine` announces state, suspension reason,
+warnings, hand presence and meter label or tip changes; `veyl://gesture` announces each poke.
+The phone receives `meter` at most 5 times a second and `gesture` for each poke, only during a
+live session. Until M6's actions every poke is reported as a test poke that did not act.
+Diagnostics gain the median and 95th percentile of the time from a poke's turning point to its
+detection over the last 50 pokes (`latency`). The echo engine and `rustfft` are now optimized in
+development builds: 16 s of simulated audio took about 25 s through the host before and 2.7 s
+after, so `tauri dev` keeps up with live audio.
+
+New tests feed 16 s of the simulated `poke_basic` scene through the host: 30 live frames per
+second with valid rows, the meter in about 10 per second, the running state, pokes reaching both
+the interface and the phone, meter messages limited, latency recorded, and a clean stop on
+disconnect. Capture states map to the engine's source status, and the latency window keeps 50
+pokes. Interface fixtures now cover the engine view, a live frame and a gesture.
+
+Verified locally: `cargo test -p veyl-desktop` (39 tests), clippy for the desktop crate with
+`-D warnings`, Rust formatting, `npm run -w desktop typecheck` and `test`.
 
 ## Dependency follow-up
 

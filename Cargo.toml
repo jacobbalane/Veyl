@@ -12,3 +12,9 @@ publish = false
 strip = true
 lto = "thin"
 codegen-units = 1
+
+# The echo engine must keep up with live audio in development builds of the desktop app.
+[profile.dev.package.veyl-dsp]
+opt-level = 3
+[profile.dev.package.rustfft]
+opt-level = 3

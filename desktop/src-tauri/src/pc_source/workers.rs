@@ -125,7 +125,9 @@ impl CaptureGroup {
                 mic_source: if mic.raw_mode { "raw" } else { "shared" }.into(), effects_off: if mic.raw_mode { vec!["raw".into()] } else { vec![] },
                 hp_cutoff_hz: 8000, mics: vec![], sound_check: None,
             }).await?;
-            group.source.status(generation, Capture { state:"running".into(), source:"pc".into(), route:"speaker".into(), reason:None }).await?;
+            // Within the PC the route names the speaker type, which the engine's meter and safety use.
+            let route = if speaker.headphones() { "headphones" } else if speaker.bluetooth { "bluetooth" } else { "speaker" };
+            group.source.status(generation, Capture { state:"running".into(), source:"pc".into(), route:route.into(), reason:None }).await?;
             group.go.store(true, Ordering::Release);
             let mut started = [false; 2];
             while started != [true, true] {

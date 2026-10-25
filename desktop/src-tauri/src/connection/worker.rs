@@ -261,6 +261,7 @@ async fn live(
                         match &message {
                             Control::AudioConfig {config}=> {source.configure(generation,config.clone()).await?;format=Some(config.clone());},
                             Control::CaptureState {capture}=> {source.status(generation,capture.clone()).await?;if capture.state!="running" {format=None;}},
+                            Control::Stats {media_volume,..}=>source.volume(generation,*media_volume),
                             Control::Bye {..}=>return Err(io::Error::new(io::ErrorKind::ConnectionAborted,"Phone closed the session.")),
                             Control::Error {code,..}=>return Err(known_error(code)),
                             _=>{},
