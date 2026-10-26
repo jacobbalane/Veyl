@@ -151,6 +151,8 @@ pub struct EngineHost {
 const LIVE_PER_SECOND: u64 = 30;
 const PHONE_METER_INTERVAL: Duration = Duration::from_millis(200);
 const LATENCY_POKES: usize = 50;
+/// Reference blocks without a microphone block before the microphone counts as silent: 2 s.
+const MICROPHONE_SILENT_BLOCKS: u32 = 200;
 /// A warning stays in the engine view for this many seconds of audio.
 const WARNING_SECONDS: u64 = 5;
 impl EngineHost {
@@ -190,6 +192,7 @@ impl EngineHost {
             format: None,
             capture: None,
             volume: None,
+            silent: (0, false),
             expected: [None, None],
             window: [Instant::now(); 2],
             counts: [0; 2],
@@ -292,6 +295,10 @@ struct Worker {
     format: Option<AudioConfig>,
     capture: Option<(u64, Capture)>,
     volume: Option<f32>,
+    /// Reference blocks since the last microphone block, and whether that made the microphone
+    /// count as silent: a microphone that delivers nothing (another app holds it, or a virtual
+    /// device whose software is closed) is not low volume.
+    silent: (u32, bool),
     expected: [Option<u64>; 2],
     window: [Instant; 2],
     counts: [u64; 2],
@@ -308,6 +315,7 @@ impl Worker {
                 self.window = [Instant::now(); 2];
                 self.counts = [0; 2];
                 self.volume = None;
+                self.silent = (0, false);
                 {
                     let mut levels = self.lock_levels();
                     *levels = LevelsView {
@@ -408,7 +416,8 @@ impl Worker {
             return;
         }
         let running = capture.state == "running";
-        let status = source_status(capture, self.volume);
+        let mut status = source_status(capture, self.volume);
+        status.mic_silenced |= self.silent.1;
         {
             let mut levels = self.lock_levels();
             levels.running = running;
@@ -468,6 +477,13 @@ impl Worker {
             return;
         };
         self.measure(&input, index, end, arrival);
+        let blocks = if index == 0 { self.silent.0 + 1 } else { 0 };
+        let silent = blocks >= MICROPHONE_SILENT_BLOCKS;
+        self.silent.0 = blocks.min(MICROPHONE_SILENT_BLOCKS);
+        if silent != self.silent.1 {
+            self.silent.1 = silent;
+            self.status();
+        }
         let Some(session) = &mut self.session else {
             return;
         };

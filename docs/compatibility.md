@@ -38,11 +38,11 @@ apps or from the simulator don't count.
 
 ## PCs
 
-| Model or type           | Windows and architecture | Speakers and microphone      | Raw mode       | Bluetooth      | PC sound check | Poke test      | Notes                                                            |
-| ----------------------- | ------------------------ | ---------------------------- | -------------- | -------------- | -------------- | -------------- | ---------------------------------------------------------------- |
-| Maintainer's desktop PC | Windows 11 Pro           | USB microphones, no speakers | Not yet tested | Not yet tested | Not yet tested | Not yet tested | Phone mode only, unless speakers are added. Wired to the router. |
+| Model or type           | Windows and architecture | Speakers and microphone                                               | Raw mode        | Bluetooth | PC sound check    | Poke test | Notes                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------ | --------------------------------------------------------------------- | --------------- | --------- | ----------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Maintainer's desktop PC | Windows 11 Pro, x64      | A speaker on the PD400X headphone output; PD400X (dynamic) microphone | PD400X: offered | Not used  | Poor (2026-10-26) | Not run   | PC sound check coherence 0.017, coverage 0: the dynamic microphone hears too little above 8 kHz, so PC mode cannot see a hand with this pair. The Maono AI Microphone delivered no audio. Phone mode recommended. Wired to the router. |
 
-No Veyl device checks have been completed yet. The planned checks for v0.1 cover at least three
+The first PC-mode check on the maintainer's desktop (above) found its speaker and microphone unsuitable; no poke test has run yet. The planned checks for v0.1 cover at least three
 phones from different makers (one with Android 8 or 9 if one can be found) and two PCs, one of
 them a laptop.
 

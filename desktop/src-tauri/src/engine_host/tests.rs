@@ -137,6 +137,57 @@ fn capture_states_map_to_the_engines_source_status() {
     assert_eq!(name(Tip::FewHighSounds), "few_high_sounds");
     assert_eq!(name(Warning::ModelJump), "model_jump");
 }
+/// A microphone that delivers nothing while the speaker copy flows reads as silenced, not as low
+/// volume, and recovers when its blocks arrive.
+#[tokio::test]
+async fn a_microphone_that_sends_nothing_reads_as_silenced() {
+    let (host, source) = EngineHost::start();
+    source.configure(1, format(3, 48000)).await.unwrap();
+    source.status(1, running()).await.unwrap();
+    let reference = |seq: u32| AudioBlock {
+        stream: 0,
+        channels: 2,
+        samples: vec![4000; 960],
+        ..block(seq, 48000, 0)
+    };
+    for seq in 0..MICROPHONE_SILENT_BLOCKS + 10 {
+        host.sender
+            .send(EngineInput::Audio(1, reference(seq), None, Instant::now()))
+            .await
+            .unwrap();
+    }
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host
+        .engine()
+        .meter
+        .is_none_or(|meter| meter.tip != Tip::MicSilenced)
+    {
+        assert!(Instant::now() < deadline, "{:?}", host.engine().meter);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    host.sender
+        .send(EngineInput::Audio(
+            1,
+            block(0, 48000, 100),
+            None,
+            Instant::now(),
+        ))
+        .await
+        .unwrap();
+    host.sender
+        .send(EngineInput::Audio(1, reference(300), None, Instant::now()))
+        .await
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host
+        .engine()
+        .meter
+        .is_some_and(|meter| meter.tip == Tip::MicSilenced)
+    {
+        assert!(Instant::now() < deadline, "{:?}", host.engine().meter);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
 #[test]
 fn latency_keeps_the_last_fifty_pokes() {
     let mut values: VecDeque<f64> = (1..=60).map(f64::from).collect();

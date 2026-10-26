@@ -214,7 +214,19 @@ remain ignored under `.cache/release/v0.0.1-tag/`, `.cache/release/v0.0.1-public
 
 **v0.1 checks (M5.4, M5.5, M6.6, M7.5):** follow [device checks](device-checks.md) with the newest
 CI build: recordings R1–R14 and gate G2, processing cost and poke delay on the target laptop,
-D8, D9, D12, P3, P6 and gate G3, then D1–D17 and P1–P7. None has been reported yet.
+D8, D9, D12, P3, P6 and gate G3, then D1–D17 and P1–P7.
+
+**First PC-mode run on the maintainer's desktop (2026-10-26, debug build, test data folder).**
+With a speaker on the PD400X headphone output and the PD400X microphone, PC capture started and
+the engine reached Running with Veyl's test loop playing: score 60 (Good), but Clear echo 0,
+repeated model jumps, and the PC sound check rated the pair **poor** (coherence 0.017, coverage 0;
+the microphone heard −70 dBFS above 8 kHz while the speaker copy carried −23 dBFS). The PD400X is
+a dynamic speech microphone, so P2, P3 and P6 cannot pass with this pair. The Maono AI Microphone
+delivered no audio at all, and Veyl then advised "Turn your PC's volume up"; the engine host now
+treats 2 s of speaker audio without a microphone block as a silenced microphone, so the tip reads
+"Another app is using the microphone. Close it, or choose another microphone." (verified in the
+running app). The remaining checks need a speaker on the PC's own output and a condenser or laptop
+microphone, or phone mode.
 
 The 0.0.1 preview checks below also remain open.
 
