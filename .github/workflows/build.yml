@@ -100,7 +100,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v6.4.0
+      - uses: gradle/actions/setup-gradle@v6.4.1
       - name: Releases need the signing key
         if: startsWith(github.ref, 'refs/tags/v') && env.HAS_KEYSTORE != 'true'
         run: |
